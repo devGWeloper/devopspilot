@@ -3,6 +3,7 @@
 - 작성일: 2026-10-07
 - 작성: SK AX (devGWeloper)
 - 상태: 사용자 검토 대기 (rev.2 — 점수 제거, 운영 방식 확정)
+- 후속 문서: [2026-10-07-replay-measurement-design.md](2026-10-07-replay-measurement-design.md) — 측정 모듈, 역할 DEVELOPER·TESTER 추가, 테이블 POC_MEAS_DAT 추가
 
 ## 1. 배경과 목적
 
@@ -81,7 +82,7 @@ llm:
 | `VIEWER` | 열람자 | 양사 | 대시보드·목록·상세 열람 |
 
 - 권한 판정은 `src/lib/auth/permissions.ts` 단일 소스. 미들웨어(경로 차단), 메뉴 노출, API 가드가 같은 함수를 쓴다.
-- PM 편집 가능 조건: `PM_USER_ID = 본인` 이고 상태가 `DRAFT` 또는 `REWORK`.
+- PM 편집 가능 조건: `PM_USER_ID = 본인` 이고 상태가 `DRAFT` 또는 `SUPPLEMENT`.
 - 세션: HMAC 서명 httpOnly 쿠키(8시간), 비밀번호 scrypt 해시(Node 내장 crypto). 로그인 5회 연속 실패 시 10분 잠금(메모리 카운터).
 - AI 기능은 AX_ADMIN 전용: 메뉴 숨김 + API 차단 + 다른 역할의 응답에서 AI 필드 제거.
 
@@ -90,7 +91,7 @@ llm:
 ```
 DRAFT(작성중) ──PM 제출──▶ SUBMITTED(제출) ──AX 검토 시작──▶ REVIEW(검토중)
      ▲                                                        │
-     └──────────── REWORK(보완요청) ◀──AX 보완요청──────────────┤
+     └──────────── SUPPLEMENT(보완요청) ◀──AX 보완요청──────────────┤
                                                               ├──▶ SELECTED(선정)
                                                               ├──▶ RESERVE(예비)
                                                               └──▶ EXCLUDED(제외)
@@ -274,7 +275,7 @@ Criteria { version, publishedAt, publishedBy,
 | `PRJ_ID` PK VARCHAR2(20) | `PRJ-0001` (앱에서 MAX+1 채번, PK 충돌 시 재시도) |
 | `PRJ_NM`, `SYS_NM` | 과제명, 시스템명 |
 | `PM_USER_ID`, `PM_USER_NM` | PM (이름 비정규화) |
-| `STATUS_CD` | DRAFT/SUBMITTED/REVIEW/REWORK/SELECTED/RESERVE/EXCLUDED |
+| `STATUS_CD` | DRAFT/SUBMITTED/REVIEW/SUPPLEMENT/SELECTED/RESERVE/EXCLUDED |
 | `DEV_TYPE_CD`, `MAIN_LANG_CD`, `DOMAIN_CD`, `SYS_TYPE_CD` | 필터·균형용 (BASE/EVAL 에서 복제) |
 | `ANSWER_CNT`, `INDICATOR_CNT` | 응답 현황 |
 | `SUGGEST_FIT`, `FINAL_FIT` | H/M/L/NA — 제안 / 확정 적합도 |
@@ -343,4 +344,4 @@ DB 설정이 있는데 연결이 실패하면 JSON 으로 조용히 바꾸지 �
 ## 12. 범위 밖
 
 - SSO, 알림, 엑셀 업로드.
-- Replay 실측 결과 입력·비교 화면 — 추후 별도 요구사항. (`BASE_JSON` 의 기준선을 그때 활용)
+- Replay 실측 측정은 후속 문서에서 다룬다.
