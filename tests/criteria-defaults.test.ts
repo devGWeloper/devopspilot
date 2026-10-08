@@ -6,9 +6,9 @@ describe("defaultCriteria", () => {
   const c = defaultCriteria();
   const inds = c.areas.flatMap((a) => a.indicators);
 
-  it("4개 영역 17개 지표", () => {
+  it("4개 영역 18개 지표", () => {
     expect(c.areas).toHaveLength(4);
-    expect(inds).toHaveLength(17);
+    expect(inds).toHaveLength(18);
   });
 
   it("Major 8개", () => {
