@@ -1,0 +1,142 @@
+.wrap {
+  padding-bottom: 96px;
+  max-width: 1080px;
+  margin: 0 auto;
+}
+.back {
+  font-weight: 600;
+  color: var(--accent);
+  font-size: 13.5px;
+}
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 20px;
+}
+.full {
+  grid-column: 1 / -1;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chipBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.chipBtn[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.mainTag {
+  font-size: 10.5px;
+  font-weight: 750;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.phaseInputs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.phaseInput {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.indList {
+  display: flex;
+  flex-direction: column;
+}
+.ind {
+  display: grid;
+  gap: 10px;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+}
+.ind:first-child {
+  border-top: 0;
+  padding-top: 4px;
+}
+.indHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.noteToggle {
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 12.5px;
+  white-space: nowrap;
+  align-self: flex-start;
+}
+.stepNav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+.previewBar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--line);
+}
+.previewInner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 12px 28px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.previewFit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.saveState {
+  font-size: 12px;
+  color: var(--subtle);
+}
+.previewActions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+@media (min-width: 1025px) {
+  .previewBar {
+    left: var(--sidebar-w);
+  }
+}
+@media (max-width: 720px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+  .phaseInputs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
