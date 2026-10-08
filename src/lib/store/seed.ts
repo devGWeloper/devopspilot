@@ -1,6 +1,8 @@
 import { hashPassword } from "../auth/password";
 import { defaultCodes, defaultCriteria } from "../criteria/defaults";
 import { sampleProjects } from "../criteria/samples";
+import { SETTINGS_KEY, toRow } from "../measure/repo";
+import { sampleMeasureInput } from "../measure/sampleData";
 import type { Criteria, OrgCd, Role, UserRecord } from "../types";
 import type { Store } from "./types";
 
@@ -47,4 +49,14 @@ export async function ensureSeed(store: Store, opts: { samples: boolean }): Prom
     if (!existing.has(id)) await store.users.insert(user(id, nm, org, dept, role, DEMO_PASSWORD, now));
   }
   for (const p of sampleProjects(criteria, now)) await store.projects.insert(p);
+
+  const m = sampleMeasureInput();
+  await store.config.set(SETTINGS_KEY, m.settings, 1, SEED_ADMIN.userId);
+  await store.meas.upsert([
+    ...m.features.map((x) => toRow("FEATURE", x, "pm01", now)),
+    ...m.efforts.map((x) => toRow("EFFORT", x, x.userId, now)),
+    ...m.defects.map((x) => toRow("DEFECT", x, "qa01", now)),
+    ...m.usages.map((x) => toRow("AIUSE", x, x.userId, now)),
+    ...m.commits.map((x) => toRow("COMMIT", x, "pm01", now)),
+  ]);
 }
