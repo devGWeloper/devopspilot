@@ -1,0 +1,14 @@
+# 이 파일을 config.yml 로 복사해 값을 채운다. config.yml 은 git 에 올라가지 않는다.
+db:
+  user: ""
+  password: ""
+  connectString: ""   # host:port/service — 비우면 로컬 JSON 저장소(data/) 사용
+auth:
+  secret: ""          # 세션 서명 키 — 비우면 개발용 기본값(운영에서는 반드시 입력)
+llm:
+  enabled: false      # AI 판정(보조 기능)
+  baseUrl: ""         # 사내 OpenAI 호환 엔드포인트
+  apiKey: ""
+  model: ""
+  temperature: 0.2
+  timeoutMs: 60000

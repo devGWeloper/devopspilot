@@ -1,0 +1,31 @@
+{
+  "name": "poc-portal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI Tool PoC 과제 선정 · Replay 생산성 측정 포털",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "js-yaml": "^4.1.1",
+    "next": "14.2.35",
+    "oracledb": "^6.5.1",
+    "pretendard": "^1.3.9",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "recharts": "^3.8.1"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "20.14.10",
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0",
+    "typescript": "5.5.3",
+    "vitest": "^3.2.4"
+  }
+}

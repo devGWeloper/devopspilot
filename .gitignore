@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+data/
+config.yml
+*.log
+.env
+.env.*
+*.tsbuildinfo
+next-env.d.ts
+__pycache__/
+.superpowers/
