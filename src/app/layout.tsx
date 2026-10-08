@@ -11,8 +11,8 @@ const pretendard = localFont({
 });
 
 export const metadata: Metadata = {
-  title: { default: "AI Tool PoC 과제 선정", template: "%s · AI Tool PoC" },
-  description: "SK hynix × SK AX Replay 생산성 검증 포털",
+  title: { default: "AI 활용 생산성 향상 PoC", template: "%s · AI 생산성 PoC" },
+  description: "SK hynix × SK AX — AI 활용 생산성 향상 측정을 위한 PoC 과제 선정·Replay 측정 포털",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -56,15 +56,15 @@ function LoginForm() {
           <span className={s.org}>SK hynix × SK AX</span>
         </div>
         <div className={s.heroBody}>
-          <span className={s.kicker}>Replay Productivity Validation</span>
+          <span className={s.kicker}>과제 선정 · Replay 측정 포털</span>
           <h1 className={s.title}>
-            AI Tool PoC
+            AI 활용
             <br />
-            과제 선정 포털
+            생산성 향상 PoC
           </h1>
           <p className={s.lead}>
-            완료된 프로젝트를 AI Tool 로 다시 수행해 생산성 효과를 검증합니다. 과제 유형이 고르게 섞인 포트폴리오를 양사가 함께
-            선정하고, 측정까지 한 곳에서 관리합니다.
+            AI 를 활용했을 때 개발 생산성이 얼마나 향상되는지 측정하기 위한 PoC 입니다. 이미 완료된 과제를 AI 로 다시 개발해
+            기존 실적과 비교하며, 과제 선정부터 측정까지 양사가 한 곳에서 함께 관리합니다.
           </p>
           <ol className={s.steps}>
             {STEPS.map(([t, d], i) => (

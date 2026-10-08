@@ -2,11 +2,10 @@ import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
 import { fail } from "../api";
 import { getStore } from "../store";
-import type { OrgCd } from "../types";
-import type { Actor } from "./permissions";
+import type { ActorFull } from "./permissions";
 import { AUTH_COOKIE, getSecret, verifySession } from "./session";
 
-export type ActorFull = Actor & { userNm: string; orgCd: OrgCd };
+export type { ActorFull } from "./permissions";
 
 export type Guard = { ok: true; actor: ActorFull } | { ok: false; res: NextResponse };
 

@@ -70,7 +70,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Link href="/" className={s.brand}>
           <span className={s.brandMark}>PoC</span>
           <span className={s.brandText}>
-            <span className={s.brandTitle}>AI Tool PoC</span>
+            <span className={s.brandTitle}>AI 생산성 PoC</span>
             <span className={s.brandSub}>SK hynix × SK AX</span>
           </span>
         </Link>

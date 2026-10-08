@@ -15,6 +15,8 @@ export interface Actor {
   role: Role;
 }
 
+export type ActorFull = Actor & { userNm: string; orgCd: OrgCd };
+
 export type Action =
   | "project.create"
   | "project.edit"
