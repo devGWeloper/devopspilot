@@ -7,29 +7,10 @@ import { STATUS_LABEL } from "../labels";
 import { conflictR, err, forbiddenR, notFoundR, okR, type ServiceResult } from "../result";
 import { DuplicateKeyError, type Store } from "../store/types";
 import type { AgreeCd, Criteria, Level, Project, ProjectStatus, ReviewEntry } from "../types";
+import { canTransition, noteRequired } from "./transitions";
 import { validateDraft, validateForSubmit, type ProjectInput } from "./validate";
 
 export type { ProjectInput } from "./validate";
-
-const TRANSITIONS: Record<ProjectStatus, ProjectStatus[]> = {
-  DRAFT: [],
-  SUPPLEMENT: [],
-  SUBMITTED: ["REVIEW", "SUPPLEMENT"],
-  REVIEW: ["SUPPLEMENT", "SELECTED", "RESERVE", "EXCLUDED"],
-  SELECTED: ["REVIEW", "RESERVE", "EXCLUDED"],
-  RESERVE: ["REVIEW", "SELECTED", "EXCLUDED"],
-  EXCLUDED: ["REVIEW"],
-};
-
-const NOTE_REQUIRED: ProjectStatus[] = ["SUPPLEMENT", "EXCLUDED"];
-
-export function allowedTransitions(from: ProjectStatus): ProjectStatus[] {
-  return TRANSITIONS[from];
-}
-
-export function noteRequired(to: ProjectStatus): boolean {
-  return NOTE_REQUIRED.includes(to);
-}
 
 export function toView(p: Project, actor: ActorFull | { role: string }): Project {
   if (actor.role === "AX_ADMIN") return p;
@@ -217,11 +198,11 @@ export async function changeStatus(
   const before = await store.projects.get(id);
   if (!before) return notFoundR("과제");
   if (!can(actor, "project.status", { project: before })) return forbiddenR();
-  if (!TRANSITIONS[before.status].includes(to)) {
+  if (!canTransition(before.status, to)) {
     return err(409, "INVALID_TRANSITION", `'${STATUS_LABEL[before.status]}'에서 '${STATUS_LABEL[to]}'(으)로 바꿀 수 없습니다.`);
   }
   const n = note?.trim() || null;
-  if (NOTE_REQUIRED.includes(to) && !n) return err(422, "VALIDATION", `'${STATUS_LABEL[to]}'(으)로 바꿀 때는 사유가 필요합니다.`);
+  if (noteRequired(to) && !n) return err(422, "VALIDATION", `'${STATUS_LABEL[to]}'(으)로 바꿀 때는 사유가 필요합니다.`);
   return save(
     store,
     actor,
