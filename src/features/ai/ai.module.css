@@ -1,0 +1,120 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.editor {
+  width: 100%;
+  min-height: 460px;
+  resize: vertical;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  font-family: ui-monospace, Consolas, "D2Coding", monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  background: var(--surface-2);
+}
+.editor:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.progress {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 10px;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+}
+.bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-deep);
+  overflow: hidden;
+}
+.bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 200ms var(--ease);
+}
+.err {
+  grid-column: 1 / -1;
+  color: var(--danger);
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.table th {
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--muted);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.table input {
+  accent-color: var(--accent);
+}
+.differs {
+  background: #fffaf0;
+}
+.plink {
+  font-weight: 600;
+}
+.plink:hover {
+  color: var(--accent);
+}
+.result {
+  max-width: 980px;
+}
+.summary {
+  font-size: 15px;
+  line-height: 1.7;
+}
+.cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-top: 16px;
+}
+.cols ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.block {
+  margin-top: 16px;
+}
+.block p {
+  margin-top: 4px;
+}
+.dl {
+  display: grid;
+  gap: 8px;
+  margin: 6px 0 0;
+}
+.dl dt {
+  font-weight: 650;
+  font-size: 13px;
+}
+.dl dd {
+  margin: 0;
+  color: var(--ink-2);
+}
+@media (max-width: 1100px) {
+  .layout,
+  .cols {
+    grid-template-columns: 1fr;
+  }
+}
