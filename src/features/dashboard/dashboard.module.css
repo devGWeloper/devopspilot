@@ -34,7 +34,7 @@
 .progress span {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: var(--ink-2);
   border-radius: 4px;
 }
 .mainGrid {
@@ -114,6 +114,8 @@
   height: 28px;
   border-radius: 6px;
   font-weight: 750;
+  background: var(--bg-deep);
+  color: var(--ink-2);
 }
 .cell {
   vertical-align: top;
@@ -125,9 +127,9 @@
 }
 .cellGap {
   background-color: var(--surface);
-  background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(180, 68, 60, 0.07) 6px 7px);
+  background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(20, 33, 61, 0.05) 6px 7px);
   border-style: dashed;
-  border-color: #e3c3bf;
+  border-color: var(--line-strong);
 }
 .cellInner {
   display: flex;
@@ -161,6 +163,13 @@
 .matrixLegend .chipSel {
   background: var(--ink-2);
 }
+.chipSel {
+  background: var(--ink-2) !important;
+}
+.chipCand {
+  border-color: var(--line-strong) !important;
+  color: var(--ink-2) !important;
+}
 .gapSample {
   width: 14px;
   height: 12px;
@@ -171,7 +180,7 @@
 .gapLabel {
   font-size: 11.5px;
   font-weight: 650;
-  color: #b97b75;
+  color: var(--subtle);
 }
 
 .warnList {
@@ -181,7 +190,7 @@
   display: grid;
   gap: 8px;
   font-size: 13px;
-  color: #7a4f10;
+  color: var(--ink-2);
 }
 .warnList li {
   display: flex;
@@ -191,13 +200,13 @@
 .warnList svg {
   flex: none;
   margin-top: 3px;
-  color: var(--warn);
+  color: var(--subtle);
 }
 .good {
   display: flex;
   gap: 6px;
   align-items: center;
-  color: var(--ok);
+  color: var(--ink-2);
   font-weight: 600;
   font-size: 13px;
 }
@@ -273,12 +282,11 @@
 }
 .feedDot {
   flex: none;
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--line-strong);
   margin-top: 7px;
-  opacity: 0.6;
 }
 
 @media (max-width: 1280px) {

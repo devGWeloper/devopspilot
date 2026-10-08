@@ -41,8 +41,8 @@ function Distribution({ title, rows }: { title: string; rows: { label: string; �
             <YAxis type="category" dataKey="label" width={118} tick={{ fontSize: 12, fill: "#2c3854" }} axisLine={false} tickLine={false} />
             <Tooltip cursor={{ fill: "rgba(43,58,140,0.05)" }} contentStyle={{ borderRadius: 8, border: "1px solid #e4e1d8", fontSize: 12 }} />
             <Legend iconType="square" iconSize={9} wrapperStyle={{ fontSize: 12 }} />
-            <Bar dataKey="후보" fill="#c5cbea" radius={[0, 3, 3, 0]} barSize={10} />
-            <Bar dataKey="선정" fill="#2b3a8c" radius={[0, 3, 3, 0]} barSize={10} />
+            <Bar dataKey="후보" fill="#d3cfc2" radius={[0, 3, 3, 0]} barSize={10} />
+            <Bar dataKey="선정" fill="#2c3854" radius={[0, 3, 3, 0]} barSize={10} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -106,7 +106,7 @@ export function Dashboard() {
             {LEVELS.map((lv) => {
               const n = confirmed.filter((p) => p.finalFit === lv).length;
               return (
-                <span key={lv} title={`${FIT_LABEL[lv]} ${n}건`} style={{ flex: Math.max(n, 0.0001), background: FIT_COLOR[lv] }} />
+                <span key={lv} title={`${FIT_LABEL[lv]} ${n}건`} style={{ flex: Math.max(n, 0.0001), background: lv === "H" ? "#2c3854" : lv === "M" ? "#8a8f98" : "#d3cfc2" }} />
               );
             })}
           </div>
@@ -161,7 +161,7 @@ export function Dashboard() {
             <div className={s.fitTargets}>
               {LEVELS.map((lv) => (
                 <div key={lv}>
-                  <span style={{ color: FIT_COLOR[lv], fontWeight: 700 }}>{FIT_LABEL[lv]}</span>
+                  <span style={{ fontWeight: 700 }}>{FIT_LABEL[lv]}</span>
                   <b className="num">{balance.byFit[lv]}</b>
                   <span className="subtle">/ {codes.target.byFit[lv]}</span>
                 </div>

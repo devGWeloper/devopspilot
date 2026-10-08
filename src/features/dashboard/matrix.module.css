@@ -75,7 +75,7 @@
   text-align: left;
 }
 .bandMajor {
-  background: var(--accent);
+  background: var(--ink);
   color: #fff;
 }
 .bandMinor {
@@ -122,7 +122,7 @@ thead .stickyB {
   cursor: help;
 }
 .colMajor {
-  background: #eef0fa;
+  background: #eef0f3;
 }
 .colName {
   display: block;
@@ -132,7 +132,7 @@ thead .stickyB {
   word-break: keep-all;
 }
 .colMajor .colName {
-  color: var(--accent-ink);
+  color: var(--ink);
   font-weight: 700;
 }
 .area {
@@ -145,14 +145,14 @@ thead .stickyB {
   border-left: 2px solid var(--ink) !important;
 }
 .colHover {
-  background-color: rgba(43, 58, 140, 0.06) !important;
+  background-color: rgba(20, 33, 61, 0.04) !important;
 }
 .row {
   cursor: pointer;
 }
 .row:hover td,
 .row:hover th {
-  background: #f4f5fb;
+  background: #f6f6f4;
 }
 .row:hover .stickyA .pname {
   color: var(--accent);
@@ -170,12 +170,9 @@ thead .stickyB {
   font-size: 11.5px;
   color: var(--subtle);
 }
-.pmeta [data-st="SELECTED"] {
-  color: var(--ok);
-  font-weight: 700;
-}
+.pmeta [data-st="SELECTED"],
 .pmeta [data-st="RESERVE"] {
-  color: #3d5576;
+  color: var(--ink-2);
   font-weight: 700;
 }
 .cell {
@@ -189,36 +186,39 @@ thead .stickyB {
   margin: 0 auto;
   font-size: 12px;
 }
+/* 업무 화면이라 무채색 단계로 수준을 표현하고, 위험 신호인 '하'만 적갈색 글자로 남긴다. */
 .chip[data-l="H"],
 .lg[data-l="H"] {
-  background: var(--fit-h);
+  background: var(--ink-2);
   color: #fff;
 }
 .chip[data-l="M"],
 .lg[data-l="M"] {
-  background: var(--fit-m-soft);
-  color: #8a5a12;
-  box-shadow: inset 0 0 0 1px #e9cf9f;
+  background: #d9dbe0;
+  color: var(--ink-2);
 }
 .chip[data-l="L"],
 .lg[data-l="L"] {
-  background: var(--fit-l);
-  color: #fff;
+  background: var(--surface);
+  color: var(--fit-l);
+  box-shadow: inset 0 0 0 1.5px #c9a7a2;
 }
 .chip[data-l="none"],
 .lg[data-l="none"] {
   background: transparent;
   color: var(--subtle);
   box-shadow: inset 0 0 0 1px var(--line-strong);
-  border: 0;
 }
 .minorCell .chip[data-l="H"] {
-  background: var(--fit-h-soft);
-  color: var(--fit-h);
+  background: #aeb3bf;
+  color: #fff;
+}
+.minorCell .chip[data-l="M"] {
+  background: #eceef1;
+  color: var(--muted);
 }
 .minorCell .chip[data-l="L"] {
-  background: var(--fit-l-soft);
-  color: var(--fit-l);
+  box-shadow: inset 0 0 0 1px #dcc4c0;
 }
 .table tfoot th,
 .table tfoot td {

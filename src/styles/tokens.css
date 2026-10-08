@@ -15,13 +15,13 @@
   --accent-soft: #e8eaf6;
   --accent-ink: #1c2766;
 
-  --fit-h: #1e7a5a;
-  --fit-m: #b7791f;
-  --fit-l: #b4443c;
+  --fit-h: #3f6457;
+  --fit-m: #8a7347;
+  --fit-l: #9b4a43;
   --fit-na: #8a8f98;
-  --fit-h-soft: #e3f1eb;
-  --fit-m-soft: #f8eedd;
-  --fit-l-soft: #f6e4e2;
+  --fit-h-soft: #eaefec;
+  --fit-m-soft: #f2eee6;
+  --fit-l-soft: #f4e9e7;
   --fit-na-soft: #eeeff1;
 
   --ok: #1e7a5a;
@@ -31,8 +31,8 @@
   --warn-soft: var(--fit-m-soft);
   --danger-soft: var(--fit-l-soft);
 
-  --col-pl: #e8eaf6;
-  --col-dev: #e3f1eb;
+  --col-pl: #eef0f4;
+  --col-dev: #f1f3f1;
   --col-auto: #eeeff1;
 
   --r-sm: 6px;

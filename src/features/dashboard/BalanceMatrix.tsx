@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Segmented } from "@/components/ui/Tabs";
 import { effectiveFit } from "@/lib/balance";
-import { FIT_COLOR, FIT_LABEL, FIT_SOFT } from "@/lib/labels";
+import { FIT_LABEL } from "@/lib/labels";
 import { DEV_TYPE_INDICATOR, LEVELS, type Codes, type Criteria, type Project } from "@/lib/types";
 import s from "./dashboard.module.css";
 
@@ -61,8 +61,8 @@ export function BalanceMatrix({ projects, criteria, codes, compact }: { projects
           <tbody>
             {LEVELS.map((lv) => (
               <tr key={lv}>
-                <th className={s.rowHead} style={{ color: FIT_COLOR[lv] }}>
-                  <span className={s.rowBadge} style={{ background: FIT_SOFT[lv] }}>
+                <th className={s.rowHead}>
+                  <span className={s.rowBadge}>
                     {FIT_LABEL[lv]}
                   </span>
                 </th>
@@ -80,7 +80,6 @@ export function BalanceMatrix({ projects, criteria, codes, compact }: { projects
                               key={p.prjId}
                               href={`/projects/${p.prjId}`}
                               className={p.status === "SELECTED" ? s.chipSel : s.chipCand}
-                              style={p.status === "SELECTED" ? { background: FIT_COLOR[lv] } : { borderColor: FIT_COLOR[lv], color: FIT_COLOR[lv] }}
                               title={`${p.prjId} ${p.prjNm}`}
                             >
                               {p.prjNm}
