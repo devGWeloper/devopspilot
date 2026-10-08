@@ -1,5 +1,5 @@
-import { PageHeader } from "@/components/ui/PageHeader";
+import { Dashboard } from "@/features/dashboard/Dashboard";
 
 export default function DashboardPage() {
-  return <PageHeader eyebrow="Overview" title="대시보드" />;
+  return <Dashboard />;
 }
