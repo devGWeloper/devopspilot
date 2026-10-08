@@ -1,0 +1,107 @@
+.wrap {
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13.5px;
+}
+.table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-2);
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.dense td {
+  padding: 8px 12px;
+}
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.clickable {
+  cursor: pointer;
+}
+.table tbody tr {
+  transition: background var(--dur) var(--ease);
+}
+.table tbody tr:hover {
+  background: var(--surface-2);
+}
+.selectedRow {
+  background: var(--accent-soft) !important;
+}
+.checkCol {
+  width: 40px;
+  text-align: center !important;
+}
+.checkCol input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+}
+.sortBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+.sortBtn svg {
+  opacity: 0;
+}
+.sortBtn:hover svg {
+  opacity: 0.5;
+}
+.sortActive {
+  color: var(--ink);
+}
+.sortActive svg {
+  opacity: 1 !important;
+}
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+}
+.pageBtn {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.pageBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.pageSize {
+  height: 28px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  padding: 0 6px;
+  font-size: 12.5px;
+}
