@@ -18,7 +18,8 @@ try {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  experimental: { serverComponentsExternalPackages: ["oracledb", "exceljs"] },
+  // Node 24 + Next 14 에서 병렬 빌드 워커가 기본 _document 를 간헐적으로 만들지 못해 빌드가 실패한다 — 단일 워커로 고정.
+  experimental: { serverComponentsExternalPackages: ["oracledb", "exceljs"], webpackBuildWorker: false },
 };
 
 export default nextConfig;
