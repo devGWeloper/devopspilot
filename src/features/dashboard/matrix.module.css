@@ -1,0 +1,249 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.toggle input {
+  accent-color: var(--accent);
+}
+.legend {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.lg,
+.chip {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 5px;
+  font-weight: 750;
+}
+.lg {
+  width: 24px;
+  height: 20px;
+  font-size: 11px;
+}
+.rule {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 8px 12px;
+}
+.rule b {
+  margin-right: 6px;
+}
+
+.scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  font-size: 13px;
+}
+.table th,
+.table td {
+  border-bottom: 1px solid var(--line);
+}
+.band th {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  padding: 7px 10px;
+  text-align: left;
+}
+.bandMajor {
+  background: var(--accent);
+  color: #fff;
+}
+.bandMinor {
+  background: var(--bg-deep);
+  color: var(--muted);
+  border-left: 2px solid var(--ink) !important;
+}
+.stickyA,
+.stickyB {
+  position: sticky;
+  z-index: 2;
+  background: var(--surface);
+  text-align: left;
+}
+.stickyA {
+  left: 0;
+  min-width: 220px;
+  max-width: 260px;
+  padding: 8px 14px;
+}
+.stickyB {
+  left: 220px;
+  width: 72px;
+  padding: 8px 10px;
+  text-align: center;
+  box-shadow: 1px 0 0 var(--line), 6px 0 8px -6px rgba(20, 33, 61, 0.12);
+}
+thead .stickyA,
+thead .stickyB {
+  background: var(--surface-2);
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--muted);
+  z-index: 3;
+}
+.colHead {
+  vertical-align: bottom;
+  width: 62px;
+  min-width: 62px;
+  padding: 8px 4px;
+  background: var(--surface-2);
+  text-align: center;
+  font-weight: 600;
+  cursor: help;
+}
+.colMajor {
+  background: #eef0fa;
+}
+.colName {
+  display: block;
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--ink-2);
+  word-break: keep-all;
+}
+.colMajor .colName {
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+.area {
+  display: block;
+  font-size: 10.5px;
+  color: var(--subtle);
+  margin-bottom: 2px;
+}
+.split {
+  border-left: 2px solid var(--ink) !important;
+}
+.colHover {
+  background-color: rgba(43, 58, 140, 0.06) !important;
+}
+.row {
+  cursor: pointer;
+}
+.row:hover td,
+.row:hover th {
+  background: #f4f5fb;
+}
+.row:hover .stickyA .pname {
+  color: var(--accent);
+}
+.pname {
+  display: block;
+  font-weight: 650;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pmeta {
+  display: block;
+  font-size: 11.5px;
+  color: var(--subtle);
+}
+.pmeta [data-st="SELECTED"] {
+  color: var(--ok);
+  font-weight: 700;
+}
+.pmeta [data-st="RESERVE"] {
+  color: #3d5576;
+  font-weight: 700;
+}
+.cell {
+  padding: 5px 4px;
+  text-align: center;
+}
+.chip {
+  width: 100%;
+  max-width: 44px;
+  height: 28px;
+  margin: 0 auto;
+  font-size: 12px;
+}
+.chip[data-l="H"],
+.lg[data-l="H"] {
+  background: var(--fit-h);
+  color: #fff;
+}
+.chip[data-l="M"],
+.lg[data-l="M"] {
+  background: var(--fit-m-soft);
+  color: #8a5a12;
+  box-shadow: inset 0 0 0 1px #e9cf9f;
+}
+.chip[data-l="L"],
+.lg[data-l="L"] {
+  background: var(--fit-l);
+  color: #fff;
+}
+.chip[data-l="none"],
+.lg[data-l="none"] {
+  background: transparent;
+  color: var(--subtle);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  border: 0;
+}
+.minorCell .chip[data-l="H"] {
+  background: var(--fit-h-soft);
+  color: var(--fit-h);
+}
+.minorCell .chip[data-l="L"] {
+  background: var(--fit-l-soft);
+  color: var(--fit-l);
+}
+.table tfoot th,
+.table tfoot td {
+  border-bottom: 0;
+  background: var(--surface-2);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.foot {
+  text-align: center;
+  padding: 6px 4px;
+}
+.footLow {
+  color: var(--fit-l);
+}
+.foot2 {
+  font-size: 12px;
+  color: var(--subtle);
+}
+@media print {
+  .scroll {
+    overflow: visible;
+  }
+  .stickyA,
+  .stickyB {
+    position: static;
+  }
+}

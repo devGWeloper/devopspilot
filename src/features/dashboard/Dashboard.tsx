@@ -11,6 +11,7 @@ import { useApi, useRefs } from "@/lib/hooks";
 import { FIT_COLOR, FIT_LABEL, fmtRelative } from "@/lib/labels";
 import { LEVELS, type CodeItem, type HistoryEntry, type Project } from "@/lib/types";
 import { BalanceMatrix } from "./BalanceMatrix";
+import { FitnessMatrix } from "./FitnessMatrix";
 import s from "./dashboard.module.css";
 
 interface DashData {
@@ -81,6 +82,21 @@ export function Dashboard() {
         title="PoC 과제 선정 현황"
         description="AI 활용 생산성 향상 측정을 위한 Replay PoC 대상 과제입니다. 생산성 효과가 과대·과소평가되지 않도록 적합도 상·중·하와 과제 유형을 고르게 선정합니다."
       />
+
+
+
+      <Panel
+        eyebrow="Candidates × indicators"
+        title="후보 과제 × 지표 한눈에 보기"
+        style={{ marginBottom: 16 }}
+        actions={
+          <Link href="/admin/criteria" className={s.link}>
+            지표 관리 <Icon name="chevronRight" size={14} />
+          </Link>
+        }
+      >
+        <FitnessMatrix projects={projects} criteria={criteria} />
+      </Panel>
 
       <section className={s.kpis}>
         <KpiTile label="후보 과제" value={live.length} unit="건" sub={`제외 ${projects.length - live.length}건 별도`} />
