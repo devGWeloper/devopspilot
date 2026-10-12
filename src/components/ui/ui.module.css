@@ -174,17 +174,12 @@
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--line-strong);
 }
-.cell[data-level="H"] {
-  background: var(--fit-h);
+.cell[data-filled="true"] {
+  background: var(--ink-2);
   box-shadow: none;
 }
-.cell[data-level="M"] {
-  background: var(--fit-m);
-  box-shadow: none;
-}
-.cell[data-level="L"] {
-  background: var(--fit-l);
-  box-shadow: none;
+.cellMinor[data-filled="true"] {
+  background: #aeb3bf;
 }
 .stripMd .cellMajor {
   width: 9px;
@@ -556,12 +551,6 @@
   font-size: 12px;
   color: var(--muted);
   line-height: 1.4;
-}
-.levelDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  flex: none;
 }
 
 /* Modal */

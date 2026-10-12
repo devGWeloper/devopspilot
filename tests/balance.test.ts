@@ -14,29 +14,30 @@ function sel(i: number, fit: Fit, dev: string, lang: string, extra: Partial<Proj
     finalFit: fit,
     devTypeCd: dev,
     mainLangCd: lang,
-    domainCd: "FAB",
-    sysTypeCd: "WEB",
+    domainCd: "MES",
+    sysTypeCd: "WEB_CLOUD",
     ...extra,
   });
 }
 
 describe("analyzeBalance", () => {
-  it("선정 0건이면 총량·적합도·개발 성격·언어 경고", () => {
+  it("선정 0건이면 총량·적합도·과제 영역('혼합' 제외)·언어 경고", () => {
     const r = analyzeBalance([], c, codes);
     expect(r.selectedCount).toBe(0);
     const kinds = r.warnings.map((w) => w.kind);
     expect(kinds.filter((k) => k === "TOTAL")).toHaveLength(1);
     expect(kinds.filter((k) => k === "FIT")).toHaveLength(3);
-    expect(kinds.filter((k) => k === "DEV_TYPE")).toHaveLength(3);
+    expect(kinds.filter((k) => k === "DEV_TYPE")).toHaveLength(4);
     expect(kinds.filter((k) => k === "LANG")).toHaveLength(1);
-    expect(r.warnings.map((w) => w.message)).toContain("개발 성격 '레거시' 선정 0건");
+    expect(r.warnings.map((w) => w.message)).toContain("과제 영역 '전환' 선정 0건");
+    expect(r.warnings.map((w) => w.message).join()).not.toContain("혼합");
   });
 
   it("목표를 모두 채우면 경고 없음", () => {
     const fits: Fit[] = ["H", "H", "H", "M", "M", "M", "L", "L", "L"];
-    const devs = ["new", "mixed", "legacy"];
+    const devs = ["NEW", "IMPROVE", "CONVERT", "REBUILD"];
     const langs = ["JAVA", "PYTHON", "PLSQL"];
-    const ps = fits.map((f, i) => sel(i, f, devs[i % 3], langs[i % 3]));
+    const ps = fits.map((f, i) => sel(i, f, devs[i % 4], langs[i % 3]));
     const r = analyzeBalance(ps, c, codes);
     expect(r.warnings).toEqual([]);
     expect(r.byFit).toMatchObject({ H: 3, M: 3, L: 3 });

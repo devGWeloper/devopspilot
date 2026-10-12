@@ -8,9 +8,9 @@ import { Callout, Skeleton } from "@/components/ui/Panel";
 import { ProfileStrip } from "@/components/ui/ProfileStrip";
 import { analyzeBalance } from "@/lib/balance";
 import { buildProfile, evaluateFit, FIT_LABEL } from "@/lib/fitness";
-import { labelOf, optionLabel, useApi, useRefs } from "@/lib/hooks";
+import { labelOf, useApi, useRefs } from "@/lib/hooks";
 import { AGREE_LABEL, FIT_COLOR, fmtDate, fmtDateTime, STATUS_LABEL } from "@/lib/labels";
-import { DEV_TYPE_INDICATOR, LEVELS, type Project } from "@/lib/types";
+import { LEVELS, type Project } from "@/lib/types";
 import { BalanceMatrix } from "../dashboard/BalanceMatrix";
 import { ruleSentences } from "../project-detail/RationaleTab";
 import s from "./report.module.css";
@@ -85,9 +85,9 @@ export function Report() {
       </section>
 
       <section className={s.page}>
-        <h2 className={s.h2}>1. 포트폴리오 균형 — 적합도 × 개발 성격</h2>
+        <h2 className={s.h2}>1. 포트폴리오 균형 — 적합도 × 분류</h2>
         <p className={s.lead}>채운 칩은 선정, 테두리 칩은 후보입니다. 빗금 칸은 선정 과제가 없는 유형입니다.</p>
-        <BalanceMatrix projects={projects} criteria={criteria} codes={codes} compact />
+        <BalanceMatrix projects={projects} codes={codes} compact />
       </section>
 
       <section className={s.page}>
@@ -101,7 +101,7 @@ export function Report() {
               <th>적합도</th>
               <th>지표 프로필</th>
               <th>판정 근거</th>
-              <th>개발 성격 · 언어 · 도메인</th>
+              <th>과제 영역 · 배포 형식 · 담당 · 언어</th>
               <th>합의</th>
             </tr>
           </thead>
@@ -129,7 +129,7 @@ export function Report() {
                     {p.eval.confirm?.reason && <div className="subtle">확정 사유: {p.eval.confirm.reason}</div>}
                   </td>
                   <td className={s.small}>
-                    {optionLabel(criteria, DEV_TYPE_INDICATOR, p.devTypeCd)} · {labelOf(codes.langs, p.mainLangCd)} · {labelOf(codes.domains, p.domainCd)}
+                    {labelOf(codes.workAreas, p.devTypeCd)} · {labelOf(codes.sysTypes, p.sysTypeCd)} · {labelOf(codes.domains, p.domainCd)} · {labelOf(codes.langs, p.mainLangCd)}
                   </td>
                   <td>
                     <AgreementSeal ax={p.axAgree} hx={p.hxAgree} />

@@ -50,20 +50,20 @@ describe("impactOf", () => {
   };
 
   it("규칙이 바뀌면 바뀌는 과제와 분포를 보여준다", () => {
-    const oneLow = { ...allH, devType: "legacy" };
+    const oneLow = { ...allH, spec: "vague" };
     const ps = [p("A", allH), p("B", oneLow)];
-    const to: Criteria = { ...from, version: 2, rule: { ...from.rule, lowMinMajorLow: 1 } };
+    const to: Criteria = { ...from, version: 2, rule: { ...from.rule, lowMinMajorLow: 2 } };
     const r = impactOf(ps, from, to);
-    expect(r.from).toMatchObject({ H: 1, M: 1, L: 0 });
-    expect(r.to).toMatchObject({ H: 1, M: 0, L: 1 });
-    expect(r.changed).toEqual([{ prjId: "B", prjNm: "B", before: "M", after: "L" }]);
+    expect(r.from).toMatchObject({ H: 1, M: 0, L: 1 });
+    expect(r.to).toMatchObject({ H: 1, M: 1, L: 0 });
+    expect(r.changed).toEqual([{ prjId: "B", prjNm: "B", before: "L", after: "M" }]);
   });
 
   it("지표를 Minor 로 내리면 판정에서 빠진다", () => {
-    const ps = [p("B", { ...allH, devType: "legacy" })];
+    const ps = [p("B", { ...allH, spec: "vague" })];
     const to: Criteria = JSON.parse(JSON.stringify(from));
     to.areas[0].indicators[0].tier = "MINOR";
-    expect(impactOf(ps, from, to).changed[0]).toMatchObject({ before: "M", after: "H" });
+    expect(impactOf(ps, from, to).changed[0]).toMatchObject({ before: "L", after: "H" });
   });
 
   it("제외 과제는 계산하지 않는다", () => {

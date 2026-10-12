@@ -2,7 +2,7 @@
 
 import { Checkbox, Field, TextInput } from "@/components/ui/Field";
 import { Callout, Panel } from "@/components/ui/Panel";
-import type { ProjectInput } from "@/lib/projects/validate";
+import { baselineRequired, type ProjectInput } from "@/lib/projects/validate";
 import { REPLAY_PHASES, type ProjectBaseline, type ReplayPhase } from "@/lib/types";
 import { PHASE_NAME } from "../project-detail/OverviewTab";
 import s from "./form.module.css";
@@ -23,6 +23,7 @@ export function StepBaseline({
   errOf: (f: string) => string | null;
 }) {
   const bl = input.base.baseline;
+  const req = baselineRequired(input);
   const set = (patch: Partial<ProjectBaseline>) => update({ base: { ...input.base, baseline: { ...bl, ...patch } } });
   const phaseSum = REPLAY_PHASES.reduce((a, p) => a + (bl.phaseMm[p] ?? 0), 0);
   const mismatch = bl.totalMm !== null && phaseSum > 0 && Math.abs(phaseSum - bl.totalMm) > 0.05;
@@ -37,15 +38,20 @@ export function StepBaseline({
         원 프로젝트(AI 없이 수행)의 실적은 Replay 테스트 결과와 비교할 <b>기준선</b>입니다. 기능 단위 실적은 선정 후 측정 단계에서 따로
         입력하며, 여기서는 과제 전체 규모를 적습니다.
       </Callout>
-      <Panel eyebrow="Step 2" title="원 프로젝트 실적">
+      {!req && (
+        <Callout tone="warn">
+          기존 WBS 실적이 <b>없음</b>으로 입력돼 수행 기간·총 공수는 필수가 아닙니다. 공수 산정서 등 다른 근거가 있으면 적어 주세요.
+        </Callout>
+      )}
+      <Panel eyebrow="Replay 기준선" title="원 프로젝트 실적">
         <div className={s.formGrid}>
-          <Field label="수행 시작일" htmlFor="sd" error={errOf("baseline.period")}>
+          <Field label="수행 시작일" required={req} htmlFor="sd" error={errOf("baseline.period")}>
             <TextInput id="sd" type="date" value={bl.startDate ?? ""} onChange={(e) => set({ startDate: e.target.value || null })} />
           </Field>
-          <Field label="수행 종료일" htmlFor="ed">
+          <Field label="수행 종료일" required={req} htmlFor="ed">
             <TextInput id="ed" type="date" value={bl.endDate ?? ""} onChange={(e) => set({ endDate: e.target.value || null })} />
           </Field>
-          <Field label="총 투입 공수 (M/M)" htmlFor="mm" error={errOf("baseline")}>
+          <Field label="총 투입 공수 (M/M)" required={req} htmlFor="mm" error={errOf("baseline.totalMm") ?? errOf("baseline")}>
             <TextInput id="mm" type="number" min={0} step={0.1} inputMode="decimal" value={bl.totalMm ?? ""} onChange={(e) => set({ totalMm: num(e.target.value) })} />
           </Field>
           <div />
@@ -91,7 +97,7 @@ export function StepBaseline({
           </Field>
           <div />
           <div className={s.full}>
-            <Field label="Replay 대상 단계" hint="요구분석·고객협의는 비교에서 제외하는 것이 원칙입니다.">
+            <Field label="Replay 대상 단계" required error={errOf("baseline.replayPhases")} hint="요구분석·고객협의는 비교에서 제외하는 것이 원칙입니다.">
               <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
                 {REPLAY_PHASES.map((p) => (
                   <Checkbox key={p} label={PHASE_NAME[p]} checked={bl.replayPhases.includes(p)} onChange={() => togglePhase(p)} />

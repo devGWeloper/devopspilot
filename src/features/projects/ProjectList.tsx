@@ -18,13 +18,13 @@ import { effectiveFit } from "@/lib/balance";
 import { api, download, errMessage } from "@/lib/apiClient";
 import { can } from "@/lib/auth/permissions";
 import { buildProfile } from "@/lib/fitness";
-import { labelOf, optionLabel, useApi, useRefs } from "@/lib/hooks";
+import { labelOf, useApi, useRefs } from "@/lib/hooks";
 import { FIT_LABEL, fmtDateTime, fmtRelative, STATUS_LABEL } from "@/lib/labels";
-import { DEV_TYPE_INDICATOR, FITS, STATUSES, type Project, type ProjectStatus } from "@/lib/types";
+import { FITS, STATUSES, type Project, type ProjectStatus } from "@/lib/types";
 import { BulkBar } from "./BulkBar";
 import s from "./projects.module.css";
 
-const FILTER_KEYS = ["q", "status", "fit", "devType", "lang", "domain", "pm"] as const;
+const FILTER_KEYS = ["q", "status", "fit", "devType", "sysType", "lang", "domain", "pm"] as const;
 
 export function ProjectList() {
   const router = useRouter();
@@ -38,8 +38,6 @@ export function ProjectList() {
   const { data: pms } = useApi<{ userId: string; userNm: string }[]>("/api/users/options?role=PM");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [q, setQ] = useState(sp.get("q") ?? "");
-
-  const devOptions = criteria?.areas.flatMap((a) => a.indicators).find((i) => i.id === DEV_TYPE_INDICATOR)?.options ?? [];
 
   function setParam(key: (typeof FILTER_KEYS)[number], value: string) {
     const next = new URLSearchParams(sp.toString());
@@ -81,9 +79,9 @@ export function ProjectList() {
     { key: "pm", header: "PM", width: 90, render: (p) => p.pmUserNm, sortValue: (p) => p.pmUserNm },
     {
       key: "dev",
-      header: "개발 성격",
-      width: 90,
-      render: (p) => optionLabel(criteria, DEV_TYPE_INDICATOR, p.devTypeCd),
+      header: "과제 영역",
+      width: 100,
+      render: (p) => labelOf(codes?.workAreas, p.devTypeCd),
       sortValue: (p) => p.devTypeCd ?? "",
     },
     {
@@ -99,7 +97,7 @@ export function ProjectList() {
     },
     {
       key: "profile",
-      header: "지표 프로필",
+      header: "지표 입력",
       width: 190,
       render: (p) => (criteria ? <ProfileStrip profile={buildProfile(criteria, p.eval.answers)} size="md" /> : null),
     },
@@ -184,7 +182,7 @@ export function ProjectList() {
               </Button>
             )}
             {me && can(me, "project.create") && (
-              <Button variant="primary" icon="plus" onClick={() => router.push("/projects/new")}>
+              <Button variant="primary" icon="plus" onClick={() => router.push("/entry/new")}>
                 과제 등록
               </Button>
             )}
@@ -218,10 +216,17 @@ export function ProjectList() {
               </option>
             ))}
           </FilterSelect>
-          <FilterSelect label="개발 성격" value={sp.get("devType") ?? ""} onChange={(v) => setParam("devType", v)}>
-            {devOptions.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.label}
+          <FilterSelect label="과제 영역" value={sp.get("devType") ?? ""} onChange={(v) => setParam("devType", v)}>
+            {codes?.workAreas.map((x) => (
+              <option key={x.code} value={x.code}>
+                {x.label}
+              </option>
+            ))}
+          </FilterSelect>
+          <FilterSelect label="배포 형식" value={sp.get("sysType") ?? ""} onChange={(v) => setParam("sysType", v)}>
+            {codes?.sysTypes.map((x) => (
+              <option key={x.code} value={x.code}>
+                {x.label}
               </option>
             ))}
           </FilterSelect>
@@ -232,7 +237,7 @@ export function ProjectList() {
               </option>
             ))}
           </FilterSelect>
-          <FilterSelect label="도메인" value={sp.get("domain") ?? ""} onChange={(v) => setParam("domain", v)}>
+          <FilterSelect label="담당" value={sp.get("domain") ?? ""} onChange={(v) => setParam("domain", v)}>
             {codes?.domains.map((x) => (
               <option key={x.code} value={x.code}>
                 {x.label}
@@ -265,7 +270,7 @@ export function ProjectList() {
           </span>
           <span className={s.legend}>
             <span className={s.legendSolid} /> 확정
-            <span className={s.legendDash} /> 제안
+            <span className={s.legendDash} /> 참고 등급
           </span>
         </div>
         {error && (

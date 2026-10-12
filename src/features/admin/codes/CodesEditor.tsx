@@ -10,16 +10,17 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { useToast } from "@/components/ui/Toast";
 import { api, errMessage } from "@/lib/apiClient";
 import { invalidateRefs, useApi } from "@/lib/hooks";
+import Link from "next/link";
+import { CODE_LISTS, ENTRY_FIELDS, type CodeListKey } from "@/lib/projects/fields";
 import { LEVELS, type CodeItem, type Codes, type Project } from "@/lib/types";
 import s from "./codes.module.css";
 
-type ListKey = "langs" | "domains" | "sysTypes";
+type ListKey = CodeListKey;
 
-const LISTS: { key: ListKey; title: string; field: (p: Project) => string[] }[] = [
-  { key: "langs", title: "주 개발 언어", field: (p) => p.base.langCds },
-  { key: "domains", title: "업무 도메인", field: (p) => [p.base.domainCd] },
-  { key: "sysTypes", title: "시스템 유형", field: (p) => [p.base.sysTypeCd] },
-];
+const LISTS = CODE_LISTS.map((l) => {
+  const f = ENTRY_FIELDS.find((x) => x.codes === l.key)!;
+  return { ...l, field: (p: Project): string[] => ([] as string[]).concat((p.base[f.key as keyof Project["base"]] as string | string[]) ?? []) };
+});
 
 export function CodesEditor() {
   const { toast, toastError } = useToast();
@@ -28,6 +29,7 @@ export function CodesEditor() {
   const [codes, setCodes] = useState<Codes | null>(null);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [active, setActive] = useState<ListKey>(LISTS[0].key);
 
   useEffect(() => {
     if (loaded) setCodes(loaded);
@@ -66,7 +68,7 @@ export function CodesEditor() {
       <PageHeader
         eyebrow="Codes & targets"
         title="코드·선정 목표"
-        description="과제 분류 코드와 선정 균형 목표입니다. 목표는 대시보드·선정 보드의 균형 경고 기준이 됩니다."
+        description="과제 선정 양식(엑셀) '코드값' 시트의 선택값과 선정 균형 목표입니다. 정의·예시는 과제 기입 화면에서 선택지 설명으로 보입니다."
         actions={
           <Button variant="primary" loading={busy} disabled={!dirty} onClick={save}>
             저장
@@ -83,7 +85,7 @@ export function CodesEditor() {
               <TextInput type="number" min={0} value={codes.target.byFit[lv]} onChange={(e) => setTarget({ byFit: { ...codes.target.byFit, [lv]: n(e.target.value) } })} />
             </Field>
           ))}
-          <Field label="개발 성격별 최소 건수" hint="신규·혼합·레거시 각각">
+          <Field label="과제 영역별 최소 건수" hint="'혼합'을 뺀 과제 영역 각각">
             <TextInput type="number" min={0} value={codes.target.minPerDevType} onChange={(e) => setTarget({ minPerDevType: n(e.target.value) })} />
           </Field>
           <Field label="최소 언어 종류">
@@ -97,13 +99,27 @@ export function CodesEditor() {
         )}
       </Panel>
       <div className={s.lists}>
-        {LISTS.map((l) => (
-          <Panel key={l.key} eyebrow="Codes" title={l.title}>
+        <nav className={s.listNav} aria-label="코드 목록">
+          {LISTS.map((l) => (
+            <button key={l.key} type="button" className={s.listBtn} aria-current={active === l.key ? "true" : undefined} onClick={() => setActive(l.key)}>
+              <span className={s.listRef}>{l.ref.startsWith("ADD") ? "포털" : l.ref}</span>
+              <span>{l.title}</span>
+              <span className="subtle num">{codes[l.key].length}</span>
+            </button>
+          ))}
+          <p className={s.navNote}>
+            Major·Minor 지표(FIT-01~03, WBS 실적·도구·AI 역량)의 선택지는 수준과 함께 <Link href="/admin/criteria">평가 기준</Link>에서 관리합니다.
+          </p>
+        </nav>
+        {LISTS.filter((l) => l.key === active).map((l) => (
+          <Panel key={l.key} eyebrow={l.ref.startsWith("ADD") ? "포털 추가 항목" : `양식 ${l.ref}`} title={l.title}>
             <table className={s.table}>
               <thead>
                 <tr>
-                  <th style={{ width: 110 }}>코드</th>
-                  <th>이름</th>
+                  <th style={{ width: 130 }}>코드</th>
+                  <th style={{ width: 180 }}>이름</th>
+                  <th>정의</th>
+                  <th style={{ width: 200 }}>예시</th>
                   <th style={{ width: 52, textAlign: "right" }}>사용</th>
                   <th style={{ width: 32 }} />
                 </tr>
@@ -112,6 +128,7 @@ export function CodesEditor() {
                 {codes[l.key].map((c, i) => {
                   const used = usage(l.key, c.code);
                   const isNew = !loaded?.[l.key].some((x) => x.code === c.code);
+                  const patch = (x: Partial<CodeItem>) => setList(l.key, codes[l.key].map((y, j) => (j === i ? { ...y, ...x } : y)));
                   return (
                     <tr key={i}>
                       <td>
@@ -119,11 +136,17 @@ export function CodesEditor() {
                           value={c.code}
                           disabled={!isNew}
                           title={isNew ? undefined : "기존 코드는 과제 데이터와 연결돼 있어 바꿀 수 없습니다"}
-                          onChange={(e) => setList(l.key, codes[l.key].map((x, j) => (j === i ? { ...x, code: e.target.value.toUpperCase().replace(/\s/g, "_") } : x)))}
+                          onChange={(e) => patch({ code: e.target.value.toUpperCase().replace(/\s/g, "_") })}
                         />
                       </td>
                       <td>
-                        <TextInput value={c.label} onChange={(e) => setList(l.key, codes[l.key].map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
+                        <TextInput value={c.label} onChange={(e) => patch({ label: e.target.value })} />
+                      </td>
+                      <td>
+                        <TextInput value={c.desc ?? ""} placeholder="—" onChange={(e) => patch({ desc: e.target.value || undefined })} />
+                      </td>
+                      <td>
+                        <TextInput value={c.example ?? ""} placeholder="—" onChange={(e) => patch({ example: e.target.value || undefined })} />
                       </td>
                       <td className="num subtle" style={{ textAlign: "right" }}>
                         {used}
@@ -146,6 +169,9 @@ export function CodesEditor() {
             <button className={s.add} onClick={() => setList(l.key, [...codes[l.key], { code: "", label: "" }])}>
               + 코드 추가
             </button>
+            <p className={s.navNote} style={{ marginTop: 10 }}>
+              코드 ETC·MIXED 를 고른 과제는 비고(REF-04)가 필수가 됩니다.
+            </p>
           </Panel>
         ))}
       </div>

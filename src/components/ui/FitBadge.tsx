@@ -18,12 +18,12 @@ export function FitBadge({
     background: FIT_SOFT[fit],
     borderColor: suggest ? FIT_COLOR[fit] : "transparent",
   };
-  const title = fit === "NA" ? "미평가" : `${confirmed ? "확정" : "제안"} 적합도 ${FIT_LABEL[fit]}`;
+  const title = fit === "NA" ? "미평가" : confirmed ? `확정 적합도 ${FIT_LABEL[fit]}` : `참고 등급 ${FIT_LABEL[fit]}`;
   const cls = [s.fit, size === "sm" ? s.fitSm : size === "lg" ? s.fitLg : s.fitMd, suggest ? s.fitSuggest : ""].join(" ");
   return (
     <span className={cls} style={style} title={title} aria-label={title}>
       {fit === "NA" ? (size === "lg" ? "—" : "미평가") : FIT_LABEL[fit]}
-      {size === "lg" && <span className={s.fitLgCaption}>{fit === "NA" ? "미평가" : confirmed ? "확정" : "제안"}</span>}
+      {size === "lg" && <span className={s.fitLgCaption}>{fit === "NA" ? "미평가" : confirmed ? "확정" : "참고"}</span>}
     </span>
   );
 }

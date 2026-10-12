@@ -1,47 +1,80 @@
+import { Fragment, type ReactNode } from "react";
 import { Chip } from "@/components/ui/Chip";
 import { Panel } from "@/components/ui/Panel";
 import { labelOf } from "@/lib/hooks";
 import { fmtDate } from "@/lib/labels";
-import { REPLAY_PHASES, type Codes, type Project, type ReplayPhase } from "@/lib/types";
+import { FIT_LABEL } from "@/lib/fitness";
+import { areasOfStep, ENTRY_STEPS, fieldsOfStep, STEP, type EntryField } from "@/lib/projects/fields";
+import { REPLAY_PHASES, type Codes, type Criteria, type Level, type Project, type ReplayPhase } from "@/lib/types";
 import s from "./detail.module.css";
 
 export const PHASE_NAME: Record<ReplayPhase, string> = { ANALYSIS: "분석", DESIGN: "설계", DEV: "개발", TEST: "테스트" };
 const PHASE_COLOR: Record<ReplayPhase, string> = { ANALYSIS: "#c5cbea", DESIGN: "#8c9cf0", DEV: "#2b3a8c", TEST: "#14213d" };
 
-export function OverviewTab({ p, codes }: { p: Project; codes: Codes | null }) {
+export function OverviewTab({ p, codes, criteria }: { p: Project; codes: Codes | null; criteria?: Criteria | null }) {
   const b = p.base;
   const bl = b.baseline;
+  const show = (f: EntryField): ReactNode => {
+    const v = f.key === "prjNm" || f.key === "sysNm" ? p[f.key] : b[f.key];
+    if (f.kind === "codes" && f.codes) {
+      const list = v as string[];
+      return list.length ? (
+        <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
+          {list.map((l, i) => (
+            <Chip key={l} tone={i === 0 ? "accent" : "outline"}>
+              {labelOf(codes?.[f.codes!], l)}
+            </Chip>
+          ))}
+        </span>
+      ) : (
+        "—"
+      );
+    }
+    if (f.kind === "code" && f.codes) return labelOf(codes?.[f.codes], v as string);
+    if (f.kind === "level") return v ? FIT_LABEL[v as Level] : "—";
+    if (v === null || v === undefined || v === "") return "—";
+    return String(v);
+  };
   const phaseSum = REPLAY_PHASES.reduce((sum, ph) => sum + (bl.phaseMm[ph] ?? 0), 0);
   return (
     <div className={s.grid2}>
-      <Panel eyebrow="Profile" title="기본 정보">
-        <dl className={s.dl}>
-          <dt>시스템명</dt>
-          <dd>{p.sysNm || "—"}</dd>
-          <dt>업무 도메인</dt>
-          <dd>{labelOf(codes?.domains, b.domainCd)}</dd>
-          <dt>시스템 유형</dt>
-          <dd>{labelOf(codes?.sysTypes, b.sysTypeCd)}</dd>
-          <dt>주 개발 언어</dt>
-          <dd style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {b.langCds.length
-              ? b.langCds.map((l, i) => (
-                  <Chip key={l} tone={i === 0 ? "accent" : "outline"}>
-                    {labelOf(codes?.langs, l)}
-                  </Chip>
-                ))
-              : "—"}
-          </dd>
-          <dt>기술 스택</dt>
-          <dd>{b.techStack || "—"}</dd>
-          <dt>담당 조직</dt>
-          <dd>{b.orgNm || "—"}</dd>
-          <dt>과제 PM</dt>
-          <dd>{p.pmUserNm}</dd>
-          <dt>과제 설명</dt>
-          <dd style={{ fontWeight: 400 }}>{b.description || "—"}</dd>
-        </dl>
-      </Panel>
+      <div style={{ display: "grid", gap: 16, alignContent: "start" }}>
+        {[STEP.PROJECT, STEP.PLAN, STEP.STAFF].map((st) => (
+          <Panel key={st} eyebrow={["① 과제", "", "③ AI 적용 계획", "", "⑤ 참여 인력"][st]} title={ENTRY_STEPS[st]}>
+            <dl className={s.dl}>
+              {fieldsOfStep(st).map((f) => (
+                <Fragment key={f.key}>
+                  <dt>
+                    <span className={s.refId}>{f.portal ? "포털" : f.ref}</span>
+                    {f.name}
+                  </dt>
+                  <dd style={f.kind === "textarea" ? { fontWeight: 400, whiteSpace: "pre-wrap" } : undefined}>{show(f)}</dd>
+                </Fragment>
+              ))}
+              {st === STEP.PROJECT && (
+                <>
+                  <dt>
+                    <span className={s.refId}>PRJ-05</span>작성자 (PM)
+                  </dt>
+                  <dd>{p.pmUserNm}</dd>
+                </>
+              )}
+              {criteria &&
+                areasOfStep(criteria, st)
+                  .flatMap((a) => a.indicators)
+                  .map((ind) => (
+                    <Fragment key={ind.id}>
+                      <dt>
+                        <span className={s.refId}>{ind.ref ?? "지표"}</span>
+                        {ind.name}
+                      </dt>
+                      <dd>{ind.options.find((o) => o.id === p.eval.answers[ind.id])?.label ?? <span className="subtle">미입력</span>}</dd>
+                    </Fragment>
+                  ))}
+            </dl>
+          </Panel>
+        ))}
+      </div>
       <Panel eyebrow="Baseline" title="원 프로젝트 실적">
         <dl className={s.dl}>
           <dt>수행 기간</dt>

@@ -1,5 +1,4 @@
 import {
-  DEV_TYPE_INDICATOR,
   type Criteria,
   type Fit,
   type Level,
@@ -25,6 +24,8 @@ export interface FitEvaluation {
   majorCount: Record<Level, number> & { total: number; answered: number };
   suggest: Fit;
   ruleText: string;
+  // 양식 FIT-05 의 '병목': 등급을 끌어내린 가장 낮은 수준의 Major 지표.
+  bottleneck: string[];
   minorLows: string[];
 }
 
@@ -47,8 +48,15 @@ export function buildProfile(c: Criteria, answers: Record<string, string>): Prof
 }
 
 function highThreshold(rule: Criteria["rule"], total: number): number {
+  if (rule.highMinMajorHigh === "all") return total;
   return rule.highMinMajorHigh === "half" ? Math.floor(total / 2) + 1 : rule.highMinMajorHigh;
 }
+
+export function highRuleLabel(rule: Criteria["rule"]): string {
+  return rule.highMinMajorHigh === "all" ? "모두" : rule.highMinMajorHigh === "half" ? "과반" : `${rule.highMinMajorHigh}개`;
+}
+
+const LEVEL_RANK: Record<Level, number> = { H: 2, M: 1, L: 0 };
 
 export function evaluateFit(c: Criteria, answers: Record<string, string>): FitEvaluation {
   const profile = buildProfile(c, answers);
@@ -78,7 +86,13 @@ export function evaluateFit(c: Criteria, answers: Record<string, string>): FitEv
     ruleText = `Major ${count.total}개 중 하 ${count.L}개, 상 ${count.H}개 → ${FIT_LABEL[suggest]}`;
   }
 
-  return { profile, answerCnt, indicatorCnt: profile.length, majorCount: count, suggest, ruleText, minorLows };
+  let bottleneck: string[] = [];
+  if (suggest === "M" || suggest === "L") {
+    const low = Math.min(...majors.map((m) => LEVEL_RANK[m.level as Level]));
+    bottleneck = majors.filter((m) => LEVEL_RANK[m.level as Level] === low).map((m) => m.indicatorName);
+  }
+
+  return { profile, answerCnt, indicatorCnt: profile.length, majorCount: count, suggest, ruleText, bottleneck, minorLows };
 }
 
 export function reconcileAnswers(
@@ -115,7 +129,7 @@ export function deriveColumns(
 > {
   const ev = evaluateFit(c, p.eval.answers);
   return {
-    devTypeCd: p.eval.answers[DEV_TYPE_INDICATOR] ?? null,
+    devTypeCd: p.base.workAreaCd || null,
     mainLangCd: p.base.langCds[0] ?? null,
     domainCd: p.base.domainCd || null,
     sysTypeCd: p.base.sysTypeCd || null,

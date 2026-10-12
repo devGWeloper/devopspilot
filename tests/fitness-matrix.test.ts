@@ -7,9 +7,9 @@ const c = defaultCriteria();
 
 it("열: Major 블록이 먼저, 각 블록 안은 영역 순서 유지", () => {
   const cols = matrixColumns(c);
-  expect(cols.map((x) => x.tier)).toEqual([...Array(8).fill("MAJOR"), ...Array(10).fill("MINOR")]);
-  expect(cols.slice(0, 3).map((x) => x.indicator.id)).toEqual(["devType", "reqType", "risk"]);
-  expect(cols[0]).toMatchObject({ areaName: "과제 특성", areaIndex: 0 });
+  expect(cols.map((x) => x.tier)).toEqual([...Array(3).fill("MAJOR"), ...Array(5).fill("MINOR")]);
+  expect(cols.map((x) => x.indicator.id)).toEqual(["spec", "context", "pattern", "wbs", "vcs", "tracker", "aiExp", "aiCert"]);
+  expect(cols[3]).toMatchObject({ areaName: "과제 관리 도구", areaIndex: 1 });
 });
 
 it("행: 제외 과제 빼고, 적합도 상→중→하→미평가, 같은 적합도는 선정이 위", () => {

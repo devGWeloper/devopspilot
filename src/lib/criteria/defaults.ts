@@ -1,12 +1,14 @@
-import type { Area, Codes, Criteria, FitRule, Indicator, Level, Tier } from "../types";
+import type { Area, CodeItem, Codes, Criteria, FitRule, Indicator, Level, Tier } from "../types";
 
-export const DEFAULT_RULE: FitRule = { lowMinMajorLow: 2, highMaxMajorLow: 0, highMinMajorHigh: "half" };
+// 과제 선정 양식 FIT-05: 명세·맥락·생성 중 가장 낮은 항목이 등급을 정한다 (셋 다 유리 = 상, 하나라도 불리 = 하).
+export const DEFAULT_RULE: FitRule = { lowMinMajorLow: 1, highMaxMajorLow: 0, highMinMajorHigh: "all" };
 
 type Opt = [id: string, label: string, level: Level, hint?: string];
 
-function ind(id: string, name: string, tier: Tier, description: string, opts: Opt[]): Indicator {
+function ind(id: string, ref: string, name: string, tier: Tier, description: string, opts: Opt[]): Indicator {
   return {
     id,
+    ref,
     name,
     tier,
     description,
@@ -14,122 +16,76 @@ function ind(id: string, name: string, tier: Tier, description: string, opts: Op
   };
 }
 
+// 양식에는 Major/Minor 구분이 없다. 등급을 정하는 개발자 평가 3항목만 Major 로 두고,
+// 값에 좋고 나쁨이 있는 도구·인력 항목은 Minor(보완 신호)로, 나머지 분류 항목은 코드로 둔다.
 function areas(): Area[] {
   return [
     {
-      id: "char",
-      name: "과제 특성",
-      question: "생산성 효과가 클 일인가",
+      id: "fit",
+      name: "AI 적합도 — 개발자 평가",
+      question: "AI 가 대부분을 만들 수 있는 일인가",
       indicators: [
-        ind("devType", "개발 성격", "MAJOR", "신규 구축인지, 기존 시스템을 고치는 일인지", [
-          ["new", "신규", "H", "새 시스템·새 모듈을 처음부터 만든다"],
-          ["mixed", "혼합", "M", "신규 개발과 기존 코드 수정이 섞여 있다"],
-          ["legacy", "레거시", "L", "기존 시스템 개선·유지보수가 중심이다"],
+        ind("spec", "FIT-01", "명세 명확성", "MAJOR", "무엇을 만들지 AI 에 명확히 줄 수 있는가", [
+          ["clear", "명확", "H", "입출력·화면·업무 규칙이 문서로 정의돼 그대로 AI 에 줄 수 있음 (예: 화면 정의서·기능 명세 있음)"],
+          ["partial", "일부 명확", "M", "핵심은 정의됐으나 예외·세부 규칙은 설명이 필요 (예: 예외 처리 규칙 미정리)"],
+          ["vague", "모호", "L", "고객 협의하며 정해지거나 비즈니스 설명이 많이 필요 (예: 요건 협의 진행 중)"],
         ]),
-        ind("reqType", "대표 요구사항 유형", "MAJOR", "요구사항이 반복되는 패턴인지, 새 설계가 필요한지", [
-          ["standard", "표준 패턴", "H", "CRUD·조회·리포트처럼 정형화된 패턴"],
-          ["exception", "예외 처리 위주", "M", "기본 패턴에 예외 규칙이 많이 붙는다"],
-          ["design", "신규 설계", "L", "선례 없는 구조·알고리즘 설계가 필요하다"],
+        ind("context", "FIT-02", "맥락 주입 가능성", "MAJOR", "알아야 할 시스템 맥락과 개발 규칙을 AI 에 넣을 수 있는가", [
+          ["able", "가능", "H", "맥락이 해당 모듈에 닫혀 있거나, 필요한 규칙·연계 정보를 문서·지침 파일로 줄 수 있음"],
+          ["partial", "일부 가능", "M", "일부는 주입 가능하나 연계·예외는 사람이 보완해야 함"],
+          ["hard", "어려움", "L", "다중 시스템 연계·암묵지·대용량 코드라 정리해 넣기 어려움 (예: 설비·MES 다중 연계)"],
         ]),
-        ind("execType", "수행 유형", "MINOR", "전환·신규 구축인지, 기존 기능 변경인지", [
-          ["convert", "전환·신규", "H"],
-          ["change", "기능 변경", "M"],
-        ]),
-        ind("scope", "변경 범위", "MINOR", "변경이 미치는 모듈·시스템의 넓이", [
-          ["single", "단일 모듈", "H"],
-          ["multiModule", "복수 모듈", "M"],
-          ["multiSystem", "복수 시스템", "L"],
-        ]),
-        ind("risk", "영향도 Risk", "MAJOR", "결함이 생겼을 때 생산·운영에 미치는 영향", [
-          ["low", "낮음", "H"],
-          ["mid", "보통", "M"],
-          ["high", "높음", "L", "FAB 가동·품질 판정 등에 직접 영향"],
+        ind("pattern", "FIT-03", "생성 패턴", "MAJOR", "해법이 기존 패턴의 반복인가, 새로 설계해야 하는가", [
+          ["repeat", "패턴 반복", "H", "기존 화면·코드를 복제해 바꾸면 됨 — AI 가 대부분 작성"],
+          ["variant", "패턴 변형", "M", "기존 패턴을 바탕으로 일부 새 로직이 필요"],
+          ["design", "신규 설계 판단", "L", "구조·로직을 사람이 새로 판단해야 함 (예: 연계 구조 재설계)"],
         ]),
       ],
     },
     {
-      id: "know",
-      name: "지식 자산화",
-      question: "AI가 참고할 맥락이 있나",
+      id: "tools",
+      name: "과제 관리 도구",
+      question: "측정 근거를 모을 수 있나",
       indicators: [
-        ind("rag", "지식 그래프 / RAG", "MINOR", "도메인 지식을 검색 가능한 형태로 구축했는지", [
-          ["built", "구축됨", "H"],
-          ["partial", "일부", "M"],
+        ind("wbs", "PRJ-09", "기존 WBS 실적", "MINOR", "AI 미적용 기준 공수로 쓸 WBS 실적이 있는지", [
+          ["yes", "있음", "H", "요구사항·작업 또는 단계별 실제 투입 공수가 WBS 에 기록됨"],
+          ["no", "없음", "L", "계획만 있거나 실적 기록이 없음 (예: 공수 산정서만 있음)"],
+        ]),
+        ind("vcs", "PRJ-10", "버전관리 도구", "MINOR", "소스 버전관리 도구 (커밋·PR 이력 수집용)", [
+          ["bitbucket", "Bitbucket", "H"],
+          ["github", "GitHub", "H"],
+          ["gitlab", "GitLab", "H"],
+          ["azure", "Azure Repos", "H"],
+          ["svn", "SVN", "M"],
+          ["etc", "기타", "M", "비고에 도구명 기재"],
           ["none", "없음", "L"],
         ]),
-        ind("funcSpec", "기능 정의서", "MAJOR", "당시 확정된 기능 정의서의 최신성·상세도", [
-          ["detailed", "최신·상세", "H"],
-          ["partial", "부분·구버전", "M"],
-          ["none", "없음", "L"],
-        ]),
-        ind("archDoc", "아키텍처 문서", "MINOR", "시스템 구조·배포 구성 문서", [
-          ["current", "최신", "H"],
-          ["partial", "부분", "M"],
-          ["none", "없음", "L"],
-        ]),
-        ind("ifSpec", "인터페이스·데이터 명세서", "MINOR", "연계 인터페이스와 데이터 구조 명세", [
-          ["current", "최신", "H"],
-          ["partial", "부분", "M"],
-          ["none", "없음", "L"],
-        ]),
-        ind("exception", "예외 사례 정리", "MINOR", "운영 중 발생한 예외·장애 사례 기록", [
-          ["organized", "정리됨", "H"],
-          ["partial", "일부", "M"],
+        ind("tracker", "PRJ-11", "작업관리 도구", "MINOR", "요구사항·이슈 관리 도구 (요구사항 ID 추적용)", [
+          ["jira", "Jira", "H"],
+          ["redmine", "Redmine", "H"],
+          ["azure", "Azure Boards", "H"],
+          ["inhouse", "사내 작업관리 시스템", "H"],
+          ["doc", "엑셀·문서", "M"],
+          ["etc", "기타", "M", "비고에 도구명 기재"],
           ["none", "없음", "L"],
         ]),
       ],
     },
     {
-      id: "tool",
-      name: "AI 도구 활용성",
-      question: "Agent가 어디까지 실행하나",
+      id: "staff",
+      name: "AI 활용 역량",
+      question: "수행자가 AI 도구를 다룰 수 있나",
       indicators: [
-        ind("netModel", "실행망 모델 연결", "MAJOR", "개발 환경에서 AI 모델을 호출할 수 있는지", [
-          ["available", "연결 가능", "H"],
-          ["limited", "제한적", "M"],
-          ["blocked", "불가", "L"],
+        ind("aiExp", "REF-02", "AI 활용 개발 경험", "MINOR", "주 수행 개발자의 AI 코딩 도구 사용 수준", [
+          ["daily", "실무 상시 사용", "H", "업무에서 AI 코딩 도구를 상시 사용"],
+          ["trial", "시범·개인 사용", "M", "시범 적용이나 개인적으로만 사용"],
+          ["none", "경험 없음", "L"],
         ]),
-        ind("readScope", "자산 읽기 범위", "MINOR", "Agent 가 읽을 수 있는 소스·문서의 범위", [
-          ["full", "전체 소스·문서", "H"],
-          ["partial", "일부", "M"],
-          ["none", "불가", "L"],
-        ]),
-        ind("agentScope", "Agent 수행 범위", "MAJOR", "Agent 가 직접 실행할 수 있는 작업의 범위", [
-          ["buildTest", "빌드·테스트 실행까지", "H"],
-          ["codeGen", "코드 생성·수정", "M"],
-          ["adviceOnly", "조언·검토만", "L"],
-        ]),
-        ind("telemetry", "텔레메트리 수집", "MINOR", "AI 사용량·토큰을 측정할 수 있는지", [
-          ["auto", "자동 수집", "H"],
-          ["manual", "수동 기록", "M"],
-          ["none", "불가", "L"],
-        ]),
-      ],
-    },
-    {
-      id: "gov",
-      name: "개발 거버넌스",
-      question: "결과를 통제·검증할 수 있나",
-      indicators: [
-        ind("vcs", "버전 관리", "MAJOR", "소스 변경 이력을 추적할 수 있는지", [
-          ["git", "Git", "H"],
-          ["otherVcs", "기타 VCS", "M"],
-          ["none", "없음", "L"],
-        ]),
-        ind("devRule", "레거시 개발 규칙", "MINOR", "코딩·명명·구조 규칙이 정리돼 있는지", [
-          ["documented", "문서화됨", "H"],
-          ["implicit", "암묵적", "M"],
-          ["none", "없음", "L"],
-        ]),
-        ind("regression", "회귀시험", "MAJOR", "변경 후 기존 기능을 검증하는 수단", [
-          ["automated", "자동화", "H"],
-          ["manual", "수동 시나리오", "M"],
-          ["none", "없음", "L"],
-        ]),
-        ind("aiReview", "AI 산출물 검토 체계", "MINOR", "AI 가 만든 산출물을 누가 어떻게 검토하는지", [
-          ["defined", "체계 있음", "H"],
-          ["individual", "담당자 재량", "M"],
-          ["none", "없음", "L"],
+        ind("aiCert", "REF-03", "AI 인증 등급", "MINOR", "주 수행 개발자가 수료한 자사 AI 인증 중 가장 높은 과정", [
+          ["master", "AI 마스터", "H", "자사 AI 인증 3단계 (최고 과정) 수료"],
+          ["bootcamp", "AI 부트캠프", "M", "자사 AI 인증 2단계 수료"],
+          ["literacy", "AI 리터러시", "L", "자사 AI 인증 1단계 수료"],
+          ["none", "미수료", "L", "수료한 인증 과정 없음"],
         ]),
       ],
     },
@@ -140,34 +96,71 @@ export function defaultCriteria(): Criteria {
   return { version: 1, publishedAt: null, publishedBy: null, rule: { ...DEFAULT_RULE }, areas: areas() };
 }
 
+type C = [code: string, label: string, desc?: string, example?: string];
+const list = (xs: C[]): CodeItem[] =>
+  xs.map(([code, label, desc, example]) => ({ code, label, ...(desc ? { desc } : {}), ...(example ? { example } : {}) }));
+
 export function defaultCodes(): Codes {
   return {
-    langs: [
-      { code: "JAVA", label: "Java" },
-      { code: "CSHARP", label: "C#" },
-      { code: "PYTHON", label: "Python" },
-      { code: "JS_TS", label: "JavaScript·TypeScript" },
-      { code: "C_CPP", label: "C·C++" },
-      { code: "PLSQL", label: "PL/SQL" },
-      { code: "ETC", label: "기타" },
-    ],
-    domains: [
-      { code: "FAB", label: "제조·FAB" },
-      { code: "QUALITY", label: "품질" },
-      { code: "EQUIP", label: "설비" },
-      { code: "RND", label: "연구개발" },
-      { code: "MGMT", label: "경영지원" },
-      { code: "INFRA", label: "인프라" },
-      { code: "ETC", label: "기타" },
-    ],
-    sysTypes: [
-      { code: "WEB", label: "웹" },
-      { code: "BATCH", label: "배치" },
-      { code: "EAI", label: "인터페이스·EAI" },
-      { code: "DATA", label: "데이터·분석" },
-      { code: "EMBEDDED", label: "임베디드·장비" },
-      { code: "ETC", label: "기타" },
-    ],
+    domains: list([["MES", "MES"], ["MIS", "MIS"], ["ETC", "기타"]]),
+    sysGrades: list([["L0", "L0", "최상위 등급"], ["L1", "L1"], ["L2", "L2"], ["L3", "L3"], ["L4", "L4"], ["UNKNOWN", "미확인", "등급 확인 전"]]),
+    sysTypes: list([
+      ["WEB_ONPREM", "Web — On-Premise", "브라우저 기반, 사내 서버에 배포", "사내 포털, 조회·관리 화면"],
+      ["WEB_CLOUD", "Web — Cloud", "브라우저 기반, 클라우드(Public·Private)에 배포", "클라우드 기반 대시보드"],
+      ["CS", "C/S — 설치형", "PC 에 설치하는 클라이언트 프로그램", "Windows 앱 (C#·WinForm 등)"],
+      ["MOBILE", "Mobile", "모바일 앱", "현장용 모바일 앱"],
+      ["SERVER", "서버 전용 (UI 없음)", "화면 없이 서버에서 동작하는 프로그램", "Batch, Interface, API"],
+      ["EQUIP", "설비·Embedded", "설비 PC·장비 제어와 연동되는 프로그램", "설비 연계 에이전트"],
+      ["MIXED", "복합", "2개 이상 섞임 — 비고에 구성 기재", "Web 화면 + 배치"],
+    ]),
+    workAreas: list([
+      ["NEW", "신규 구축", "기존 시스템 없이 새로 개발", "신규 분석 화면 구축"],
+      ["IMPROVE", "기능 개선", "기존 시스템에 기능 추가·변경", "조회 조건 추가, 화면 항목 변경"],
+      ["CONVERT", "전환", "기능은 유지하고 언어·프레임워크·플랫폼을 변경", "Java 버전업, 프레임워크 전환"],
+      ["REBUILD", "재구축 (차세대)", "기존 기능을 새 구조로 다시 구현", "차세대 시스템 구축"],
+      ["MIXED", "혼합", "2개 이상 섞임 — 비고에 기재"],
+    ]),
+    langs: list([
+      ["JAVA", "Java"],
+      ["CSHARP", "C#"],
+      ["PYTHON", "Python"],
+      ["JS_TS", "JavaScript·TypeScript"],
+      ["C_CPP", "C·C++"],
+      ["PLSQL", "PL/SQL"],
+      ["ETC", "기타"],
+    ]),
+    llmTypes: list([
+      ["PUBLIC", "Public LLM (외부)", "외부 상용 모델 사용", "인터넷 VDI 환경"],
+      ["INTERNAL", "사내 LLM", "사내 구축 모델 사용"],
+      ["HYBRID", "Hybrid", "작업에 따라 외부·사내 혼용", "복잡한 작업은 외부, 단순 작업은 사내"],
+      ["TBD", "미정", "선정 전"],
+    ]),
+    aiTools: list([
+      ["CLAUDE_CODE", "Claude Code"],
+      ["CODEX", "Codex", "CLI·IDE 포함"],
+      ["CURSOR", "Cursor"],
+      ["COPILOT", "GitHub Copilot"],
+      ["GEMINI_CLI", "Gemini CLI"],
+      ["INHOUSE_AGENT", "사내 소스코딩 에이전트", "조직에서 자체 구축한 코딩 에이전트", "다비스 기반 에이전트"],
+      ["INHOUSE_OSS", "사내 오픈소스 도구", "사내 배포 오픈소스 기반 도구"],
+      ["ETC", "기타", "비고에 도구명 기재"],
+      ["TBD", "미정", "선정 전"],
+    ]),
+    aiPlans: list([
+      ["PRO", "개인 표준 (Pro급)", "개인 구독 기본 등급"],
+      ["MAX", "개인 고사용량 (Max급)", "사용 한도가 큰 개인 구독", "대규모 코드 분석·에이전트 작업"],
+      ["TEAM", "Team·Enterprise", "조직 단위 구독"],
+      ["API", "API 종량제", "토큰 사용량만큼 과금"],
+      ["INHOUSE", "사내 (과금 없음)", "사내 LLM 사용"],
+      ["TBD", "미정"],
+    ]),
+    tokenRanges: list([
+      ["T_100K", "10만 미만", "단순 수정 1~2건 수준"],
+      ["T_1M", "10만~100만", "기능 1개 개발 수준"],
+      ["T_10M", "100만~1,000만", "여러 모듈 분석·개발 수준"],
+      ["T_10M_PLUS", "1,000만 이상", "대규모 분석·전환 수준"],
+      ["UNKNOWN", "모름"],
+    ]),
     target: { total: 9, byFit: { H: 3, M: 3, L: 3 }, minPerDevType: 1, minLangKinds: 3 },
   };
 }

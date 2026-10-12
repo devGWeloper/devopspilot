@@ -150,7 +150,7 @@ export function CriteriaAdmin() {
       {justPublished && (
         <div style={{ marginBottom: 16 }}>
           <Callout tone="ok">
-            평가 기준 v{justPublished} 을(를) 게시했습니다. 기존 과제의 제안 적합도는 재판정해야 새 기준으로 바뀝니다(확정 적합도는 그대로 유지).{" "}
+            평가 기준 v{justPublished} 을(를) 게시했습니다. 기존 과제의 참고 등급는 재판정해야 새 기준으로 바뀝니다(확정 적합도는 그대로 유지).{" "}
             <Button size="sm" variant="primary" loading={busy} onClick={reevaluate} style={{ marginLeft: 8 }}>
               지금 재판정
             </Button>

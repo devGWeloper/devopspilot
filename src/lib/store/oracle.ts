@@ -1,4 +1,5 @@
 import type { DbConfig } from "../config";
+import { normalizeBase } from "../projects/base";
 import type { AgreeCd, Fit, HistoryEntry, OrgCd, Project, ProjectStatus, Role, UserRecord } from "../types";
 import { TABLES } from "./schema";
 import {
@@ -119,7 +120,7 @@ export async function createOracleStore(cfg: DbConfig): Promise<Store> {
     axAgree: String(r.AX_AGREE_CD) as AgreeCd,
     hxAgree: String(r.HX_AGREE_CD) as AgreeCd,
     critVer: Number(r.CRIT_VER ?? 1),
-    base: json(r.BASE_JSON, {} as Project["base"]),
+    base: normalizeBase(json<Partial<Project["base"]>>(r.BASE_JSON, {})),
     eval: json(r.EVAL_JSON, { answers: {}, notes: {}, confirm: null }),
     reviews: json(r.REVIEW_JSON, []),
     ai: json(r.AI_JSON, null),

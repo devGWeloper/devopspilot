@@ -1,4 +1,5 @@
-import type { Project } from "@/lib/types";
+import { emptyBase } from "@/lib/projects/base";
+import type { Project, ProjectBase } from "@/lib/types";
 
 export function mkProject(partial: Partial<Project> = {}): Project {
   return {
@@ -14,31 +15,14 @@ export function mkProject(partial: Partial<Project> = {}): Project {
     domainCd: null,
     sysTypeCd: null,
     answerCnt: 0,
-    indicatorCnt: 18,
+    indicatorCnt: 8,
     suggestFit: "NA",
     finalFit: "NA",
     aiFit: null,
     axAgree: "NONE",
     hxAgree: "NONE",
     critVer: 1,
-    base: {
-      description: "",
-      domainCd: "",
-      sysTypeCd: "",
-      langCds: [],
-      techStack: "",
-      orgNm: "",
-      baseline: {
-        startDate: null,
-        endDate: null,
-        totalMm: null,
-        phaseMm: { ANALYSIS: null, DESIGN: null, DEV: null, TEST: null },
-        screens: null,
-        programs: null,
-        loc: null,
-        replayPhases: [],
-      },
-    },
+    base: { ...emptyBase(), baseline: { ...emptyBase().baseline, replayPhases: [] } },
     eval: { answers: {}, notes: {}, confirm: null },
     reviews: [],
     ai: null,
@@ -47,5 +31,32 @@ export function mkProject(partial: Partial<Project> = {}): Project {
     updUserId: "pm01",
     updAt: "2026-10-01T00:00:00.000Z",
     ...partial,
+  };
+}
+
+// 양식의 필수 항목을 모두 채운 기본 정보. 제출 가능한 과제를 만들 때 쓴다.
+export function filledBase(): ProjectBase {
+  return {
+    ...emptyBase(),
+    domainCd: "MES",
+    orgNm: "FAB MOS",
+    sysGradeCd: "L2",
+    sysTypeCd: "WEB_CLOUD",
+    workAreaCd: "IMPROVE",
+    langCds: ["JAVA"],
+    description: "설명",
+    llmTypeCd: "PUBLIC",
+    aiToolCd: "CLAUDE_CODE",
+    aiAccounts: 2,
+    pmFit: "H",
+    pmFitReason: "패턴 반복 위주",
+    staffNms: "김개발",
+    baseline: {
+      ...emptyBase().baseline,
+      startDate: "2025-01-01",
+      endDate: "2025-06-30",
+      totalMm: 6,
+      replayPhases: ["DEV"],
+    },
   };
 }

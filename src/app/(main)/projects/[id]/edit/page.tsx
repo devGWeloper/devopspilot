@@ -1,7 +1,6 @@
-import { ProjectForm } from "@/features/project-form/ProjectForm";
+import { redirect } from "next/navigation";
 
-export const metadata = { title: "과제 편집" };
-
+// 기입은 '과제 기입' 메뉴로 모았다 — 예전 주소로 들어와도 같은 화면으로 보낸다.
 export default function EditProjectPage({ params }: { params: { id: string } }) {
-  return <ProjectForm id={params.id} />;
+  redirect(`/entry/${params.id}`);
 }

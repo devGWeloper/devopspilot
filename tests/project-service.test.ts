@@ -19,6 +19,7 @@ import { createJsonStore } from "@/lib/store/json";
 import { ensureSeed } from "@/lib/store/seed";
 import type { Store } from "@/lib/store/types";
 import type { Criteria, Level, UserRecord } from "@/lib/types";
+import { filledBase } from "./helpers";
 
 const admin: ActorFull = { userId: "admin", role: "AX_ADMIN", userNm: "AX 관리자", orgCd: "SKAX" };
 const pm: ActorFull = { userId: "pm01", role: "PM", userNm: "김지훈", orgCd: "SKAX" };
@@ -33,24 +34,7 @@ function input(over: Partial<ProjectInput> = {}): ProjectInput {
   return {
     prjNm: "테스트 과제",
     sysNm: "SYS",
-    base: {
-      description: "설명",
-      domainCd: "FAB",
-      sysTypeCd: "WEB",
-      langCds: ["JAVA"],
-      techStack: "",
-      orgNm: "",
-      baseline: {
-        startDate: null,
-        endDate: null,
-        totalMm: null,
-        phaseMm: { ANALYSIS: null, DESIGN: null, DEV: null, TEST: null },
-        screens: null,
-        programs: null,
-        loc: null,
-        replayPhases: [],
-      },
-    },
+    base: filledBase(),
     answers: allH(),
     notes: {},
     ...over,
@@ -153,6 +137,29 @@ describe("submitProject", () => {
     expect(!r.ok && JSON.stringify(r.details)).toContain(majors[0].id);
   });
 
+  it("Minor 지표·양식 필수 항목·실적도 비면 422", async () => {
+    const answers = allH();
+    const minor = crit.areas.flatMap((a) => a.indicators).find((i) => i.tier === "MINOR")!;
+    delete answers[minor.id];
+    const base = { ...input().base, sysGradeCd: "", pmFitReason: "", aiAccounts: null, baseline: { ...input().base.baseline, totalMm: null } };
+    const p = await created(pm, { answers, base });
+    const r = await submitProject(store, pm, p.prjId, p.updAt);
+    const fields = !r.ok ? (r.details as { field: string }[]).map((d) => d.field) : [];
+    expect(fields).toEqual(expect.arrayContaining([`answer.${minor.id}`, "sysGradeCd", "pmFitReason", "aiAccounts", "baseline.totalMm"]));
+  });
+
+  it("WBS 실적 없음이면 기간·총 공수 없이 제출, 기타 선택 시 비고 필수", async () => {
+    const base = { ...input().base, aiToolCd: "ETC", baseline: { ...input().base.baseline, startDate: null, endDate: null, totalMm: null } };
+    const p = await created(pm, { base, answers: { ...allH(), wbs: "no" } });
+    const r = await submitProject(store, pm, p.prjId, p.updAt);
+    const fields = !r.ok ? (r.details as { field: string }[]).map((d) => d.field) : [];
+    expect(fields).toEqual(["remark"]);
+    const p2 = await updateProject(store, pm, p.prjId, input({ base: { ...base, remark: "사내 도구 X" }, answers: { ...allH(), wbs: "no" } }), p.updAt);
+    expect(p2.ok).toBe(true);
+    const r2 = await submitProject(store, pm, p.prjId, p2.ok ? p2.value.updAt : "");
+    expect(r2.ok && r2.value.status).toBe("SUBMITTED");
+  });
+
   it("필수값이 차면 제출", async () => {
     const p = await created(pm);
     const r = await submitProject(store, pm, p.prjId, p.updAt);
@@ -232,14 +239,14 @@ describe("reevaluateAll", () => {
     const v2: Criteria = {
       ...crit,
       version: 2,
-      areas: crit.areas.map((a) => ({ ...a, indicators: a.indicators.filter((i) => i.id !== "rag") })),
+      areas: crit.areas.map((a) => ({ ...a, indicators: a.indicators.filter((i) => i.id !== "tracker") })),
     };
     await store.config.set("CRITERIA", v2, 2, "admin");
     const r = await reevaluateAll(store, admin);
     expect(r.ok && r.value.changed).toBe(1);
     const after = await store.projects.get(p.prjId);
-    expect(after).toMatchObject({ critVer: 2, indicatorCnt: 17, finalFit: "H" });
-    expect(after?.eval.answers.rag).toBeUndefined();
+    expect(after).toMatchObject({ critVer: 2, indicatorCnt: 7, finalFit: "H" });
+    expect(after?.eval.answers.tracker).toBeUndefined();
   });
 
   it("관리자만", async () => {

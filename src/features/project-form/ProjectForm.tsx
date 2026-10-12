@@ -15,52 +15,25 @@ import { api, ApiError, errMessage } from "@/lib/apiClient";
 import { can } from "@/lib/auth/permissions";
 import { evaluateFit } from "@/lib/fitness";
 import { useApi, useRefs } from "@/lib/hooks";
-import type { FieldError, ProjectInput } from "@/lib/projects/validate";
+import { ENTRY_STEPS, entryProgress, stepOfField, toInput, type FieldError, type ProjectInput } from "@/lib/projects/validate";
 import type { Project } from "@/lib/types";
 import s from "./form.module.css";
+import { emptyBase } from "@/lib/projects/base";
 import { StepBaseline } from "./StepBaseline";
-import { StepBasic } from "./StepBasic";
-import { StepEvaluation } from "./StepEvaluation";
+import { StepFit, StepPlan, StepProject, StepStaff } from "./Steps";
 
-const STEPS = ["기본 정보", "원 프로젝트 실적", "지표 평가"];
+const STEPS = [...ENTRY_STEPS];
 
 export function emptyInput(): ProjectInput {
   return {
     prjNm: "",
     sysNm: "",
     pmUserId: "",
-    base: {
-      description: "",
-      domainCd: "",
-      sysTypeCd: "",
-      langCds: [],
-      techStack: "",
-      orgNm: "",
-      baseline: {
-        startDate: null,
-        endDate: null,
-        totalMm: null,
-        phaseMm: { ANALYSIS: null, DESIGN: null, DEV: null, TEST: null },
-        screens: null,
-        programs: null,
-        loc: null,
-        replayPhases: ["DESIGN", "DEV", "TEST"],
-      },
-    },
+    base: emptyBase(),
     answers: {},
     notes: {},
   };
 }
-
-function fromProject(p: Project): ProjectInput {
-  return { prjNm: p.prjNm, sysNm: p.sysNm, pmUserId: p.pmUserId, base: p.base, answers: p.eval.answers, notes: p.eval.notes };
-}
-
-const STEP_FIELDS: ((f: string) => boolean)[] = [
-  (f) => ["prjNm", "sysNm", "pmUserId", "domainCd", "sysTypeCd", "langCds", "description", "techStack"].includes(f),
-  (f) => f.startsWith("baseline"),
-  (f) => f.startsWith("answer.") || f.startsWith("note."),
-];
 
 export function ProjectForm({ id }: { id?: string }) {
   const router = useRouter();
@@ -79,7 +52,7 @@ export function ProjectForm({ id }: { id?: string }) {
   useEffect(() => {
     if (loaded) {
       setProject(loaded);
-      setInput(fromProject(loaded));
+      setInput(toInput(loaded));
     }
   }, [loaded]);
 
@@ -111,7 +84,7 @@ export function ProjectForm({ id }: { id?: string }) {
       setProject(p);
       setDirty(false);
       setErrors([]);
-      if (!project) window.history.replaceState(null, "", `/projects/${p.prjId}/edit`);
+      if (!project) window.history.replaceState(null, "", `/entry/${p.prjId}`);
       if (!quiet) toast("임시저장했습니다.");
       return p;
     } catch (e) {
@@ -136,14 +109,13 @@ export function ProjectForm({ id }: { id?: string }) {
     try {
       await api<Project>(`/api/projects/${saved.prjId}/submit`, { body: { updAt: saved.updAt } });
       setDirty(false);
-      toast("제출했습니다.");
-      router.push(`/projects/${saved.prjId}`);
+      toast("제출했습니다. AX 검토가 시작되면 기입 목록에서 상태를 확인할 수 있습니다.");
+      router.push("/entry");
     } catch (e) {
       if (e instanceof ApiError && Array.isArray(e.details)) {
         const errs = e.details as FieldError[];
         setErrors(errs);
-        const first = STEP_FIELDS.findIndex((match) => errs.some((x) => match(x.field)));
-        if (first >= 0) setStep(first);
+        if (errs.length) setStep(Math.min(...errs.map((x) => stepOfField(x.field, criteria ?? undefined))));
         setTimeout(() => document.querySelector("[data-error='true']")?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
       }
       toastError(errMessage(e));
@@ -169,20 +141,22 @@ export function ProjectForm({ id }: { id?: string }) {
   }
 
   const errOf = (f: string) => errors.find((e) => e.field === f)?.message ?? null;
-  const stepDone = [
-    !!(input.prjNm && input.sysNm && input.base.domainCd && input.base.sysTypeCd && input.base.langCds.length && input.base.description),
-    input.base.baseline.totalMm !== null,
-    !!ev && ev.majorCount.answered === ev.majorCount.total,
-  ];
+  const progress = entryProgress(input, criteria);
+  const stepDone = progress.missing.map((n) => n === 0);
   const canSubmit = !project || can(me, "project.submit", { project });
+  const ctx = { input, update, errOf, codes, criteria };
 
   return (
     <div className={s.wrap}>
       <PageHeader
-        eyebrow={project ? `${project.prjId} · 편집` : "New candidate"}
-        title={project ? project.prjNm || "과제 편집" : "PoC 후보 과제 등록"}
-        description="단계를 이동하면 자동으로 임시저장됩니다. Major 지표까지 모두 응답하면 제출할 수 있습니다."
-        actions={project && <Link href={`/projects/${project.prjId}`} className={s.back}>상세로 돌아가기</Link>}
+        eyebrow={project ? `과제 기입 · ${project.prjId}` : "과제 기입 · 신규"}
+        title={project ? project.prjNm || "과제 기입" : "PoC 후보 과제 기입"}
+        description="과제 선정 양식(엑셀)과 같은 항목입니다. 단계를 이동하면 자동으로 임시저장되고, * 표시 항목을 모두 채워야 제출할 수 있습니다."
+        actions={
+          <Link href="/entry" className={s.back}>
+            기입 목록으로
+          </Link>
+        }
       >
         <Stepper steps={STEPS} current={step} done={stepDone} onSelect={goStep} />
       </PageHeader>
@@ -197,10 +171,17 @@ export function ProjectForm({ id }: { id?: string }) {
       )}
 
       {step === 0 && (
-        <StepBasic input={input} update={update} codes={codes} pms={pms ?? []} isAdmin={me.role === "AX_ADMIN"} errOf={errOf} />
+        <StepProject
+          ctx={ctx}
+          pms={pms ?? []}
+          isAdmin={me.role === "AX_ADMIN"}
+          pmName={project?.pmUserNm ?? me.userNm}
+        />
       )}
       {step === 1 && <StepBaseline input={input} update={update} errOf={errOf} />}
-      {step === 2 && <StepEvaluation input={input} update={update} criteria={criteria} errOf={errOf} />}
+      {step === 2 && <StepPlan ctx={ctx} />}
+      {step === 3 && <StepFit ctx={ctx} ev={ev} />}
+      {step === 4 && <StepStaff ctx={ctx} />}
 
       <div className={s.stepNav}>
         <Button icon="chevronLeft" disabled={step === 0} onClick={() => goStep(step - 1)}>
@@ -218,12 +199,21 @@ export function ProjectForm({ id }: { id?: string }) {
           {ev && <ProfileStrip profile={ev.profile} size="md" />}
           {ev && (
             <span className={s.previewFit}>
-              제안 <FitBadge fit={ev.suggest} confirmed={false} size="sm" />
+              참고 등급 <FitBadge fit={ev.suggest} confirmed={false} size="sm" />
             </span>
           )}
-          <span className="muted num" style={{ fontSize: 13 }}>
-            응답 <b style={{ color: "var(--ink)" }}>{ev?.answerCnt ?? 0}</b>/{ev?.indicatorCnt ?? 0}
-            {ev && ev.majorCount.answered < ev.majorCount.total && <> · Major 미응답 {ev.majorCount.total - ev.majorCount.answered}</>}
+          {input.base.pmFit && (
+            <span className={s.previewFit}>
+              PM 판단 <FitBadge fit={input.base.pmFit} confirmed={false} size="sm" />
+            </span>
+          )}
+          <span className="muted num" style={{ fontSize: 13 }} title="양식 REF-05 필수 입력 완료율">
+            필수 입력 <b style={{ color: "var(--ink)" }}>{Math.floor(progress.rate * 100)}%</b>
+            {progress.total > 0 ? (
+              <span style={{ color: "var(--fit-l)", fontWeight: 600 }}> · 남은 항목 {progress.total}</span>
+            ) : (
+              <> · 제출 가능</>
+            )}
           </span>
           <span className={s.saveState}>{dirty ? "저장 안 된 변경 있음" : project ? "저장됨" : ""}</span>
           <div className={s.previewActions}>

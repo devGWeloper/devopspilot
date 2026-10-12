@@ -80,7 +80,7 @@ export function PublishDialog({
             </Callout>
           )}
           <div>
-            <span className="eyebrow">제안 적합도 변화 (제외 과제 제외)</span>
+            <span className="eyebrow">참고 등급 변화 (제외 과제 제외)</span>
             <div className={s.impact}>
               {FITS.map((f) => {
                 const a = preview.impact.from[f];
@@ -113,10 +113,10 @@ export function PublishDialog({
               </ul>
             </div>
           ) : (
-            <p className="muted">이 변경으로 제안 적합도가 바뀌는 과제는 없습니다.</p>
+            <p className="muted">이 변경으로 참고 등급가 바뀌는 과제는 없습니다.</p>
           )}
           <Callout tone="info">
-            게시 후 <b>재판정</b>을 실행해야 기존 과제의 제안 적합도가 갱신됩니다. AX 가 확정한 적합도는 바뀌지 않습니다.
+            게시 후 <b>재판정</b>을 실행해야 기존 과제의 참고 등급가 갱신됩니다. AX 가 확정한 적합도는 바뀌지 않습니다.
           </Callout>
         </div>
       )}

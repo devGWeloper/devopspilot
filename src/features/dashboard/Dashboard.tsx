@@ -1,57 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { useAuth } from "@/components/auth/AuthProvider";
 import { Icon } from "@/components/ui/Icon";
 import { Callout, EmptyState, KpiTile, Panel, Skeleton } from "@/components/ui/Panel";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { analyzeBalance, effectiveFit } from "@/lib/balance";
 import { useApi, useRefs } from "@/lib/hooks";
 import { FIT_COLOR, FIT_LABEL, fmtRelative } from "@/lib/labels";
-import { LEVELS, type CodeItem, type HistoryEntry, type Project } from "@/lib/types";
+import { LEVELS, type HistoryEntry, type Project } from "@/lib/types";
 import { BalanceMatrix } from "./BalanceMatrix";
+import { CompositionTable } from "./CompositionTable";
+import { DistributionBoard } from "./DistributionBoard";
 import { FitnessMatrix } from "./FitnessMatrix";
 import s from "./dashboard.module.css";
 
 interface DashData {
-  myTasks: { prjId: string; prjNm: string; reason: string }[];
   activity: HistoryEntry[];
 }
 
-function distRows(codes: CodeItem[], ps: Project[], key: (p: Project) => string | null) {
-  return codes
-    .map((c) => ({
-      label: c.label,
-      후보: ps.filter((p) => p.status !== "EXCLUDED" && key(p) === c.code).length,
-      선정: ps.filter((p) => p.status === "SELECTED" && key(p) === c.code).length,
-    }))
-    .filter((r) => r.후보 > 0);
-}
-
-function Distribution({ title, rows }: { title: string; rows: { label: string; 후보: number; 선정: number }[] }) {
-  return (
-    <div>
-      <span className="eyebrow">{title}</span>
-      <div style={{ height: Math.max(120, rows.length * 34 + 40) }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={rows} layout="vertical" margin={{ top: 8, right: 16, bottom: 0, left: 8 }} barGap={2}>
-            <CartesianGrid horizontal={false} stroke="#ece9e1" />
-            <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "#8a8f98" }} axisLine={false} tickLine={false} />
-            <YAxis type="category" dataKey="label" width={118} tick={{ fontSize: 12, fill: "#2c3854" }} axisLine={false} tickLine={false} />
-            <Tooltip cursor={{ fill: "rgba(43,58,140,0.05)" }} contentStyle={{ borderRadius: 8, border: "1px solid #e4e1d8", fontSize: 12 }} />
-            <Legend iconType="square" iconSize={9} wrapperStyle={{ fontSize: 12 }} />
-            <Bar dataKey="후보" fill="#d3cfc2" radius={[0, 3, 3, 0]} barSize={10} />
-            <Bar dataKey="선정" fill="#2c3854" radius={[0, 3, 3, 0]} barSize={10} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
 export function Dashboard() {
-  const { me } = useAuth();
   const { criteria, codes } = useRefs();
   const { data: projects, error } = useApi<Project[]>("/api/projects");
   const { data: dash } = useApi<DashData>("/api/dashboard");
@@ -83,8 +50,6 @@ export function Dashboard() {
         description="AI 활용 생산성 향상 측정을 위한 Replay PoC 대상 과제입니다. 생산성 효과가 과대·과소평가되지 않도록 적합도 상·중·하와 과제 유형을 고르게 선정합니다."
       />
 
-
-
       <Panel
         eyebrow="Candidates × indicators"
         title="후보 과제 × 지표 한눈에 보기"
@@ -95,7 +60,7 @@ export function Dashboard() {
           </Link>
         }
       >
-        <FitnessMatrix projects={projects} criteria={criteria} />
+        <FitnessMatrix projects={projects} criteria={criteria} codes={codes} />
       </Panel>
 
       <section className={s.kpis}>
@@ -131,6 +96,19 @@ export function Dashboard() {
         />
       </section>
 
+      <Panel
+        eyebrow="Portfolio distribution"
+        title="과제 분포 — 후보 대비 선정"
+        actions={
+          <Link href="/selection" className={s.link}>
+            선정 보드 <Icon name="chevronRight" size={14} />
+          </Link>
+        }
+        style={{ marginBottom: 16 }}
+      >
+        <DistributionBoard projects={projects} criteria={criteria} codes={codes} />
+      </Panel>
+
       <div className={s.mainGrid}>
         <Panel
           eyebrow="Portfolio balance"
@@ -141,7 +119,7 @@ export function Dashboard() {
             </Link>
           }
         >
-          <BalanceMatrix projects={projects} criteria={criteria} codes={codes} />
+          <BalanceMatrix projects={projects} codes={codes} />
         </Panel>
         <div className={s.side}>
           <Panel eyebrow="Balance check" title="균형 점검">
@@ -168,33 +146,12 @@ export function Dashboard() {
               ))}
             </div>
           </Panel>
-          <Panel eyebrow="To do" title="내 할 일">
-            {dash?.myTasks.length ? (
-              <ul className={s.tasks}>
-                {dash.myTasks.map((t) => (
-                  <li key={t.prjId}>
-                    <Link href={`/projects/${t.prjId}`}>
-                      <b>{t.prjNm}</b>
-                      <span>{t.reason}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="muted" style={{ fontSize: 13 }}>
-                {me?.role === "PM" ? "작성 중이거나 보완 요청된 과제가 없습니다." : "처리할 항목이 없습니다."}
-              </p>
-            )}
-          </Panel>
         </div>
       </div>
 
       <div className={s.bottomGrid}>
-        <Panel eyebrow="Distribution" title="후보 대비 선정 분포">
-          <div className={s.charts}>
-            <Distribution title="주 개발 언어" rows={distRows(codes.langs, projects, (p) => p.mainLangCd)} />
-            <Distribution title="시스템 유형" rows={distRows(codes.sysTypes, projects, (p) => p.sysTypeCd)} />
-          </div>
+        <Panel eyebrow="Composition" title="선정 과제 구성표">
+          <CompositionTable projects={projects} criteria={criteria} codes={codes} />
         </Panel>
         <Panel eyebrow="Activity" title="최근 활동">
           {dash?.activity.length ? (
@@ -219,7 +176,7 @@ export function Dashboard() {
         </Panel>
       </div>
       <p className="subtle" style={{ fontSize: 12, marginTop: 16 }}>
-        적합도는 AX 확정값을 우선하고, 미확정 과제는 판정 규칙의 제안값으로 집계합니다. 미평가 과제{" "}
+        적합도는 AX 확정값을 우선하고, 미확정 과제는 참고 등급(판정 규칙)으로 집계합니다. 미평가 과제{" "}
         {projects.filter((p) => effectiveFit(p) === "NA").length}건은 매트릭스에서 제외됩니다.
       </p>
     </>

@@ -3,6 +3,7 @@ import { record } from "../history";
 import { err, forbiddenR, okR, type ServiceResult } from "../result";
 import type { Store } from "../store/types";
 import type { Codes, Criteria } from "../types";
+import { CODE_LISTS } from "../projects/fields";
 import { getCodes, getPublishedCriteria } from "./service";
 import { validateCriteria } from "./validate";
 
@@ -71,11 +72,7 @@ export async function getVersion(store: Store, version: number): Promise<Criteri
 
 export function validateCodes(c: Codes): string[] {
   const e: string[] = [];
-  for (const [name, list] of [
-    ["언어", c.langs],
-    ["도메인", c.domains],
-    ["시스템 유형", c.sysTypes],
-  ] as const) {
+  for (const [name, list] of CODE_LISTS.map((l) => [l.title, c[l.key]] as const)) {
     if (!Array.isArray(list) || list.length === 0) e.push(`${name} 코드가 1개 이상 있어야 합니다.`);
     const codes = (list ?? []).map((x) => x.code);
     if (new Set(codes).size !== codes.length) e.push(`${name} 코드가 중복됩니다.`);

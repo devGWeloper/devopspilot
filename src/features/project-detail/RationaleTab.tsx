@@ -1,7 +1,7 @@
 import { FitBadge } from "@/components/ui/FitBadge";
 import { Callout, Panel } from "@/components/ui/Panel";
 import { ProfileStrip } from "@/components/ui/ProfileStrip";
-import { evaluateFit } from "@/lib/fitness";
+import { evaluateFit, highRuleLabel } from "@/lib/fitness";
 import { FIT_LABEL, fmtDateTime } from "@/lib/labels";
 import type { Criteria, Project } from "@/lib/types";
 import s from "./detail.module.css";
@@ -9,10 +9,14 @@ import { LevelTag } from "./EvaluationTab";
 
 export function ruleSentences(c: Criteria): string[] {
   const r = c.rule;
-  const high = r.highMinMajorHigh === "half" ? "과반" : `${r.highMinMajorHigh}개`;
+  const low = r.lowMinMajorLow === 1 ? "Major 지표가 하나라도 하이면 하" : `Major 지표 중 하가 ${r.lowMinMajorLow}개 이상이면 하`;
+  const high =
+    r.highMinMajorHigh === "all" && r.highMaxMajorLow === 0
+      ? "Major 지표가 모두 상이면 상"
+      : `Major 지표 중 하가 ${r.highMaxMajorLow}개 이하이고 상이 ${highRuleLabel(r)} 이상이면 상`;
   return [
-    `Major 지표 중 하가 ${r.lowMinMajorLow}개 이상이면 하`,
-    `Major 지표 중 하가 ${r.highMaxMajorLow}개 이하이고 상이 ${high} 이상이면 상`,
+    low,
+    high,
     "그 외는 중 — Minor 지표는 판정을 바꾸지 않고 보완 신호로만 표시",
   ];
 }
@@ -22,11 +26,16 @@ export function RationaleTab({ p, criteria }: { p: Project; criteria: Criteria }
   const majors = ev.profile.filter((x) => x.tier === "MAJOR");
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      <Panel eyebrow="Judgement" title="판정 결과">
+      <Panel eyebrow="FIT-05 · 자동" title="참고 등급">
         <div className={s.ruleBox}>
           <FitBadge fit={ev.suggest} confirmed={false} size="lg" />
           <div>
             <div className={s.ruleText}>{ev.ruleText}</div>
+            {ev.bottleneck.length > 0 && (
+              <div style={{ fontSize: 13, marginTop: 4 }}>
+                병목: <b>{ev.bottleneck.join(", ")}</b>
+              </div>
+            )}
             <div className={s.counts}>
               <span>
                 Major 상<b className="num">{ev.majorCount.H}</b>
@@ -77,7 +86,27 @@ export function RationaleTab({ p, criteria }: { p: Project; criteria: Criteria }
               <p className="muted">하 수준인 Minor 지표가 없습니다.</p>
             )}
           </Panel>
-          <Panel eyebrow="Confirmation" title="확정 기록">
+          <Panel eyebrow="FIT-06 · FIT-07" title="PM 판단">
+            {p.base.pmFit ? (
+              <div style={{ display: "grid", gap: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <FitBadge fit={p.base.pmFit} confirmed={false} />
+                  <span className="muted" style={{ fontSize: 13 }}>
+                    예상 기대효과{p.base.fitEvaluator && ` · 평가자 ${p.base.fitEvaluator}`}
+                  </span>
+                </div>
+                {ev.suggest !== "NA" && p.base.pmFit !== ev.suggest && (
+                  <span className="muted" style={{ fontSize: 13 }}>
+                    참고 등급({FIT_LABEL[ev.suggest]})과 다르게 판단함
+                  </span>
+                )}
+                {p.base.pmFitReason && <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>{p.base.pmFitReason}</p>}
+              </div>
+            ) : (
+              <p className="muted">PM 이 아직 예상 기대효과를 입력하지 않았습니다.</p>
+            )}
+          </Panel>
+          <Panel eyebrow="Confirmation" title="AX 확정">
             {p.eval.confirm ? (
               <div style={{ display: "grid", gap: 6 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -88,7 +117,7 @@ export function RationaleTab({ p, criteria }: { p: Project; criteria: Criteria }
                 </div>
                 {p.eval.confirm.fit !== ev.suggest && ev.suggest !== "NA" && (
                   <span className="muted" style={{ fontSize: 13 }}>
-                    제안({FIT_LABEL[ev.suggest]})과 다르게 확정됨
+                    참고 등급({FIT_LABEL[ev.suggest]})과 다르게 확정됨
                   </span>
                 )}
                 {p.eval.confirm.reason && <p style={{ whiteSpace: "pre-wrap" }}>{p.eval.confirm.reason}</p>}

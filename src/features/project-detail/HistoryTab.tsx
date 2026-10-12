@@ -13,7 +13,7 @@ const FIELD: Record<string, string> = {
   pmUserId: "PM",
   status: "상태",
   statusNote: "사유",
-  suggestFit: "제안 적합도",
+  suggestFit: "참고 등급",
   finalFit: "확정 적합도",
   answers: "지표 응답",
   base: "기본정보·실적",

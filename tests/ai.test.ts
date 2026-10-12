@@ -23,7 +23,10 @@ describe("buildAssessPrompt", () => {
   });
 
   it("과제 응답을 선택지 라벨로 풀어 쓴다", () => {
-    expect(buildAssessPrompt(args).user).toContain("개발 성격: 신규");
+    const u = buildAssessPrompt(args).user;
+    expect(u).toContain("명세 명확성: 명확");
+    expect(u).toContain("배포 형식: Web — Cloud");
+    expect(u).toContain("PM 예상 기대효과: 상");
   });
 
   it("빈 컨설턴트 프롬프트는 거부", () => {

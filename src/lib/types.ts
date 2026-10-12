@@ -35,6 +35,8 @@ export interface CriteriaOption {
 
 export interface Indicator {
   id: string;
+  // 과제 선정 양식(엑셀)의 항목 ID. 엑셀과 화면을 오가며 같은 항목인지 맞춰 보는 데 쓴다.
+  ref?: string;
   name: string;
   description: string;
   tier: Tier;
@@ -51,7 +53,7 @@ export interface Area {
 export interface FitRule {
   lowMinMajorLow: number;
   highMaxMajorLow: number;
-  highMinMajorHigh: number | "half";
+  highMinMajorHigh: number | "half" | "all";
 }
 
 export interface Criteria {
@@ -65,6 +67,8 @@ export interface Criteria {
 export interface CodeItem {
   code: string;
   label: string;
+  desc?: string;
+  example?: string;
 }
 
 export interface BalanceTarget {
@@ -76,8 +80,15 @@ export interface BalanceTarget {
 
 export interface Codes {
   langs: CodeItem[];
+  // domains(담당)·sysTypes(배포 형식)는 POC_PROJECT 의 DOMAIN_CD·SYS_TYPE_CD 컬럼을 그대로 쓰려고 예전 이름을 유지한다.
   domains: CodeItem[];
   sysTypes: CodeItem[];
+  sysGrades: CodeItem[];
+  workAreas: CodeItem[];
+  llmTypes: CodeItem[];
+  aiTools: CodeItem[];
+  aiPlans: CodeItem[];
+  tokenRanges: CodeItem[];
   target: BalanceTarget;
 }
 
@@ -112,12 +123,25 @@ export interface ProjectBaseline {
 }
 
 export interface ProjectBase {
-  description: string;
   domainCd: string;
+  orgNm: string;
+  sysGradeCd: string;
   sysTypeCd: string;
+  workAreaCd: string;
   langCds: string[];
   techStack: string;
-  orgNm: string;
+  description: string;
+  llmTypeCd: string;
+  aiToolCd: string;
+  aiAccounts: number | null;
+  llmModel: string;
+  aiPlanCd: string;
+  tokenCd: string;
+  fitEvaluator: string;
+  pmFit: Level | "";
+  pmFitReason: string;
+  staffNms: string;
+  remark: string;
   baseline: ProjectBaseline;
 }
 
@@ -204,6 +228,3 @@ export interface HistoryEntry {
   userNm: string;
   regAt: string;
 }
-
-export const DEV_TYPE_INDICATOR = "devType";
-export const EXEC_TYPE_INDICATOR = "execType";

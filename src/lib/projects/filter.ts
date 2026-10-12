@@ -11,6 +11,8 @@ export function matchesFilter(p: Project, sp: URLSearchParams): boolean {
   if (dev.length && !dev.includes(p.devTypeCd ?? "")) return false;
   const lang = list("lang");
   if (lang.length && !p.base.langCds.some((l) => lang.includes(l))) return false;
+  const sysType = list("sysType");
+  if (sysType.length && !sysType.includes(p.sysTypeCd ?? "")) return false;
   const domain = list("domain");
   if (domain.length && !domain.includes(p.domainCd ?? "")) return false;
   const pm = list("pm");

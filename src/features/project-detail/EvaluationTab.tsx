@@ -24,15 +24,13 @@ export function EvaluationTab({ p, criteria }: { p: Project; criteria: Criteria 
               <div key={ind.id} className={s.indRow}>
                 <div>
                   <div className={s.indName}>
+                    {ind.ref && <span className={s.refId}>{ind.ref}</span>}
                     {ind.name}
-                    {ind.tier === "MAJOR" && <span className={s.major}>MAJOR</span>}
+                    <span className={ind.tier === "MAJOR" ? s.major : s.minor}>{ind.tier}</span>
                   </div>
                   <div className={s.indDesc}>{ind.description}</div>
                 </div>
-                <span className={s.answer}>
-                  {opt ? opt.label : <span className="subtle">미응답</span>}
-                  <LevelTag level={opt?.level ?? null} />
-                </span>
+                <span className={s.answer}>{opt ? opt.label : <span className="subtle">미입력</span>}</span>
                 {note && <div className={s.indNote}>{note}</div>}
               </div>
             );

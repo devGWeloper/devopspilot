@@ -1,8 +1,6 @@
 "use client";
 
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
-import { FIT_COLOR } from "@/lib/labels";
-import type { Level } from "@/lib/types";
 import s from "./ui.module.css";
 
 export function Field({
@@ -68,7 +66,6 @@ export interface RadioOption {
   id: string;
   label: string;
   hint?: string;
-  level?: Level;
 }
 
 export function RadioCards({
@@ -99,10 +96,7 @@ export function RadioCards({
           onClick={() => !disabled && onChange(o.id)}
         >
           <span className={s.radioMark} />
-          <span className={s.radioLabel}>
-            {o.label}
-            {o.level && <span className={s.levelDot} style={{ background: FIT_COLOR[o.level] }} title={`수준 ${o.level}`} />}
-          </span>
+          <span className={s.radioLabel}>{o.label}</span>
           {o.hint && <span className={s.radioHint}>{o.hint}</span>}
         </button>
       ))}

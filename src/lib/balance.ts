@@ -1,6 +1,5 @@
 import { FIT_LABEL } from "./fitness";
 import {
-  DEV_TYPE_INDICATOR,
   LEVELS,
   type Codes,
   type Criteria,
@@ -63,11 +62,11 @@ export function analyzeBalance(
       warnings.push({ kind: "FIT", message: `${FIT_LABEL[lv]} 적합도 목표 ${t.byFit[lv]}건 중 ${byFit[lv]}건` });
     }
   }
-  const devInd = c.areas.flatMap((a) => a.indicators).find((i) => i.id === DEV_TYPE_INDICATOR);
-  if (devInd && t.minPerDevType > 0) {
-    for (const o of devInd.options) {
-      const n = byDevType[o.id] ?? 0;
-      if (n < t.minPerDevType) warnings.push({ kind: "DEV_TYPE", message: `개발 성격 '${o.label}' 선정 ${n}건` });
+  if (t.minPerDevType > 0) {
+    // '혼합'은 다른 영역이 섞인 과제라 그 자체를 따로 채울 대상으로 보지 않는다.
+    for (const o of codes.workAreas.filter((x) => x.code !== "MIXED")) {
+      const n = byDevType[o.code] ?? 0;
+      if (n < t.minPerDevType) warnings.push({ kind: "DEV_TYPE", message: `과제 영역 '${o.label}' 선정 ${n}건` });
     }
   }
   const langKinds = Object.keys(byLang).length;

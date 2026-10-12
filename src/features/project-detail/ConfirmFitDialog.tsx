@@ -88,21 +88,32 @@ export function ConfirmFitDialog({
       }
     >
       <div style={{ display: "grid", gap: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }} className="muted">
-          판정 규칙 제안 <FitBadge fit={project.suggestFit} confirmed={false} size="sm" />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }} className="muted">
+          참고 등급 <FitBadge fit={project.suggestFit} confirmed={false} size="sm" />
+          {project.base.pmFit && (
+            <>
+              <span aria-hidden>·</span> PM 판단 <FitBadge fit={project.base.pmFit} confirmed={false} size="sm" />
+            </>
+          )}
         </div>
+        {project.base.pmFitReason && (
+          <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+            PM 판단 사유: {project.base.pmFitReason}
+          </p>
+        )}
         <div role="radiogroup" aria-label="확정 적합도" className={ui.radioGroup}>
           {LEVELS.map((lv) => (
             <button key={lv} type="button" role="radio" aria-checked={fit === lv} className={ui.radioCard} onClick={() => setFit(lv)}>
               <span className={ui.radioMark} />
               <span className={ui.radioLabel}>
                 <FitBadge fit={lv} size="sm" />
-                {lv === suggest && <span className="subtle" style={{ fontWeight: 500, fontSize: 12 }}>제안</span>}
+                {lv === suggest && <span className="subtle" style={{ fontWeight: 500, fontSize: 12 }}>참고</span>}
+                {lv === project.base.pmFit && <span className="subtle" style={{ fontWeight: 500, fontSize: 12 }}>PM</span>}
               </span>
             </button>
           ))}
         </div>
-        <Field label="확정 사유" required={needReason} hint={needReason ? "제안과 다르게 확정하므로 사유가 필요합니다." : "선택 입력"}>
+        <Field label="확정 사유" required={needReason} hint={needReason ? "참고 등급과 다르게 확정하므로 사유가 필요합니다." : "선택 입력"}>
           <Textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} />
         </Field>
       </div>

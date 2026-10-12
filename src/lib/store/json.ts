@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type { HistoryEntry, Project, UserRecord } from "../types";
+import { withBase } from "../projects/base";
 import {
   DuplicateKeyError,
   filterHistory,
@@ -71,9 +72,10 @@ export function createJsonStore(dir: string): Store {
         }),
     },
     projects: {
-      list: () => snapshot<Project>("projects"),
+      list: async () => (await snapshot<Project>("projects")).map(withBase),
       async get(id) {
-        return (await snapshot<Project>("projects")).find((p) => p.prjId === id) ?? null;
+        const p = (await snapshot<Project>("projects")).find((x) => x.prjId === id);
+        return p ? withBase(p) : null;
       },
       insert: (p) =>
         mutate<Project, void>("projects", (rows) => {

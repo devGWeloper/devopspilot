@@ -40,14 +40,15 @@ export function RuleEditor({ criteria, onChange }: { criteria: Criteria; onChang
           <b>상</b>이{" "}
           <select
             className={s.ruleSel}
-            value={r.highMinMajorHigh === "half" ? "half" : "n"}
-            onChange={(e) => set({ highMinMajorHigh: e.target.value === "half" ? "half" : half })}
+            value={r.highMinMajorHigh === "half" || r.highMinMajorHigh === "all" ? r.highMinMajorHigh : "n"}
+            onChange={(e) => set({ highMinMajorHigh: e.target.value === "half" || e.target.value === "all" ? e.target.value : half })}
             aria-label="상 기준 방식"
           >
+            <option value="all">모두({majors}개)</option>
             <option value="half">과반({half}개)</option>
             <option value="n">직접 지정</option>
           </select>
-          {r.highMinMajorHigh !== "half" && (
+          {typeof r.highMinMajorHigh === "number" && (
             <>
               {" "}
               <NumIn value={r.highMinMajorHigh} onChange={(n) => set({ highMinMajorHigh: n })} label="상 기준 개수" />개

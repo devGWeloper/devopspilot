@@ -6,7 +6,8 @@ import { record } from "../history";
 import { STATUS_LABEL } from "../labels";
 import { conflictR, err, forbiddenR, notFoundR, okR, type ServiceResult } from "../result";
 import { DuplicateKeyError, type Store } from "../store/types";
-import type { AgreeCd, Criteria, Level, Project, ProjectStatus, ReviewEntry } from "../types";
+import { LEVELS, type AgreeCd, type Criteria, type Level, type Project, type ProjectStatus, type ReviewEntry } from "../types";
+import { normalizeBase } from "./base";
 import { canTransition, noteRequired } from "./transitions";
 import { validateDraft, validateForSubmit, type ProjectInput } from "./validate";
 
@@ -47,13 +48,10 @@ function clean(input: ProjectInput, c: Criteria) {
   return {
     prjNm: input.prjNm.trim(),
     sysNm: (input.sysNm ?? "").trim(),
-    base: {
-      ...input.base,
-      langCds: Array.from(new Set(input.base.langCds ?? [])),
-      description: input.base.description ?? "",
-      techStack: input.base.techStack ?? "",
-      orgNm: input.base.orgNm ?? "",
-    },
+    base: (() => {
+      const b = normalizeBase(input.base);
+      return { ...b, langCds: Array.from(new Set(b.langCds)), pmFit: LEVELS.includes(b.pmFit as Level) ? b.pmFit : "" };
+    })(),
     answers,
     notes: Object.fromEntries(Object.entries(notes).filter(([, v]) => typeof v === "string" && v.trim())),
   };
@@ -227,7 +225,7 @@ export async function confirmFit(
   if (!can(actor, "project.confirm", { project: before })) return forbiddenR();
   if (!["H", "M", "L"].includes(fit)) return err(422, "VALIDATION", "적합도 값이 올바르지 않습니다.");
   const r = reason?.trim() ?? "";
-  if (fit !== before.suggestFit && !r) return err(422, "VALIDATION", "제안 적합도와 다르게 확정할 때는 사유가 필요합니다.");
+  if (fit !== before.suggestFit && !r) return err(422, "VALIDATION", "참고 등급와 다르게 확정할 때는 사유가 필요합니다.");
   const confirm = { fit, reason: r, by: actor.userId, byNm: actor.userNm, at: now() };
   const after: Project = { ...before, eval: { ...before.eval, confirm }, finalFit: fit };
   return save(store, actor, before, after, expectedUpdAt, "CONFIRM", `적합도 확정: ${FIT_LABEL[fit]}${r ? ` (${r})` : ""}`);

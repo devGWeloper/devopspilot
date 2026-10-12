@@ -91,7 +91,7 @@
 }
 .dl {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
+  grid-template-columns: 170px minmax(0, 1fr);
   gap: 12px 16px;
   margin: 0;
 }
@@ -302,4 +302,21 @@
   .reviewGrid {
     grid-template-columns: 1fr;
   }
+}
+.refId {
+  display: inline-block;
+  min-width: 52px;
+  margin-right: 6px;
+  font: 600 10.5px/1.6 var(--font-mono, ui-monospace, monospace);
+  color: var(--subtle);
+}
+.minor {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  color: var(--subtle);
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  padding: 0 4px;
+  line-height: 16px;
 }

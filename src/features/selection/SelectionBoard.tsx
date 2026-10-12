@@ -13,10 +13,10 @@ import { useToast } from "@/components/ui/Toast";
 import { api, errMessage } from "@/lib/apiClient";
 import { can } from "@/lib/auth/permissions";
 import { buildProfile } from "@/lib/fitness";
-import { labelOf, optionLabel, useApi, useRefs } from "@/lib/hooks";
+import { labelOf, useApi, useRefs } from "@/lib/hooks";
 import { STATUS_LABEL } from "@/lib/labels";
 import { canTransition, noteRequired } from "@/lib/projects/transitions";
-import { DEV_TYPE_INDICATOR, type Project, type ProjectStatus } from "@/lib/types";
+import type { Project, ProjectStatus } from "@/lib/types";
 import { selectionWarnings, StatusDialog } from "../project-detail/StatusDialog";
 import { BalancePanel } from "./BalancePanel";
 import s from "./board.module.css";
@@ -136,7 +136,8 @@ export function SelectionBoard() {
                       </Link>
                       {criteria && <ProfileStrip profile={buildProfile(criteria, p.eval.answers)} size="sm" />}
                       <div className={s.cardChips}>
-                        {p.devTypeCd && <Chip tone="outline">{optionLabel(criteria, DEV_TYPE_INDICATOR, p.devTypeCd)}</Chip>}
+                        {p.devTypeCd && <Chip tone="outline">{labelOf(codes?.workAreas, p.devTypeCd)}</Chip>}
+                        {p.sysTypeCd && <Chip tone="outline">{labelOf(codes?.sysTypes, p.sysTypeCd)}</Chip>}
                         {p.mainLangCd && <Chip tone="outline">{labelOf(codes?.langs, p.mainLangCd)}</Chip>}
                         {p.status === "SUPPLEMENT" && <Chip tone="warn">보완요청</Chip>}
                       </div>

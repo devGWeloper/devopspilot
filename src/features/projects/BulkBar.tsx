@@ -46,7 +46,7 @@ export function BulkBar({
           상태 변경
         </Button>
         <Button size="sm" variant="ghost" loading={busy && !open} onClick={() => run(onConfirm)} className={s.bulkBtn}>
-          제안대로 적합도 확정
+          참고 등급대로 적합도 확정
         </Button>
         <Button size="sm" variant="ghost" icon="x" onClick={onClear} className={s.bulkBtn}>
           선택 해제

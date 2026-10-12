@@ -91,6 +91,7 @@ interface PathRule {
 const PATH_RULES: PathRule[] = [
   { prefix: "/admin", roles: ["AX_ADMIN"] },
   { prefix: "/api/admin", roles: ["AX_ADMIN"] },
+  { prefix: "/entry", roles: ["AX_ADMIN", "PM"] },
   { prefix: "/today", roles: ["AX_ADMIN", "DEVELOPER"] },
   { prefix: "/collect", roles: ["AX_ADMIN", "PM", "DEVELOPER"] },
   { prefix: "/check", roles: ["AX_ADMIN", "PM"] },
@@ -109,6 +110,7 @@ export function canAccessPath(role: Role, pathname: string): boolean {
 export function homePathFor(role: Role): string {
   if (role === "DEVELOPER") return "/today";
   if (role === "TESTER") return "/defects";
+  if (role === "PM") return "/entry";
   return "/";
 }
 

@@ -5,24 +5,16 @@ import { useState } from "react";
 import { Segmented } from "@/components/ui/Tabs";
 import { effectiveFit } from "@/lib/balance";
 import { FIT_LABEL } from "@/lib/labels";
-import { DEV_TYPE_INDICATOR, LEVELS, type Codes, type Criteria, type Project } from "@/lib/types";
+import { dimensions, type DimKey } from "@/lib/distribution";
+import { LEVELS, type Codes, type Project } from "@/lib/types";
 import s from "./dashboard.module.css";
 
-type Axis = "devType" | "domain" | "lang" | "sysType";
-
-export function BalanceMatrix({ projects, criteria, codes, compact }: { projects: Project[]; criteria: Criteria; codes: Codes; compact?: boolean }) {
-  const [axis, setAxis] = useState<Axis>("devType");
-  const devOpts = criteria.areas.flatMap((a) => a.indicators).find((i) => i.id === DEV_TYPE_INDICATOR)?.options ?? [];
-  const cols: { key: string; label: string }[] =
-    axis === "devType"
-      ? devOpts.map((o) => ({ key: o.id, label: o.label }))
-      : axis === "domain"
-        ? codes.domains.map((c) => ({ key: c.code, label: c.label }))
-        : axis === "lang"
-          ? codes.langs.map((c) => ({ key: c.code, label: c.label }))
-          : codes.sysTypes.map((c) => ({ key: c.code, label: c.label }));
-  const keyOf = (p: Project) =>
-    axis === "devType" ? p.devTypeCd : axis === "domain" ? p.domainCd : axis === "lang" ? p.mainLangCd : p.sysTypeCd;
+export function BalanceMatrix({ projects, codes, compact }: { projects: Project[]; codes: Codes; compact?: boolean }) {
+  const dims = dimensions(codes).filter((d) => d.key !== "fit");
+  const [axis, setAxis] = useState<DimKey>("devType");
+  const dim = dims.find((d) => d.key === axis) ?? dims[0];
+  const cols = dim.cats.map((c) => ({ key: c.code, label: c.label }));
+  const keyOf = dim.of;
 
   const pool = projects.filter((p) => p.status !== "EXCLUDED" && effectiveFit(p) !== "NA");
 
@@ -34,12 +26,7 @@ export function BalanceMatrix({ projects, criteria, codes, compact }: { projects
             ariaLabel="열 기준"
             value={axis}
             onChange={setAxis}
-            options={[
-              { key: "devType", label: "개발 성격" },
-              { key: "domain", label: "업무 도메인" },
-              { key: "lang", label: "주 언어" },
-              { key: "sysType", label: "시스템 유형" },
-            ]}
+            options={dims.map((d) => ({ key: d.key, label: d.title }))}
           />
           <span className={s.matrixLegend}>
             <span className={s.chipSel}>선정</span>

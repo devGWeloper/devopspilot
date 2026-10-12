@@ -94,6 +94,11 @@ describe("canAccessPath", () => {
   it("/administrator 같은 유사 경로는 /admin 규칙에 걸리지 않는다", () => {
     expect(canAccessPath("PM", "/administrator")).toBe(true);
   });
+  it("과제 기입은 PM 과 AX 관리자만", () => {
+    expect(canAccessPath("PM", "/entry/PRJ-0001")).toBe(true);
+    expect(canAccessPath("AX_ADMIN", "/entry")).toBe(true);
+    expect(canAccessPath("HX_REVIEWER", "/entry")).toBe(false);
+  });
   it("오늘 공수 입력", () => {
     expect(canAccessPath("DEVELOPER", "/today")).toBe(true);
     expect(canAccessPath("HX_REVIEWER", "/today")).toBe(false);
@@ -117,7 +122,7 @@ describe("homePathFor / reviewSide", () => {
   it("역할별 첫 화면", () => {
     expect(homePathFor("DEVELOPER")).toBe("/today");
     expect(homePathFor("TESTER")).toBe("/defects");
-    expect(homePathFor("PM")).toBe("/");
+    expect(homePathFor("PM")).toBe("/entry");
   });
   it("의견 측은 역할 기준", () => {
     expect(reviewSide({ ...me("AX_ADMIN"), orgCd: "SKAX" })).toBe("AX");

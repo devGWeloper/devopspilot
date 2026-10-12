@@ -3,9 +3,8 @@
 import { Checkbox } from "@/components/ui/Field";
 import { Icon } from "@/components/ui/Icon";
 import { analyzeBalance } from "@/lib/balance";
-import { labelOf } from "@/lib/hooks";
 import { FIT_COLOR, FIT_LABEL, FIT_SOFT } from "@/lib/labels";
-import { DEV_TYPE_INDICATOR, LEVELS, type Codes, type Criteria, type Project } from "@/lib/types";
+import { LEVELS, type Codes, type Criteria, type Project } from "@/lib/types";
 import s from "./board.module.css";
 
 function Bars({ title, rows }: { title: string; rows: { label: string; n: number; target?: number }[] }) {
@@ -42,7 +41,6 @@ export function BalancePanel({
 }) {
   const r = analyzeBalance(projects, criteria, codes, withReserve ? ["SELECTED", "RESERVE"] : ["SELECTED"]);
   const t = codes.target;
-  const devInd = criteria.areas.flatMap((a) => a.indicators).find((i) => i.id === DEV_TYPE_INDICATOR);
   const pct = Math.min(100, (r.selectedCount / Math.max(1, t.total)) * 100);
 
   return (
@@ -99,15 +97,13 @@ export function BalancePanel({
         </div>
       )}
 
-      {devInd && (
-        <Bars
-          title="개발 성격"
-          rows={devInd.options.map((o) => ({ label: o.label, n: r.byDevType[o.id] ?? 0, target: t.minPerDevType }))}
-        />
-      )}
+      <Bars
+        title="과제 영역"
+        rows={codes.workAreas.map((o) => ({ label: o.label, n: r.byDevType[o.code] ?? 0, target: o.code === "MIXED" ? undefined : t.minPerDevType }))}
+      />
+      <Bars title="배포 형식" rows={codes.sysTypes.map((d) => ({ label: d.label, n: r.bySysType[d.code] ?? 0 }))} />
+      <Bars title="담당" rows={codes.domains.map((d) => ({ label: d.label, n: r.byDomain[d.code] ?? 0 }))} />
       <Bars title="주 개발 언어" rows={codes.langs.map((l) => ({ label: l.label, n: r.byLang[l.code] ?? 0 })).filter((x) => x.n > 0 || r.selectedCount === 0).slice(0, 7)} />
-      <Bars title="업무 도메인" rows={codes.domains.map((d) => ({ label: d.label, n: r.byDomain[d.code] ?? 0 }))} />
-      <Bars title="시스템 유형" rows={codes.sysTypes.map((d) => ({ label: labelOf(codes.sysTypes, d.code), n: r.bySysType[d.code] ?? 0 }))} />
     </aside>
   );
 }

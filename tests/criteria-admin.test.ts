@@ -23,14 +23,14 @@ describe("평가 기준 초안·게시", () => {
   it("초안이 없으면 게시본 사본", async () => {
     const d = await getDraft(store);
     expect(d.version).toBe(1);
-    expect(d.areas).toHaveLength(4);
+    expect(d.areas).toHaveLength(3);
   });
 
   it("초안 저장은 게시본을 바꾸지 않는다", async () => {
     const d = await getDraft(store);
     d.areas[0].name = "바뀜";
     expect((await saveDraft(store, admin, d)).ok).toBe(true);
-    expect((await getPublishedCriteria(store)).areas[0].name).toBe("과제 특성");
+    expect((await getPublishedCriteria(store)).areas[0].name).toBe("AI 적합도 — 개발자 평가");
     expect((await getDraft(store)).areas[0].name).toBe("바뀜");
   });
 

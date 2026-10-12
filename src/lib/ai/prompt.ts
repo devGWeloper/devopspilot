@@ -1,5 +1,5 @@
 import type { BalanceReport } from "../balance";
-import { evaluateFit, FIT_LABEL } from "../fitness";
+import { evaluateFit, FIT_LABEL, highRuleLabel } from "../fitness";
 import type { Codes, Criteria, Project } from "../types";
 
 // 컨설턴트가 채우는 빈 틀. 앱은 판정 기준을 정하지 않는다.
@@ -9,13 +9,13 @@ export const PROMPT_TEMPLATE = `## 판정 기준 (상/중/하가 무엇인가)
     하: …
 
 ## Major 지표 해석
-예) '실행망 모델 연결'이 불가면 Replay 자체가 어려우므로 다른 지표가 좋아도 하로 본다.
+예) '맥락 주입 가능성'이 어려움이면 다른 지표가 좋아도 AI 가 만든 결과를 믿기 어려우므로 하로 본다.
 
 ## 선정 원칙
 예) 생산성 효과가 과대평가되지 않도록 상·중·하를 고르게 뽑는다. 레거시 과제를 최소 1건 포함한다.
 
 ## 주의사항
-예) 기능 정의서가 구버전이면 Replay 입력 고정 조건을 만족하지 못할 수 있다.
+예) WBS 실적이 없으면 Replay 결과와 비교할 기준 공수가 없다.
 `;
 
 const OUTPUT_SPEC = `반드시 아래 JSON 하나만 출력하라. 다른 설명은 쓰지 마라.
@@ -67,16 +67,18 @@ export function buildAssessPrompt(args: { consultantPrompt: string; criteria: Cr
   const user = [
     `## 평가 기준 v${c.version}`,
     criteriaText,
-    `판정 규칙: Major 중 하 ${r.lowMinMajorLow}개 이상 → 하 / 하 ${r.highMaxMajorLow}개 이하이고 상 ${r.highMinMajorHigh === "half" ? "과반" : `${r.highMinMajorHigh}개`} 이상 → 상 / 그 외 중`,
+    `판정 규칙: Major 중 하 ${r.lowMinMajorLow}개 이상 → 하 / 하 ${r.highMaxMajorLow}개 이하이고 상 ${highRuleLabel(r)} 이상 → 상 / 그 외 중`,
     "",
     `## 대상 과제 ${p.prjId} ${p.prjNm}`,
-    `시스템: ${p.sysNm} · 도메인: ${label(codes.domains, p.base.domainCd)} · 유형: ${label(codes.sysTypes, p.base.sysTypeCd)} · 언어: ${p.base.langCds.map((l) => label(codes.langs, l)).join(", ")}`,
+    `시스템: ${p.sysNm} · 담당: ${label(codes.domains, p.base.domainCd)} ${p.base.orgNm} · 배포 형식: ${label(codes.sysTypes, p.base.sysTypeCd)} · 과제 영역: ${label(codes.workAreas, p.base.workAreaCd)} · 등급: ${label(codes.sysGrades, p.base.sysGradeCd)} · 언어: ${p.base.langCds.map((l) => label(codes.langs, l)).join(", ")}`,
+    `AI 적용 계획: ${label(codes.llmTypes, p.base.llmTypeCd)} · ${label(codes.aiTools, p.base.aiToolCd)} · 계정 ${p.base.aiAccounts ?? "?"}개`,
     `설명: ${p.base.description || "—"}`,
     `원 프로젝트 실적: ${bl.startDate ?? "?"} ~ ${bl.endDate ?? "?"}, 총 ${bl.totalMm ?? "?"} M/M`,
     "",
     "## 지표 응답",
     answers,
-    `규칙 기반 제안: ${FIT_LABEL[ev.suggest]} (${ev.ruleText})`,
+    `규칙 기반 참고 등급: ${FIT_LABEL[ev.suggest]} (${ev.ruleText}${ev.bottleneck.length ? ` · 병목: ${ev.bottleneck.join(", ")}` : ""})`,
+    `PM 예상 기대효과: ${p.base.pmFit ? FIT_LABEL[p.base.pmFit] : "미입력"}${p.base.pmFitReason ? ` — ${p.base.pmFitReason}` : ""}`,
     "",
     "## 현재 선정 분포",
     dist,

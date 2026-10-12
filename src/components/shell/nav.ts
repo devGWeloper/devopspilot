@@ -19,6 +19,7 @@ export const NAV: NavGroup[] = [
     label: "과제 선정",
     items: [
       { href: "/", label: "대시보드", icon: "dashboard" },
+      { href: "/entry", label: "과제 기입", icon: "edit" },
       { href: "/projects", label: "과제 포트폴리오", icon: "folder" },
       { href: "/selection", label: "선정 보드", icon: "board" },
       { href: "/report", label: "보고서", icon: "report" },

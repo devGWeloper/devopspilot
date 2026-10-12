@@ -14,7 +14,7 @@ import { Tabs, type TabItem } from "@/components/ui/Tabs";
 import { useToast } from "@/components/ui/Toast";
 import { api, errMessage } from "@/lib/apiClient";
 import { can } from "@/lib/auth/permissions";
-import { evaluateFit } from "@/lib/fitness";
+import { evaluateFit, FIT_LABEL } from "@/lib/fitness";
 import { useApi, useRefs } from "@/lib/hooks";
 import { canTransition } from "@/lib/projects/transitions";
 import { STATUSES, type Project } from "@/lib/types";
@@ -132,16 +132,19 @@ export function ProjectDetail({ id, slots = {} }: { id: string; slots?: DetailSl
               <span className="eyebrow">적합도</span>
               {p.finalFit !== "NA" ? (
                 <span>
-                  확정{p.finalFit !== p.suggestFit && p.suggestFit !== "NA" ? <span className="subtle"> · 제안과 다름</span> : null}
+                  확정{p.finalFit !== p.suggestFit && p.suggestFit !== "NA" ? <span className="subtle"> · 참고 등급과 다름</span> : null}
                 </span>
               ) : (
-                <span className="muted">{p.suggestFit === "NA" ? "Major 지표 응답 필요" : "제안 — AX 확정 전"}</span>
+                <span className="muted">{p.suggestFit === "NA" ? "Major 지표 응답 필요" : "참고 등급 — AX 확정 전"}</span>
               )}
+              <span className="subtle" style={{ fontSize: 12 }}>
+                PM 판단 {p.base.pmFit ? FIT_LABEL[p.base.pmFit] : "미입력"}
+              </span>
             </div>
           </div>
           <div className={`${s.actions} no-print`}>
             {canEdit && (
-              <Button icon="edit" onClick={() => router.push(`/projects/${p.prjId}/edit`)}>
+              <Button icon="edit" onClick={() => router.push(`/entry/${p.prjId}`)}>
                 편집
               </Button>
             )}
@@ -182,7 +185,7 @@ export function ProjectDetail({ id, slots = {} }: { id: string; slots?: DetailSl
 
       <Tabs items={items} value={items.some((i) => i.key === tab) ? tab : "overview"} onChange={setTab} />
       <div className={s.tabBody}>
-        {tab === "overview" && <OverviewTab p={p} codes={codes} />}
+        {tab === "overview" && <OverviewTab p={p} codes={codes} criteria={criteria} />}
         {tab === "eval" && <EvaluationTab p={p} criteria={criteria} />}
         {tab === "rationale" && <RationaleTab p={p} criteria={criteria} />}
         {tab === "review" && <ReviewTab p={p} me={me} onChange={setData} context="SELECTION" />}

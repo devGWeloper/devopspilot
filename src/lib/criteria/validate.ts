@@ -28,7 +28,7 @@ export function validateCriteria(c: Criteria): string[] {
   if (majors === 0) e.push("Major 지표가 1개 이상 있어야 합니다.");
   const r = c.rule;
   const okInt = (n: unknown) => typeof n === "number" && Number.isInteger(n) && n >= 0;
-  if (!okInt(r.lowMinMajorLow) || !okInt(r.highMaxMajorLow) || !(r.highMinMajorHigh === "half" || okInt(r.highMinMajorHigh))) {
+  if (!okInt(r.lowMinMajorLow) || !okInt(r.highMaxMajorLow) || !(r.highMinMajorHigh === "half" || r.highMinMajorHigh === "all" || okInt(r.highMinMajorHigh))) {
     e.push("판정 규칙 값은 0 이상의 정수여야 합니다.");
   }
   if (okInt(r.lowMinMajorLow) && okInt(r.highMaxMajorLow) && r.highMaxMajorLow >= r.lowMinMajorLow) {
@@ -43,7 +43,7 @@ export interface Impact {
   changed: { prjId: string; prjNm: string; before: Fit; after: Fit }[];
 }
 
-// 게시 전에 "이 기준으로 바꾸면 제안 적합도가 어떻게 달라지나"를 보여 준다. 확정값은 기준과 무관하므로 제안값만 비교한다.
+// 게시 전에 "이 기준으로 바꾸면 참고 등급가 어떻게 달라지나"를 보여 준다. 확정값은 기준과 무관하므로 제안값만 비교한다.
 export function impactOf(projects: Project[], from: Criteria, to: Criteria): Impact {
   const zero = (): Record<Fit, number> => ({ H: 0, M: 0, L: 0, NA: 0 });
   const r: Impact = { from: zero(), to: zero(), changed: [] };
