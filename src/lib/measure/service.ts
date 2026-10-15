@@ -2,7 +2,7 @@ import { can, type ActorFull } from "../auth/permissions";
 import { record } from "../history";
 import { err, forbiddenR, notFoundR, okR, type ServiceResult } from "../result";
 import type { MeasRow, Store } from "../store/types";
-import type { Project, StageCd } from "../types";
+import type { Project } from "../types";
 import { normalizeSettings, SETTINGS_KEY } from "./defaults";
 import { kstDate, kstTime, parseLogUpload, type OtelDelta } from "./ingest";
 import type { StoredSession } from "./match";
@@ -165,6 +165,35 @@ async function setConfState(store: Store, actor: ActorFull, reqId: string, date:
 export const reopenDay = (store: Store, actor: ActorFull, reqId: string, date: string) => setConfState(store, actor, reqId, date, "EDIT");
 export const addExtraDay = (store: Store, actor: ActorFull, reqId: string, date: string) => setConfState(store, actor, reqId, date, "EXTRA");
 
+/** 하루 단위 확정 — 공수 입력 화면은 날짜 하나를 한 번에 확정한다. 저장은 기존처럼 요구사항별로 남는다. */
+export async function confirmDate(store: Store, actor: ActorFull, date: string): Promise<ServiceResult<{ count: number }>> {
+  if (actor.role !== "DEVELOPER") return forbiddenR("개발자 본인만 확정할 수 있습니다.");
+  const ix = await loadIndex(store);
+  const reqs = ix.data.projects
+    .flatMap((p) => p.reqs)
+    .filter((r) => rowsOf(ix, actor.userId, r).some((x) => x.date === date && x.st !== "conf"));
+  if (reqs.length === 0) return err(409, "NOTHING", "확정할 입력이 없습니다.");
+  let count = 0;
+  for (const r of reqs) {
+    const res = await confirmDays(store, actor, r.reqId, [date]);
+    if (!res.ok) return res;
+    count += res.value.count;
+  }
+  return okR({ count });
+}
+
+export async function reopenDate(store: Store, actor: ActorFull, date: string): Promise<ServiceResult<null>> {
+  if (actor.role !== "DEVELOPER") return forbiddenR("개발자 본인만 고칠 수 있습니다.");
+  const ix = await loadIndex(store);
+  const reqs = ix.data.projects.flatMap((p) => p.reqs).filter((r) => !r.done && ix.conf.get(confKey(actor.userId, r.reqId, date))?.state === "CONF");
+  if (reqs.length === 0) return err(409, "NOT_CONFIRMED", "고칠 수 있는 확정이 없습니다. (측정 완료된 요구사항은 고칠 수 없습니다)");
+  for (const r of reqs) {
+    const res = await reopenDay(store, actor, r.reqId, date);
+    if (!res.ok) return res;
+  }
+  return okR(null);
+}
+
 export type ResolveInput = { off: true } | { parts: { unit: string; min: number }[] };
 
 export async function resolveSession(store: Store, actor: ActorFull, datId: string, input: ResolveInput): Promise<ServiceResult<null>> {
@@ -255,4 +284,3 @@ export async function saveSettings(store: Store, actor: ActorFull, v: Settings):
   return okR(s);
 }
 
-export type { StageCd };

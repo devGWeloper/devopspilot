@@ -8,15 +8,25 @@ export interface NavItem {
   icon: IconName;
 }
 
-export const NAV: NavItem[] = [
-  { href: "/", label: "PoC 과제 현황", icon: "folder" },
-  { href: "/effort", label: "투입 공수", icon: "clock" },
-  { href: "/dashboard", label: "측정 결과", icon: "gauge" },
-  { href: "/admin", label: "시스템 관리", icon: "sliders" },
+export interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+export const NAV: NavGroup[] = [
+  {
+    label: "PoC",
+    items: [
+      { href: "/", label: "과제 현황", icon: "folder" },
+      { href: "/effort", label: "공수 입력", icon: "clock" },
+      { href: "/dashboard", label: "측정 결과", icon: "gauge" },
+    ],
+  },
+  { label: "관리", items: [{ href: "/admin", label: "시스템 관리", icon: "sliders" }] },
 ];
 
-export function visibleNav(role: Role): NavItem[] {
-  return NAV.filter((i) => canAccessPath(role, i.href));
+export function visibleNav(role: Role): NavGroup[] {
+  return NAV.map((g) => ({ ...g, items: g.items.filter((i) => canAccessPath(role, i.href)) })).filter((g) => g.items.length > 0);
 }
 
 export function isActive(href: string, pathname: string): boolean {

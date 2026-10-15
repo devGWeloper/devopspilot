@@ -240,3 +240,27 @@ export function confirmedSum(ix: Index, userId: string, req: Requirement): { byS
   }
   return { byStage, tot, md: tot / ix.data.settings.mdHours };
 }
+
+export type DaySt = "none" | "need" | "edit" | "conf";
+
+const reqsOwnedBy = (ix: Index, userId: string) => ix.data.projects.flatMap((p) => p.reqs).filter((r) => r.stages.some((s) => s.ownerId === userId));
+
+/** 개발자의 하루 상태 — 그날 입력이 있는 요구사항이 모두 확정이면 conf, 하나라도 값이 바뀌었으면 edit */
+export function userDayState(ix: Index, userId: string, date: string): DaySt {
+  const sts = reqsOwnedBy(ix, userId).flatMap((r) => rowsOf(ix, userId, r).filter((x) => x.date === date).map((x) => x.st));
+  if (!sts.length) return "none";
+  if (sts.includes("edit")) return "edit";
+  if (sts.includes("need")) return "need";
+  return "conf";
+}
+
+export function userDayTotal(ix: Index, userId: string, date: string): number {
+  return ix.units.filter((u) => u.ownerId === userId).reduce((a, u) => a + cellOf(ix, u.code, date).tot, 0);
+}
+
+/** 개발자에게 입력·확정 기록이 있는 날 */
+export function userDates(ix: Index, userId: string): string[] {
+  const out = new Set<string>();
+  for (const r of reqsOwnedBy(ix, userId)) rowsOf(ix, userId, r).forEach((x) => out.add(x.date));
+  return Array.from(out);
+}

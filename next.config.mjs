@@ -17,6 +17,8 @@ try {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // dev 서버와 빌드 확인을 동시에 돌릴 때 같은 .next 를 덮어쓰지 않도록 출력 폴더를 바꿀 수 있게 한다.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   reactStrictMode: true,
   // Node 24 + Next 14 에서 병렬 빌드 워커가 기본 _document 를 간헐적으로 만들지 못해 빌드가 실패한다 — 단일 워커로 고정.
   experimental: { serverComponentsExternalPackages: ["oracledb", "exceljs"], webpackBuildWorker: false },

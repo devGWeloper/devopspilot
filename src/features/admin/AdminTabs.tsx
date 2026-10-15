@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { Tabs } from "@/components/ui/Tabs";
 import { f1, pct } from "@/lib/format";
 import { fmtDay } from "@/lib/labels";
@@ -17,9 +18,7 @@ export function AdminTabs({ conf, collect, settings, otelOn }: { conf: ConfMatri
   const [tab, setTab] = useState<Tab>("conf");
   return (
     <>
-      <div className={b.head}>
-        <h1 className={b.title}>시스템 관리</h1>
-      </div>
+      <PageHeader eyebrow="Admin" title="시스템 관리" description="개발자 확정 현황과 AI 사용 수집 상태를 보고, 계정·단가를 관리합니다." />
       <Tabs
         value={tab}
         onChange={setTab}
