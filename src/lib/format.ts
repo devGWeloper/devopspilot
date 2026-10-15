@@ -21,3 +21,15 @@ export function num(v: number | null | undefined): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return "—";
   return Math.round(v).toLocaleString("ko-KR");
 }
+
+/** 소수 첫째 자리 (M/D·시간 표시용) */
+export function f1(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return "—";
+  return (Math.round(v * 10) / 10).toLocaleString("ko-KR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+/** 만 원 단위 정수 */
+export function man(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return "—";
+  return Math.round(v / 10_000).toLocaleString("ko-KR");
+}

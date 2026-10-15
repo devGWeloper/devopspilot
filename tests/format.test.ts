@@ -1,5 +1,5 @@
 import { it, expect } from "vitest";
-import { hours, pct, won } from "@/lib/format";
+import { f1, hours, man, pct, won } from "@/lib/format";
 
 it("pct: null 은 —, 반올림 정수, 음수", () => {
   expect(pct(null)).toBe("—");
@@ -20,4 +20,11 @@ it("won: 천 단위 콤마, 큰 금액은 만원", () => {
   expect(won(1234.5)).toBe("1,235원");
   expect(won(12_345_678)).toBe("1,235만원");
   expect(won(-50_000)).toBe("-5만원");
+});
+
+it("f1: 소수 1자리 고정, man: 만 원 정수", () => {
+  expect(f1(2)).toBe("2.0");
+  expect(f1(1234.56)).toBe("1,234.6");
+  expect(f1(null)).toBe("—");
+  expect(man(12_345_678)).toBe("1,235");
 });

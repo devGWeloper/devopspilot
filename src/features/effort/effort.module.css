@@ -1,0 +1,409 @@
+.ef {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.lp {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: sticky;
+  top: 72px;
+  max-height: calc(100vh - 88px);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.box {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.fl select {
+  flex: 1;
+  min-width: 0;
+}
+
+.cks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+  font-size: 12px;
+}
+
+.cks label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.chk {
+  text-align: left;
+  border: 1px solid var(--warn);
+  background: var(--warn-soft);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chk b {
+  color: var(--warn);
+  font-size: 13px;
+}
+
+.chkOn {
+  outline: 2px solid var(--warn);
+}
+
+.chkNone {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  cursor: default;
+}
+
+.chkNone b {
+  color: var(--muted);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rc {
+  display: flex;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.rc:hover {
+  border-color: var(--line-strong);
+}
+
+.rcSel {
+  border-color: var(--ink);
+  box-shadow: inset 3px 0 0 var(--ink);
+}
+
+.rcb {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rcm {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rp {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.rqh {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.rqh h3 {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.rqs {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.strip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.sbox {
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.sbox .wt {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.sboxOff {
+  border-style: dashed;
+  color: var(--subtle);
+}
+
+.sboxMine {
+  border-color: var(--ink-2);
+}
+
+.cmds {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 12px;
+}
+
+.cmd {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  padding: 2px 4px 2px 8px;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.cmd button {
+  border: 0;
+  background: var(--bg-deep);
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 2px 6px;
+}
+
+/* 일자 × 단계 표 */
+.et {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.et th {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--muted);
+  background: var(--surface-2);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.et th small {
+  display: block;
+  font-weight: 400;
+  color: var(--subtle);
+}
+
+.et td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+  vertical-align: middle;
+}
+
+.et .na {
+  color: var(--subtle);
+  background: repeating-linear-gradient(135deg, transparent 0 6px, var(--surface-2) 6px 8px);
+}
+
+.et .dcol {
+  text-align: left;
+  white-space: nowrap;
+}
+
+.et .r {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rowNeed td {
+  background: color-mix(in srgb, var(--warn-soft) 55%, var(--surface));
+}
+
+.rowToday td {
+  background: var(--surface-2);
+}
+
+.sumr td {
+  font-weight: 650;
+  background: var(--surface-2);
+}
+
+.ecell {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.ain {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.ain input {
+  width: 56px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  padding: 2px 4px;
+  text-align: right;
+  font-size: 13px;
+}
+
+.addb {
+  border: 1px dashed var(--line-strong);
+  background: none;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.addbOn {
+  border-style: solid;
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.meta {
+  display: block;
+  font-size: 11px;
+  color: var(--subtle);
+  white-space: nowrap;
+}
+
+.tv {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.pend {
+  font-size: 11px;
+  color: var(--subtle);
+}
+
+.una {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.una:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.why {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.chipset {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.chipset button {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.chipset button.np {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.tyrow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+
+.tyrowOn {
+  border-color: var(--ink-2);
+}
+
+.tyrow input {
+  width: 72px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  padding: 4px 6px;
+  text-align: right;
+}
+
+@media (max-width: 1000px) {
+  .ef {
+    grid-template-columns: 1fr;
+  }
+  .lp {
+    position: static;
+    max-height: none;
+  }
+  .strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

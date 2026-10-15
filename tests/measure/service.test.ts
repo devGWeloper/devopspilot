@@ -2,149 +2,128 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { mkdtempSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
-import type { ActorFull } from "@/lib/auth/permissions";
-import { loadInput } from "@/lib/measure/repo";
-import { addDefect, applyUpload, saveTodayEfforts, setGridCell, upsertFeature } from "@/lib/measure/service";
+import { kstDate } from "@/lib/measure/ingest";
+import { rowsOf } from "@/lib/measure/metrics";
+import { confirmDays, ingestOtel, loadIndex, reopenDay, resolveSession, saveEffort, todayKst, uploadLog } from "@/lib/measure/service";
 import { createJsonStore } from "@/lib/store/json";
 import { ensureSeed } from "@/lib/store/seed";
 import type { Store } from "@/lib/store/types";
+import type { UserRecord } from "@/lib/types";
+import { admin, dev1, dev2, mkProject, mkReq, mkStage } from "../helpers";
 
-const admin: ActorFull = { userId: "admin", role: "AX_ADMIN", userNm: "AX 관리자", orgCd: "SKAX" };
-const pm: ActorFull = { userId: "pm01", role: "PM", userNm: "김지훈", orgCd: "SKAX" };
-const dev: ActorFull = { userId: "dev01", role: "DEVELOPER", userNm: "최민준", orgCd: "SKAX" };
-const dev2: ActorFull = { userId: "dev02", role: "DEVELOPER", userNm: "정다은", orgCd: "SKAX" };
-const qa: ActorFull = { userId: "qa01", role: "TESTER", userNm: "한예린", orgCd: "SKAX" };
-const P = "PRJ-0001";
-
+// 오늘 이후 날짜는 서비스가 거부하므로 실행일 기준 과거로 잡는다.
+const D = kstDate(Date.now() - 3 * 86400000);
 let store: Store;
+
+const user = (userId: string, userNm: string): UserRecord => ({
+  userId,
+  userNm,
+  orgCd: "SKAX",
+  deptNm: "",
+  role: "DEVELOPER",
+  useYn: true,
+  pwdHash: "x",
+  pwdSalt: "x",
+  lastLoginAt: null,
+  regAt: "",
+  updAt: "",
+});
+
 beforeEach(async () => {
-  store = createJsonStore(mkdtempSync(path.join(tmpdir(), "poc-meas-")));
-  await ensureSeed(store, { samples: true });
+  store = createJsonStore(mkdtempSync(path.join(tmpdir(), "poc-svc-")));
+  await ensureSeed(store, { samples: false });
+  await store.users.insert(user("dev01", "김개발"));
+  await store.users.insert(user("dev02", "박개발"));
+  await store.projects.insert(
+    mkProject({
+      reqs: [
+        mkReq({ reqId: "R-1", stages: [mkStage({ cd: "DS", ownerId: "dev01" }), mkStage({ cd: "DV", ownerId: "dev01" })] }),
+        mkReq({ reqId: "R-2", stages: [mkStage({ cd: "DV", ownerId: "dev02" })] }),
+      ],
+    }),
+  );
 });
 
-const effortsOf = async (wbs: string) => (await loadInput(store, [P])).efforts.filter((e) => e.wbsId === wbs);
+const req1 = async () => (await loadIndex(store)).data.projects[0].reqs[0];
 
-describe("seed", () => {
-  it("PRJ-0001 에 측정 seed 가 들어간다", async () => {
-    const input = await loadInput(store, [P]);
-    expect(input.features.map((f) => f.wbsId).sort()).toEqual(["WBS-3.2.1", "WBS-3.4.2", "WBS-4.1.3"]);
-    expect(input.commits).toHaveLength(7);
-    expect(input.settings.laborRatePerHour).toBe(60_000);
-  });
-});
-
-describe("기능·기존 실적", () => {
-  it("PM 이 MD 로 입력하면 h 로 환산", async () => {
-    const r = await upsertFeature(store, pm, P, {
-      wbsId: "WBS-9.9",
-      name: "새 기능",
-      typeCd: "SCREEN",
-      devUserId: "dev01",
-      status: "WAIT",
-      completedAt: null,
-      baseline: { DESIGN: 1, DEV: 2, UNIT: 0.5, INTEG: 0, defects: 0, evidence: "", evidenceVerified: false },
-      note: "",
-    }, "MD");
-    expect(r.ok && r.value.baseline).toMatchObject({ DESIGN: 8, DEV: 16, UNIT: 4 });
-    expect(r.ok && r.value.devUserNm).toBe("최민준");
+describe("공수 입력·확정", () => {
+  it("담당 개발자만, 오늘 이후·A8 메모 없음은 거부", async () => {
+    expect((await saveEffort(store, dev1, { unit: "R-1-DV", date: D, add: { A1: 2 } })).ok).toBe(true);
+    expect(await saveEffort(store, dev2, { unit: "R-1-DV", date: D, add: { A1: 2 } })).toMatchObject({ ok: false, status: 403 });
+    expect(await saveEffort(store, admin, { unit: "R-1-DV", date: D, add: { A1: 2 } })).toMatchObject({ ok: false, status: 403 });
+    expect(await saveEffort(store, dev1, { unit: "R-1-DV", date: "2999-01-01", add: { A1: 1 } })).toMatchObject({ ok: false, code: "BAD_DATE" });
+    expect(await saveEffort(store, dev1, { unit: "R-1-DV", date: D, add: { A8: 1 } })).toMatchObject({ ok: false, code: "MEMO_REQUIRED" });
   });
 
-  it("선정되지 않은 과제는 409", async () => {
-    const r = await upsertFeature(store, admin, "PRJ-0004", { wbsId: "W-1", name: "x", typeCd: "SCREEN", devUserId: null, status: "WAIT", completedAt: null, baseline: { DESIGN: 0, DEV: 0, UNIT: 0, INTEG: 0, defects: 0, evidence: "", evidenceVerified: false }, note: "" }, "h");
-    expect(r).toMatchObject({ ok: false, status: 409, code: "NOT_MEASURING" });
+  it("AI 도구 내 시간은 수집값보다 크게 못 넣는다", async () => {
+    await ingestOtel(store, [{ userId: "dev01", sessionId: "s", tool: "Claude Code", workDt: D, ms: Date.parse(D), minutes: 120, hints: ["R-1-DV"], branch: "" }]);
+    expect(await saveEffort(store, dev1, { unit: "R-1-DV", date: D, inT: 3 })).toMatchObject({ ok: false, code: "OVER_COLLECTED" });
+    expect((await saveEffort(store, dev1, { unit: "R-1-DV", date: D, inT: 1.5 })).ok).toBe(true);
+    const ix = await loadIndex(store);
+    expect(ix.effort.get(`R-1-DV|${D}`)?.reduceH).toBe(0.5);
   });
 
-  it("개발자는 기능 등록 불가", async () => {
-    const r = await upsertFeature(store, dev, P, { wbsId: "W-2", name: "x", typeCd: "SCREEN", devUserId: null, status: "WAIT", completedAt: null, baseline: { DESIGN: 0, DEV: 0, UNIT: 0, INTEG: 0, defects: 0, evidence: "", evidenceVerified: false }, note: "" }, "h");
-    expect(r).toMatchObject({ ok: false, status: 403 });
-  });
-});
-
-describe("오늘 공수 입력", () => {
-  it("같은 날 같은 단계를 두 번 저장하면 1행, 나중 값", async () => {
-    await saveTodayEfforts(store, dev, "2026-10-20", [{ prjId: P, wbsId: "WBS-3.2.1", phase: "DEV", hours: 2, aiLevel: "LEAD" }], []);
-    await saveTodayEfforts(store, dev, "2026-10-20", [{ prjId: P, wbsId: "WBS-3.2.1", phase: "DEV", hours: 3, aiLevel: "LEAD" }], []);
-    const rows = (await effortsOf("WBS-3.2.1")).filter((e) => e.workDt === "2026-10-20");
-    expect(rows).toHaveLength(1);
-    expect(rows[0].hours).toBe(3);
-  });
-
-  it("0 시간 저장은 그 날 기록을 지운다", async () => {
-    await saveTodayEfforts(store, dev, "2026-10-20", [{ prjId: P, wbsId: "WBS-3.2.1", phase: "DEV", hours: 2, aiLevel: null }], []);
-    await saveTodayEfforts(store, dev, "2026-10-20", [{ prjId: P, wbsId: "WBS-3.2.1", phase: "DEV", hours: 0, aiLevel: null }], []);
-    expect((await effortsOf("WBS-3.2.1")).filter((e) => e.workDt === "2026-10-20")).toHaveLength(0);
-  });
-
-  it("남의 기능은 403, 시간 범위 밖은 422", async () => {
-    expect(await saveTodayEfforts(store, dev2, "2026-10-20", [{ prjId: P, wbsId: "WBS-3.2.1", phase: "DEV", hours: 1, aiLevel: null }], [])).toMatchObject({ ok: false, status: 403 });
-    expect(await saveTodayEfforts(store, dev, "2026-10-20", [{ prjId: P, wbsId: "WBS-3.2.1", phase: "DEV", hours: 25, aiLevel: null }], [])).toMatchObject({ ok: false, status: 422 });
-  });
-
-  it("완료 처리하면 완료일이 그 날짜", async () => {
-    const r = await saveTodayEfforts(store, dev2, "2026-10-21", [], [{ prjId: P, wbsId: "WBS-4.1.3" }]);
-    expect(r.ok).toBe(true);
-    const f = (await loadInput(store, [P])).features.find((x) => x.wbsId === "WBS-4.1.3")!;
-    expect(f).toMatchObject({ status: "DONE", completedAt: "2026-10-21" });
+  it("확정 → 확정된 날은 못 고침 → 수정(해제) → 재확정 시 수정 횟수", async () => {
+    await saveEffort(store, dev1, { unit: "R-1-DV", date: D, add: { A1: 2 } });
+    expect(await confirmDays(store, dev1, "R-1")).toMatchObject({ ok: true, value: { count: 1 } });
+    expect(await saveEffort(store, dev1, { unit: "R-1-DV", date: D, add: { A1: 3 } })).toMatchObject({ ok: false, code: "CONFIRMED" });
+    expect((await reopenDay(store, dev1, "R-1", D)).ok).toBe(true);
+    expect((await saveEffort(store, dev1, { unit: "R-1-DV", date: D, add: { A1: 3 } })).ok).toBe(true);
+    await confirmDays(store, dev1, "R-1", [D]);
+    const rows = rowsOf(await loadIndex(store), "dev01", await req1());
+    expect(rows[0]).toMatchObject({ st: "conf", revCount: 1 });
+    expect((await store.history.list({ targetTyp: "EFFORT" })).length).toBeGreaterThan(0);
   });
 });
 
-describe("공수 기록표 그리드 보정", () => {
-  it("합계를 직접 바꾸면 차이만큼 오늘 보정 행, 다시 바꾸면 그 행만 갱신", async () => {
-    const sumDev = async () => (await effortsOf("WBS-3.2.1")).filter((e) => e.phase === "DEV").reduce((s, e) => s + e.hours, 0);
-    expect(await sumDev()).toBe(9);
-    const r1 = await setGridCell(store, dev, P, "WBS-3.2.1", "DEV", 13, "2026-10-20");
-    expect(r1.ok && r1.value.adjustment).toBe(4);
-    expect(await sumDev()).toBe(13);
-    const r2 = await setGridCell(store, dev, P, "WBS-3.2.1", "DEV", 11, "2026-10-20");
-    expect(r2.ok && r2.value.adjustment).toBe(2);
-    expect(await sumDev()).toBe(11);
-    expect((await effortsOf("WBS-3.2.1")).filter((e) => e.srcCd === "GRID")).toHaveLength(1);
+describe("AI 사용 배정", () => {
+  beforeEach(async () => {
+    await ingestOtel(store, [{ userId: "dev01", sessionId: "s9", tool: "Claude Code", workDt: D, ms: Date.parse(D), minutes: 60, hints: ["R-1"], branch: "" }]);
   });
 
-  it("음수 합계는 422", async () => {
-    expect(await setGridCell(store, dev, P, "WBS-3.2.1", "DEV", -1, "2026-10-20")).toMatchObject({ ok: false, status: 422 });
+  it("단계가 둘이면 확인 필요 → 나눠 배정하면 사라진다", async () => {
+    let ix = await loadIndex(store);
+    expect(ix.alloc.pending).toHaveLength(1);
+    const id = ix.alloc.pending[0].session.datId;
+    expect(await resolveSession(store, dev1, id, { parts: [{ unit: "R-2-DV", min: 10 }] })).toMatchObject({ ok: false, code: "NOT_MINE" });
+    expect(await resolveSession(store, dev2, id, { off: true })).toMatchObject({ ok: false, status: 403 });
+    expect(await resolveSession(store, dev1, id, { parts: [{ unit: "R-1-DS", min: 70 }] })).toMatchObject({ ok: false, code: "OVER" });
+    expect((await resolveSession(store, dev1, id, { parts: [{ unit: "R-1-DS", min: 20 }, { unit: "R-1-DV", min: 40 }] })).ok).toBe(true);
+    ix = await loadIndex(store);
+    expect(ix.alloc.pending).toHaveLength(0);
+    expect(ix.alloc.byUnitDay.get(`R-1-DV|${D}`)?.min).toBe(40);
+  });
+
+  it("텔레메트리 delta 는 같은 세션에 더해지고, 없는 계정은 버린다", async () => {
+    await ingestOtel(store, [
+      { userId: "dev01", sessionId: "s9", tool: "Claude Code", workDt: D, ms: Date.parse(D), minutes: 30, hints: ["R-1-DV"], branch: "" },
+      { userId: "ghost", sessionId: "g", tool: "Claude Code", workDt: D, ms: Date.parse(D), minutes: 30, hints: [], branch: "" },
+    ]);
+    const ix = await loadIndex(store);
+    expect(ix.data.sessions).toHaveLength(1);
+    expect(ix.data.sessions[0].minutes).toBe(90);
+    // 단계 코드가 늦게 잡히면 자동 배정으로 바뀐다
+    expect(ix.alloc.byUnitDay.get(`R-1-DV|${D}`)?.min).toBe(90);
   });
 });
 
-describe("결함·업로드", () => {
-  it("테스트 수행자가 결함 등록, WBS 가 기능 목록에 없으면 422", async () => {
-    expect((await addDefect(store, qa, P, { wbsId: "WBS-3.2.1", defectId: "QA-900", foundDt: "2026-10-20", phase: "UNIT", cause: "", severity: "NORMAL", title: "t", testCaseRef: "" })).ok).toBe(true);
-    expect(await addDefect(store, qa, P, { wbsId: "WBS-0.0", defectId: "QA-901", foundDt: "2026-10-20", phase: "UNIT", cause: "", severity: "NORMAL", title: "t", testCaseRef: "" })).toMatchObject({ ok: false, status: 422 });
-  });
+describe("로그 업로드", () => {
+  const file = (min: number) => ({ format: "poc-ai-sessions", version: 1, sessions: [{ tool: "Codex", sessionId: "c1", date: D, start: "10:00", end: "11:00", activeMin: min, branch: "main", hints: [] }] });
 
-  it("같은 커밋 CSV 재업로드 — 신규 0, 갱신 n", async () => {
-    const csv = "hash,date,author,message,added,deleted\nz1,2026-10-20,k,[WBS-3.2.1] a,1,1\nz2,2026-10-20,k,b,2,2\n";
-    const first = await applyUpload(store, pm, P, "commits", "c.csv", csv, false);
-    expect(first.ok && first.value).toMatchObject({ inserted: 2, updated: 0 });
-    const again = await applyUpload(store, pm, P, "commits", "c.csv", csv, false);
-    expect(again.ok && again.value).toMatchObject({ inserted: 0, updated: 2 });
-    expect((await loadInput(store, [P])).commits).toHaveLength(9);
+  it("형식 확인, 올린 사람 계정으로 저장, 다시 올려도 배정 유지", async () => {
+    expect(await uploadLog(store, dev1, { foo: 1 })).toMatchObject({ ok: false, code: "BAD_FILE" });
+    expect(await uploadLog(store, admin, file(30))).toMatchObject({ ok: false, status: 403 });
+    expect((await uploadLog(store, dev1, file(30))).ok).toBe(true);
+    let ix = await loadIndex(store);
+    expect(ix.data.sessions[0].userId).toBe("dev01");
+    await resolveSession(store, dev1, ix.alloc.pending[0].session.datId, { off: true });
+    await uploadLog(store, dev1, file(45));
+    ix = await loadIndex(store);
+    expect(ix.data.sessions[0]).toMatchObject({ minutes: 45, resolution: { kind: "OFF" } });
+    expect(ix.alloc.pending).toHaveLength(0);
   });
+});
 
-  it("dryRun 은 저장하지 않는다", async () => {
-    const csv = "hash,date,author,message,added,deleted\nz9,2026-10-20,k,x,1,1\n";
-    const r = await applyUpload(store, pm, P, "commits", "c.csv", csv, true);
-    expect(r.ok && r.value.inserted).toBe(1);
-    expect((await loadInput(store, [P])).commits).toHaveLength(7);
-  });
-
-  it("개발자 사용량 업로드는 본인 행만 반영", async () => {
-    const csv = [
-      "date,user,wbs_id,model,requests,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,source",
-      "2026-10-20,dev01,WBS-3.2.1,claude-sonnet-4-5,1,1,1,1,1,claude",
-      "2026-10-20,dev02,WBS-4.1.3,claude-sonnet-4-5,1,1,1,1,1,claude",
-    ].join("\n");
-    const r = await applyUpload(store, dev, P, "usage", "u.csv", csv, false);
-    expect(r.ok && r.value.inserted).toBe(1);
-    expect(r.ok && r.value.warnings.some((w) => w.message.includes("dev02"))).toBe(true);
-  });
-
-  it("업로드 이력이 남는다", async () => {
-    await applyUpload(store, pm, P, "commits", "c.csv", "hash,date,author,message,added,deleted\nq1,2026-10-20,k,x,1,1\n", false);
-    expect((await store.history.list({ targetTyp: "UPLOAD" }))[0].summary).toContain("커밋");
-  });
-
-  it("권한 없는 업로드 403", async () => {
-    expect(await applyUpload(store, dev, P, "commits", "c.csv", "hash,date,author,message,added,deleted\n", false)).toMatchObject({ ok: false, status: 403 });
-  });
+it("todayKst 는 YYYY-MM-DD", () => {
+  expect(todayKst()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 });

@@ -5,33 +5,33 @@ import path from "path";
 import { createJsonStore } from "@/lib/store/json";
 import { ensureSeed } from "@/lib/store/seed";
 import type { MeasRow } from "@/lib/store/types";
+import { rowsOf } from "@/lib/measure/metrics";
+import { loadIndex } from "@/lib/measure/service";
 import { mkProject } from "./helpers";
 
 const fresh = () => createJsonStore(mkdtempSync(path.join(tmpdir(), "poc-")));
 
 describe("seed", () => {
-  it("admin 계정과 기준·코드를 만들고, 두 번 실행해도 중복이 없다", async () => {
+  it("admin 계정과 설정을 만들고, 두 번 실행해도 중복이 없다", async () => {
     const s = fresh();
     await ensureSeed(s, { samples: false });
     await ensureSeed(s, { samples: false });
     const users = await s.users.list();
     expect(users.map((u) => u.userId)).toEqual(["admin"]);
-    expect(users[0]).toMatchObject({ role: "AX_ADMIN", orgCd: "SKAX", useYn: true });
-    expect((await s.config.get("CRITERIA"))?.value).toBeTruthy();
-    expect((await s.config.get("CODES"))?.value).toBeTruthy();
-    expect(await s.config.keys("CRITERIA@")).toEqual(["CRITERIA@1"]);
+    expect(users[0]).toMatchObject({ role: "ADMIN", useYn: true });
+    expect((await s.config.get("SETTINGS"))?.value).toBeTruthy();
   });
 
-  it("샘플: 12개 과제와 데모 계정, PRJ-0001 은 선정", async () => {
+  it("샘플: 과제 6개·데모 계정, 확정 스냅샷이 실제 값과 같다", async () => {
     const s = fresh();
     await ensureSeed(s, { samples: true });
-    const ps = await s.projects.list();
-    expect(ps).toHaveLength(12);
-    expect(ps.find((p) => p.prjId === "PRJ-0001")?.status).toBe("SELECTED");
+    expect(await s.projects.list()).toHaveLength(6);
     const ids = (await s.users.list()).map((u) => u.userId).sort();
-    expect(ids).toEqual(["admin", "dev01", "dev02", "hx01", "pm01", "pm02", "qa01", "view01"]);
-    const fits = new Set(ps.map((p) => p.suggestFit));
-    expect(fits.has("H") && fits.has("M") && fits.has("L")).toBe(true);
+    expect(ids).toEqual(["admin", "dev01", "dev02", "dev03", "dev04", "dev05", "dev06", "view01"]);
+    const ix = await loadIndex(s);
+    const req = ix.data.projects.flatMap((p) => p.reqs).find((r) => r.reqId === "REQ-0033")!;
+    // 샘플 확정일이 '값 변경 · 재확정 필요'로 보이면 시연이 깨진다.
+    expect(rowsOf(ix, "dev02", req).every((r) => r.st === "conf")).toBe(true);
   });
 });
 
@@ -41,7 +41,7 @@ describe("users", () => {
     await ensureSeed(s, { samples: false });
     await s.users.update("admin", { userNm: "관리자2" });
     expect((await s.users.get("admin"))?.userNm).toBe("관리자2");
-    expect((await s.users.get("admin"))?.role).toBe("AX_ADMIN");
+    expect((await s.users.get("admin"))?.role).toBe("ADMIN");
   });
 
   it("없는 사용자는 null", async () => {
@@ -99,13 +99,11 @@ describe("projects", () => {
 });
 
 describe("config", () => {
-  it("set/get/keys", async () => {
+  it("set/get", async () => {
     const s = fresh();
-    await s.config.set("A@1", { x: 1 }, 1, "admin");
-    await s.config.set("A@2", { x: 2 }, 2, "admin");
-    await s.config.set("B", { y: 1 }, 1, "admin");
-    expect((await s.config.get<{ x: number }>("A@2"))?.value.x).toBe(2);
-    expect(await s.config.keys("A@")).toEqual(["A@1", "A@2"]);
+    await s.config.set("A", { x: 1 }, 1, "admin");
+    await s.config.set("A", { x: 2 }, 2, "admin");
+    expect((await s.config.get<{ x: number }>("A"))?.value.x).toBe(2);
     expect(await s.config.get("none")).toBeNull();
   });
 });
@@ -133,14 +131,14 @@ describe("history", () => {
 });
 
 describe("meas", () => {
-  const row = (datId: string, data: unknown, prjId = "PRJ-0001"): MeasRow => ({
+  const row = (datId: string, data: unknown, kind: MeasRow["kind"] = "EFFORT"): MeasRow => ({
     datId,
-    kind: "COMMIT",
-    prjId,
-    wbsId: "WBS-1",
+    kind,
+    prjId: "PRJ-0001",
+    reqId: "REQ-0001",
     workDt: "2026-10-10",
     userId: "dev01",
-    srcCd: "GIT",
+    srcCd: "MANUAL",
     data,
     regUserId: "dev01",
     regAt: "2026-10-10T00:00:00.000Z",
@@ -149,19 +147,25 @@ describe("meas", () => {
 
   it("같은 datId 두 번 upsert → 1행, 나중 값", async () => {
     const s = fresh();
-    await s.meas.upsert([row("CMT:1", { a: 1 })]);
-    await s.meas.upsert([row("CMT:1", { a: 2 })]);
-    const rows = await s.meas.list("PRJ-0001");
+    await s.meas.upsert([row("E|1", { a: 1 })]);
+    await s.meas.upsert([row("E|1", { a: 2 })]);
+    const rows = await s.meas.listAll();
     expect(rows).toHaveLength(1);
     expect(rows[0].data).toEqual({ a: 2 });
+    expect((await s.meas.get("E|1"))?.data).toEqual({ a: 2 });
   });
 
-  it("과제·종류 필터, 삭제", async () => {
+  it("종류 필터, 삭제", async () => {
     const s = fresh();
-    await s.meas.upsert([row("CMT:1", {}), row("CMT:2", {}, "PRJ-0002"), { ...row("FEAT:1", {}), kind: "FEATURE" }]);
-    expect(await s.meas.list("PRJ-0001", "COMMIT")).toHaveLength(1);
-    expect(await s.meas.listAll("COMMIT")).toHaveLength(2);
-    await s.meas.remove("CMT:1");
-    expect(await s.meas.list("PRJ-0001", "COMMIT")).toHaveLength(0);
+    await s.meas.upsert([row("E|1", {}), row("C|1", {}, "CONF"), row("A|1", {}, "AIUSE")]);
+    expect(await s.meas.listAll("CONF")).toHaveLength(1);
+    await s.meas.remove("E|1");
+    expect(await s.meas.listAll("EFFORT")).toHaveLength(0);
+  });
+
+  it("다른 저장소 객체로 다시 열어도 같은 값 (메모리 사본이 파일과 어긋나지 않음)", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "poc-"));
+    await createJsonStore(dir).meas.upsert([row("E|1", { a: 1 })]);
+    expect((await createJsonStore(dir).meas.get("E|1"))?.data).toEqual({ a: 1 });
   });
 });

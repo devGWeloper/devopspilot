@@ -1,6 +1,5 @@
 import type { DbConfig } from "../config";
-import { normalizeBase } from "../projects/base";
-import type { AgreeCd, Fit, HistoryEntry, OrgCd, Project, ProjectStatus, Role, UserRecord } from "../types";
+import type { HistoryEntry, OrgCd, PrjKind, Project, Role, UserRecord } from "../types";
 import { TABLES } from "./schema";
 import {
   DuplicateKeyError,
@@ -100,71 +99,53 @@ export async function createOracleStore(cfg: DbConfig): Promise<Store> {
     updAt: u.updAt,
   });
 
+  // 목록 컬럼은 DB 에서 바로 보이게 두고, 나머지(요구사항·단계 포함)는 DATA_JSON 에 통째로 둔다 — 조인 없이 과제 1건 = 1행.
   const toProject = (r: Row): Project => ({
+    ...json<Omit<Project, "prjId" | "prjNm" | "sysNm" | "kind" | "deptCd" | "pmNm" | "regUserId" | "regAt" | "updUserId" | "updAt">>(r.DATA_JSON, {
+      teamNm: "",
+      axTeam: "",
+      sysGrade: "",
+      deployType: "",
+      area: "",
+      wbsYn: "",
+      vcs: "",
+      pms: "",
+      reqs: [],
+    }),
     prjId: String(r.PRJ_ID),
     prjNm: String(r.PRJ_NM),
     sysNm: s(r.SYS_NM) ?? "",
-    pmUserId: String(r.PM_USER_ID),
-    pmUserNm: s(r.PM_USER_NM) ?? "",
-    status: String(r.STATUS_CD) as ProjectStatus,
-    statusNote: s(r.STATUS_NOTE),
-    devTypeCd: s(r.DEV_TYPE_CD),
-    mainLangCd: s(r.MAIN_LANG_CD),
-    domainCd: s(r.DOMAIN_CD),
-    sysTypeCd: s(r.SYS_TYPE_CD),
-    answerCnt: Number(r.ANSWER_CNT ?? 0),
-    indicatorCnt: Number(r.INDICATOR_CNT ?? 0),
-    suggestFit: String(r.SUGGEST_FIT) as Fit,
-    finalFit: String(r.FINAL_FIT) as Fit,
-    aiFit: (s(r.AI_FIT) as Fit | null) ?? null,
-    axAgree: String(r.AX_AGREE_CD) as AgreeCd,
-    hxAgree: String(r.HX_AGREE_CD) as AgreeCd,
-    critVer: Number(r.CRIT_VER ?? 1),
-    base: normalizeBase(json<Partial<Project["base"]>>(r.BASE_JSON, {})),
-    eval: json(r.EVAL_JSON, { answers: {}, notes: {}, confirm: null }),
-    reviews: json(r.REVIEW_JSON, []),
-    ai: json(r.AI_JSON, null),
+    kind: String(r.KIND_CD) as PrjKind,
+    deptCd: s(r.DEPT_CD) ?? "",
+    pmNm: s(r.PM_NM) ?? "",
     regUserId: s(r.REG_USER_ID) ?? "",
     regAt: String(r.REG_DT),
     updUserId: s(r.UPD_USER_ID) ?? "",
     updAt: String(r.UPD_DT),
   });
 
-  const projectBinds = (p: Project) => ({
-    id: p.prjId,
-    nm: p.prjNm,
-    sys: p.sysNm,
-    pm: p.pmUserId,
-    pmNm: p.pmUserNm,
-    st: p.status,
-    note: p.statusNote,
-    dev: p.devTypeCd,
-    lang: p.mainLangCd,
-    dom: p.domainCd,
-    stype: p.sysTypeCd,
-    ans: p.answerCnt,
-    ind: p.indicatorCnt,
-    sug: p.suggestFit,
-    fin: p.finalFit,
-    ai: p.aiFit,
-    ax: p.axAgree,
-    hx: p.hxAgree,
-    ver: p.critVer,
-    base: clob(p.base),
-    ev: clob(p.eval),
-    rev: clob(p.reviews),
-    aiJson: clob(p.ai),
-    regUser: p.regUserId,
-    regAt: p.regAt,
-    updUser: p.updUserId,
-    updAt: p.updAt,
-  });
+  const projectBinds = (p: Project) => {
+    const { prjId, prjNm, sysNm, kind, deptCd, pmNm, regUserId, regAt, updUserId, updAt, ...rest } = p;
+    return {
+      id: prjId,
+      nm: prjNm,
+      sys: sysNm,
+      kind,
+      dept: deptCd,
+      pm: pmNm,
+      data: clob(rest),
+      regUser: regUserId,
+      regAt,
+      updUser: updUserId,
+      updAt,
+    };
+  };
 
   const toMeas = (r: Row): MeasRow => ({
     datId: String(r.DAT_ID),
     kind: String(r.KIND_CD) as MeasKind,
     prjId: String(r.PRJ_ID),
-    wbsId: s(r.WBS_ID),
+    reqId: s(r.REQ_ID),
     workDt: s(r.WORK_DT),
     userId: s(r.USER_ID),
     srcCd: String(r.SRC_CD),
@@ -213,25 +194,22 @@ export async function createOracleStore(cfg: DbConfig): Promise<Store> {
       },
       async insert(p) {
         await exec(
-          `INSERT INTO POC_PRJ_MAS (PRJ_ID, PRJ_NM, SYS_NM, PM_USER_ID, PM_USER_NM, STATUS_CD, STATUS_NOTE, DEV_TYPE_CD,
-             MAIN_LANG_CD, DOMAIN_CD, SYS_TYPE_CD, ANSWER_CNT, INDICATOR_CNT, SUGGEST_FIT, FINAL_FIT, AI_FIT,
-             AX_AGREE_CD, HX_AGREE_CD, CRIT_VER, BASE_JSON, EVAL_JSON, REVIEW_JSON, AI_JSON, REG_USER_ID, REG_DT, UPD_USER_ID, UPD_DT)
-           VALUES (:id, :nm, :sys, :pm, :pmNm, :st, :note, :dev, :lang, :dom, :stype, :ans, :ind, :sug, :fin, :ai,
-             :ax, :hx, :ver, :base, :ev, :rev, :aiJson, :regUser, :regAt, :updUser, :updAt)`,
+          `INSERT INTO POC_PRJ_MAS (PRJ_ID, PRJ_NM, SYS_NM, KIND_CD, DEPT_CD, PM_NM, DATA_JSON, REG_USER_ID, REG_DT, UPD_USER_ID, UPD_DT)
+           VALUES (:id, :nm, :sys, :kind, :dept, :pm, :data, :regUser, :regAt, :updUser, :updAt)`,
           projectBinds(p),
         );
       },
       async update(p, expectedUpdAt) {
         const n = await exec(
-          `UPDATE POC_PRJ_MAS SET PRJ_NM = :nm, SYS_NM = :sys, PM_USER_ID = :pm, PM_USER_NM = :pmNm, STATUS_CD = :st,
-             STATUS_NOTE = :note, DEV_TYPE_CD = :dev, MAIN_LANG_CD = :lang, DOMAIN_CD = :dom, SYS_TYPE_CD = :stype,
-             ANSWER_CNT = :ans, INDICATOR_CNT = :ind, SUGGEST_FIT = :sug, FINAL_FIT = :fin, AI_FIT = :ai,
-             AX_AGREE_CD = :ax, HX_AGREE_CD = :hx, CRIT_VER = :ver, BASE_JSON = :base, EVAL_JSON = :ev,
-             REVIEW_JSON = :rev, AI_JSON = :aiJson, REG_USER_ID = :regUser, REG_DT = :regAt, UPD_USER_ID = :updUser, UPD_DT = :updAt
+          `UPDATE POC_PRJ_MAS SET PRJ_NM = :nm, SYS_NM = :sys, KIND_CD = :kind, DEPT_CD = :dept, PM_NM = :pm, DATA_JSON = :data,
+             REG_USER_ID = :regUser, REG_DT = :regAt, UPD_USER_ID = :updUser, UPD_DT = :updAt
            WHERE PRJ_ID = :id AND UPD_DT = :expected`,
           { ...projectBinds(p), expected: expectedUpdAt },
         );
         return n === 1;
+      },
+      async remove(id) {
+        await exec("DELETE FROM POC_PRJ_MAS WHERE PRJ_ID = :id", { id });
       },
       async nextId() {
         const rows = await q(
@@ -259,12 +237,6 @@ export async function createOracleStore(cfg: DbConfig): Promise<Store> {
            WHEN NOT MATCHED THEN INSERT (CFG_KEY, CFG_JSON, VER_NO, UPD_USER_ID, UPD_DT) VALUES (:k, :v, :ver, :u, :d)`,
           { k: key, v: clob(value), ver: verNo, u: userId, d: new Date().toISOString() },
         );
-      },
-      async keys(prefix) {
-        const rows = await q("SELECT CFG_KEY FROM POC_CFG_MAS WHERE CFG_KEY LIKE :p ESCAPE '\\'", {
-          p: prefix.replace(/[\\%_]/g, (c) => `\\${c}`) + "%",
-        });
-        return rows.map((r) => String(r.CFG_KEY)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
       },
     },
     history: {
@@ -312,11 +284,9 @@ export async function createOracleStore(cfg: DbConfig): Promise<Store> {
       },
     },
     meas: {
-      async list(prjId, kind) {
-        const rows = kind
-          ? await q("SELECT * FROM POC_MEAS_DAT WHERE PRJ_ID = :p AND KIND_CD = :k", { p: prjId, k: kind })
-          : await q("SELECT * FROM POC_MEAS_DAT WHERE PRJ_ID = :p", { p: prjId });
-        return rows.map(toMeas);
+      async get(datId) {
+        const rows = await q("SELECT * FROM POC_MEAS_DAT WHERE DAT_ID = :id", { id: datId });
+        return rows[0] ? toMeas(rows[0]) : null;
       },
       async listAll(kind) {
         const rows = kind
@@ -330,15 +300,15 @@ export async function createOracleStore(cfg: DbConfig): Promise<Store> {
         try {
           await conn.executeMany(
             `MERGE INTO POC_MEAS_DAT t USING (SELECT :datId AS DAT_ID FROM DUAL) s ON (t.DAT_ID = s.DAT_ID)
-             WHEN MATCHED THEN UPDATE SET KIND_CD = :kind, PRJ_ID = :prj, WBS_ID = :wbs, WORK_DT = :dt, USER_ID = :usr,
+             WHEN MATCHED THEN UPDATE SET KIND_CD = :kind, PRJ_ID = :prj, REQ_ID = :req, WORK_DT = :dt, USER_ID = :usr,
                SRC_CD = :src, DATA_JSON = :data, UPD_DT = :updAt
-             WHEN NOT MATCHED THEN INSERT (DAT_ID, KIND_CD, PRJ_ID, WBS_ID, WORK_DT, USER_ID, SRC_CD, DATA_JSON, REG_USER_ID, REG_DT, UPD_DT)
-               VALUES (:datId, :kind, :prj, :wbs, :dt, :usr, :src, :data, :regUser, :regAt, :updAt)`,
+             WHEN NOT MATCHED THEN INSERT (DAT_ID, KIND_CD, PRJ_ID, REQ_ID, WORK_DT, USER_ID, SRC_CD, DATA_JSON, REG_USER_ID, REG_DT, UPD_DT)
+               VALUES (:datId, :kind, :prj, :req, :dt, :usr, :src, :data, :regUser, :regAt, :updAt)`,
             rows.map((r) => ({
               datId: r.datId,
               kind: r.kind,
               prj: r.prjId,
-              wbs: r.wbsId,
+              req: r.reqId,
               dt: r.workDt,
               usr: r.userId,
               src: r.srcCd,
@@ -352,7 +322,7 @@ export async function createOracleStore(cfg: DbConfig): Promise<Store> {
                 datId: { type: oracledb.STRING, maxSize: 200 },
                 kind: { type: oracledb.STRING, maxSize: 10 },
                 prj: { type: oracledb.STRING, maxSize: 20 },
-                wbs: { type: oracledb.STRING, maxSize: 50 },
+                req: { type: oracledb.STRING, maxSize: 50 },
                 dt: { type: oracledb.STRING, maxSize: 10 },
                 usr: { type: oracledb.STRING, maxSize: 100 },
                 src: { type: oracledb.STRING, maxSize: 20 },

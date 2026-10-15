@@ -1,7 +1,6 @@
 import fs from "fs";
 import path from "path";
 import type { HistoryEntry, Project, UserRecord } from "../types";
-import { withBase } from "../projects/base";
 import {
   DuplicateKeyError,
   filterHistory,
@@ -21,25 +20,32 @@ const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v
 export function createJsonStore(dir: string): Store {
   fs.mkdirSync(dir, { recursive: true });
   const chains = new Map<string, Promise<unknown>>();
+  // 매 요청 파일 전체를 읽고 파싱하면 화면마다 수십 ms 씩 쌓인다. 이 프로세스만 쓰는 파일이라 메모리 사본을 기준으로 삼는다.
+  const cache = new Map<string, unknown[]>();
 
   function read<T>(name: string): T[] {
+    const hit = cache.get(name);
+    if (hit) return hit as T[];
     const file = path.join(dir, `${name}.json`);
-    if (!fs.existsSync(file)) return [];
-    return JSON.parse(fs.readFileSync(file, "utf8")) as T[];
+    const rows = fs.existsSync(file) ? (JSON.parse(fs.readFileSync(file, "utf8")) as T[]) : [];
+    cache.set(name, rows);
+    return rows;
   }
 
   function write<T>(name: string, rows: T[]) {
     const file = path.join(dir, `${name}.json`);
     const tmp = `${file}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(rows, null, 1), "utf8");
+    fs.writeFileSync(tmp, JSON.stringify(rows), "utf8");
     fs.renameSync(tmp, file);
+    cache.set(name, rows);
   }
 
   // 파일 하나를 읽고-고치고-쓰는 동안 다른 요청이 끼어들면 한쪽 변경이 사라진다 → 파일별로 직렬화.
   function mutate<T, R>(name: string, fn: (rows: T[]) => R): Promise<R> {
     const prev = chains.get(name) ?? Promise.resolve();
     const next = prev.then(() => {
-      const rows = read<T>(name);
+      // 실패한 변경이 캐시에 반쯤 남지 않도록 사본에 적용한다.
+      const rows = read<T>(name).slice();
       const out = fn(rows);
       write(name, rows);
       return out;
@@ -56,9 +62,9 @@ export function createJsonStore(dir: string): Store {
   return {
     kind: "json",
     users: {
-      list: () => snapshot<UserRecord>("users"),
+      list: async () => clone(await snapshot<UserRecord>("users")),
       async get(id) {
-        return (await snapshot<UserRecord>("users")).find((u) => u.userId === id) ?? null;
+        return clone((await snapshot<UserRecord>("users")).find((u) => u.userId === id) ?? null);
       },
       insert: (u) =>
         mutate<UserRecord, void>("users", (rows) => {
@@ -72,10 +78,9 @@ export function createJsonStore(dir: string): Store {
         }),
     },
     projects: {
-      list: async () => (await snapshot<Project>("projects")).map(withBase),
+      list: async () => clone(await snapshot<Project>("projects")),
       async get(id) {
-        const p = (await snapshot<Project>("projects")).find((x) => x.prjId === id);
-        return p ? withBase(p) : null;
+        return clone((await snapshot<Project>("projects")).find((x) => x.prjId === id) ?? null);
       },
       insert: (p) =>
         mutate<Project, void>("projects", (rows) => {
@@ -89,6 +94,11 @@ export function createJsonStore(dir: string): Store {
           rows[i] = clone(p);
           return true;
         }),
+      remove: (id) =>
+        mutate<Project, void>("projects", (rows) => {
+          const i = rows.findIndex((r) => r.prjId === id);
+          if (i >= 0) rows.splice(i, 1);
+        }),
       async nextId() {
         const rows = await snapshot<Project>("projects");
         return formatPrjId(rows.reduce((m, p) => Math.max(m, prjNumber(p.prjId)), 0) + 1);
@@ -97,7 +107,7 @@ export function createJsonStore(dir: string): Store {
     config: {
       async get<T>(key: string) {
         const row = (await snapshot<ConfigRow>("config")).find((r) => r.key === key);
-        return row ? ({ value: row.value, verNo: row.verNo, updAt: row.updAt, updUserId: row.updUserId } as ConfigValue<T>) : null;
+        return row ? (clone({ value: row.value, verNo: row.verNo, updAt: row.updAt, updUserId: row.updUserId }) as ConfigValue<T>) : null;
       },
       set: (key, value, verNo, userId) =>
         mutate<ConfigRow, void>("config", (rows) => {
@@ -106,12 +116,6 @@ export function createJsonStore(dir: string): Store {
           if (i >= 0) rows[i] = row;
           else rows.push(row);
         }),
-      async keys(prefix) {
-        return (await snapshot<ConfigRow>("config"))
-          .map((r) => r.key)
-          .filter((k) => k.startsWith(prefix))
-          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-      },
     },
     history: {
       add: (e) =>
@@ -120,15 +124,15 @@ export function createJsonStore(dir: string): Store {
           rows.push({ ...clone(e), histId });
         }),
       async list(f) {
-        return filterHistory(await snapshot<HistoryEntry>("history"), f);
+        return clone(filterHistory(await snapshot<HistoryEntry>("history"), f));
       },
     },
     meas: {
-      async list(prjId, kind) {
-        return (await snapshot<MeasRow>("meas")).filter((r) => r.prjId === prjId && (!kind || r.kind === kind));
+      async get(datId) {
+        return clone((await snapshot<MeasRow>("meas")).find((r) => r.datId === datId) ?? null);
       },
       async listAll(kind) {
-        return (await snapshot<MeasRow>("meas")).filter((r) => !kind || r.kind === kind);
+        return clone((await snapshot<MeasRow>("meas")).filter((r) => !kind || r.kind === kind));
       },
       upsert: (input) =>
         mutate<MeasRow, void>("meas", (rows) => {

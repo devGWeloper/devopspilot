@@ -59,7 +59,7 @@ export async function createUser(store: Store, actor: ActorFull, input: UserInpu
 }
 
 async function activeAdmins(store: Store): Promise<string[]> {
-  return (await store.users.list()).filter((u) => u.role === "AX_ADMIN" && u.useYn).map((u) => u.userId);
+  return (await store.users.list()).filter((u) => u.role === "ADMIN" && u.useYn).map((u) => u.userId);
 }
 
 export async function updateUser(
@@ -73,7 +73,7 @@ export async function updateUser(
   if (!before) return notFoundR("계정");
   const v = validate(patch);
   if (v) return err(422, "VALIDATION", v);
-  const losesAdmin = before.role === "AX_ADMIN" && before.useYn && ((patch.role && patch.role !== "AX_ADMIN") || patch.useYn === false);
+  const losesAdmin = before.role === "ADMIN" && before.useYn && ((patch.role && patch.role !== "ADMIN") || patch.useYn === false);
   // 관리자가 한 명도 남지 않으면 계정을 되살릴 사람이 없다.
   if (losesAdmin && (await activeAdmins(store)).length <= 1) {
     return err(409, "LAST_ADMIN", "마지막 AX 관리자 계정은 비활성화하거나 역할을 바꿀 수 없습니다.");

@@ -1,12 +1,12 @@
 import type { HistoryEntry, HistoryTarget, Project, UserRecord } from "../types";
 
-export type MeasKind = "FEATURE" | "EFFORT" | "DEFECT" | "AIUSE" | "COMMIT";
+export type MeasKind = "EFFORT" | "CONF" | "AIUSE";
 
 export interface MeasRow {
   datId: string;
   kind: MeasKind;
   prjId: string;
-  wbsId: string | null;
+  reqId: string | null;
   workDt: string | null;
   userId: string | null;
   srcCd: string;
@@ -45,19 +45,19 @@ export interface Store {
     get(id: string): Promise<Project | null>;
     insert(p: Project): Promise<void>;
     update(p: Project, expectedUpdAt: string): Promise<boolean>;
+    remove(id: string): Promise<void>;
     nextId(): Promise<string>;
   };
   config: {
     get<T>(key: string): Promise<ConfigValue<T> | null>;
     set(key: string, value: unknown, verNo: number, userId: string): Promise<void>;
-    keys(prefix: string): Promise<string[]>;
   };
   history: {
     add(e: Omit<HistoryEntry, "histId">): Promise<void>;
     list(f: HistoryFilter): Promise<HistoryEntry[]>;
   };
   meas: {
-    list(prjId: string, kind?: MeasKind): Promise<MeasRow[]>;
+    get(datId: string): Promise<MeasRow | null>;
     listAll(kind?: MeasKind): Promise<MeasRow[]>;
     upsert(rows: MeasRow[]): Promise<void>;
     remove(datId: string): Promise<void>;

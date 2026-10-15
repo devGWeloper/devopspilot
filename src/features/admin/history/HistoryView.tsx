@@ -1,10 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { Fragment, useState } from "react";
 import { Field, Select, TextInput } from "@/components/ui/Field";
 import { Callout, EmptyState, Panel, Skeleton } from "@/components/ui/Panel";
-import { PageHeader } from "@/components/ui/PageHeader";
 import t from "@/components/ui/table.module.css";
 import type { DiffItem } from "@/lib/diff";
 import { useApi } from "@/lib/hooks";
@@ -12,14 +10,12 @@ import { fmtDateTime } from "@/lib/labels";
 import type { HistoryEntry } from "@/lib/types";
 
 const TARGET_LABEL: Record<string, string> = {
-  PROJECT: "과제",
-  CRITERIA: "평가 기준",
-  CODES: "코드·목표",
+  PROJECT: "과제·요구사항",
+  EFFORT: "공수 확정",
+  UPLOAD: "AI 기록 업로드",
+  SETTINGS: "코드·단가",
   USER: "계정",
-  UPLOAD: "업로드",
-  MEASURE: "측정",
-  AI_PROMPT: "AI 프롬프트",
-};
+}
 
 function show(v: unknown): string {
   if (v === undefined || v === null || v === "") return "—";
@@ -37,7 +33,6 @@ export function HistoryView() {
 
   return (
     <>
-      <PageHeader eyebrow="Audit trail" title="변경 이력" description="누가 언제 무엇을 바꿨는지 기록합니다. 합의 근거로 활용할 수 있습니다." />
       <Panel flush>
         <div style={{ display: "flex", gap: 12, padding: 16, borderBottom: "1px solid var(--line)", flexWrap: "wrap" }}>
           <Field label="대상">
@@ -82,7 +77,7 @@ export function HistoryView() {
                       <tr className={diff.length ? t.clickable : ""} onClick={() => diff.length && setOpen(open === h.histId ? null : h.histId)}>
                         <td className="num subtle">{fmtDateTime(h.regAt)}</td>
                         <td>{TARGET_LABEL[h.targetTyp] ?? h.targetTyp}</td>
-                        <td>{h.targetTyp === "PROJECT" ? <Link href={`/projects/${h.targetId}`} style={{ color: "var(--accent)", fontWeight: 600 }} onClick={(e) => e.stopPropagation()}>{h.targetId}</Link> : h.targetId}</td>
+                        <td>{h.targetId}</td>
                         <td>
                           {h.summary}
                           {diff.length > 0 && <span className="subtle"> · 변경 {diff.length}개 {open === h.histId ? "▲" : "▼"}</span>}

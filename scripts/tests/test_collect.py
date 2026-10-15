@@ -13,89 +13,81 @@ def write(path, lines):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         for line in lines:
-            f.write(line if isinstance(line, str) else json.dumps(line))
+            f.write(line if isinstance(line, str) else json.dumps(line, ensure_ascii=False))
             f.write("\n")
 
 
-def assistant(mid, ts, branch, model, inp, out, cr, cw):
-    return {
-        "type": "assistant",
-        "timestamp": ts,
-        "gitBranch": branch,
-        "message": {
-            "id": mid,
-            "model": model,
-            "usage": {"input_tokens": inp, "output_tokens": out, "cache_read_input_tokens": cr, "cache_creation_input_tokens": cw},
-        },
-    }
+def claude(typ, ts, sid="s1", branch="feature/REQ-0047", text=None):
+    d = {"type": typ, "timestamp": ts, "sessionId": sid, "gitBranch": branch}
+    if typ == "user":
+        d["message"] = {"role": "user", "content": text or ""}
+    return d
 
 
 class ClaudeTest(unittest.TestCase):
-    def test_dedupes_message_id_and_groups_by_day_branch_model(self):
+    def test_active_minutes_skip_idle_and_collect_hints_without_text(self):
         with tempfile.TemporaryDirectory() as d:
             write(
-                os.path.join(d, "proj", "s1.jsonl"),
+                os.path.join(d, "claude", "proj", "s1.jsonl"),
                 [
-                    {"type": "user", "timestamp": "2026-10-07T01:00:00Z"},
-                    assistant("m1", "2026-10-07T01:00:00Z", "poc/WBS-3.2.1", "claude-sonnet-4-5", 10, 20, 30, 40),
-                    assistant("m1", "2026-10-07T01:00:01Z", "poc/WBS-3.2.1", "claude-sonnet-4-5", 10, 20, 30, 40),
-                    assistant("m2", "2026-10-07T02:00:00Z", "poc/WBS-3.2.1", "claude-sonnet-4-5", 1, 2, 3, 4),
-                    "{broken json",
-                    assistant("m3", "2026-10-07T16:00:00Z", "main", "claude-sonnet-4-5", 5, 5, 5, 5),
+                    claude("user", "2026-11-10T01:00:00Z", text="REQ-0047-DV 수신 로직 고쳐줘 비밀"),
+                    claude("assistant", "2026-11-10T01:04:00Z"),
+                    claude("user", "2026-11-10T01:06:00Z", text=[{"type": "text", "text": "계속"}]),
+                    # 1시간 공백 — 자리 비움이라 5분만 센다
+                    claude("assistant", "2026-11-10T02:06:00Z"),
+                    "{broken",
                 ],
             )
-            write(os.path.join(d, "proj", "sub", "s2.jsonl"), [assistant("m2", "2026-10-07T02:00:00Z", "poc/WBS-3.2.1", "claude-sonnet-4-5", 1, 2, 3, 4)])
-            rows, warnings = c.collect_claude(d, since=None, wbs_pattern=c.DEFAULT_WBS)
-        key = ("2026-10-07", "WBS-3.2.1", "claude-sonnet-4-5")
-        self.assertEqual(rows[key]["requests"], 2)
-        self.assertEqual(rows[key]["input_tokens"], 11)
-        self.assertEqual(rows[key]["cache_write_tokens"], 44)
-        self.assertEqual(rows[("2026-10-08", "", "claude-sonnet-4-5")]["requests"], 1)
-        self.assertEqual(len(warnings), 1)
+            data, warnings = c.build(os.path.join(d, "claude"), os.path.join(d, "none"), None)
+            self.assertEqual(len(warnings), 1)
+            self.assertEqual(data["format"], "poc-ai-sessions")
+            [r] = data["sessions"]
+            self.assertEqual(r["activeMin"], 4 + 2 + 5)
+            self.assertEqual((r["date"], r["start"], r["end"]), ("2026-11-10", "10:00", "11:06"))
+            self.assertEqual(r["hints"], ["REQ-0047", "REQ-0047-DV"])
+            self.assertNotIn("비밀", json.dumps(data, ensure_ascii=False))
 
-    def test_since_filter(self):
+    def test_splits_by_kst_day_and_since(self):
         with tempfile.TemporaryDirectory() as d:
-            write(os.path.join(d, "p", "s.jsonl"), [assistant("a", "2026-10-01T01:00:00Z", "WBS-1", "m", 1, 1, 1, 1), assistant("b", "2026-10-05T01:00:00Z", "WBS-1", "m", 1, 1, 1, 1)])
-            rows, _ = c.collect_claude(d, since="2026-10-03", wbs_pattern=c.DEFAULT_WBS)
-        self.assertEqual(list(rows.keys()), [("2026-10-05", "WBS-1", "m")])
+            write(
+                os.path.join(d, "claude", "p", "s.jsonl"),
+                [
+                    claude("user", "2026-11-09T14:50:00Z"),  # 23:50 KST
+                    claude("assistant", "2026-11-09T14:55:00Z"),
+                    claude("user", "2026-11-09T15:00:00Z"),  # 00:00 KST 다음날
+                    claude("assistant", "2026-11-09T15:03:00Z"),
+                ],
+            )
+            data, _ = c.build(os.path.join(d, "claude"), "", None)
+            self.assertEqual([(r["date"], r["activeMin"]) for r in data["sessions"]], [("2026-11-09", 5), ("2026-11-10", 3)])
+            data, _ = c.build(os.path.join(d, "claude"), "", "2026-11-10")
+            self.assertEqual([r["date"] for r in data["sessions"]], ["2026-11-10"])
 
 
 class CodexTest(unittest.TestCase):
-    def test_cumulative_delta_and_reset(self):
+    def test_session_meta_branch_and_user_message(self):
         with tempfile.TemporaryDirectory() as d:
-            p = os.path.join(d, "2026", "10", "08", "rollout-1.jsonl")
-
-            def tc(ts, inp, cached, out):
-                return {"timestamp": ts, "type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {"input_tokens": inp, "cached_input_tokens": cached, "output_tokens": out}}}}
-
             write(
-                p,
+                os.path.join(d, "codex", "2026", "11", "10", "rollout-abc.jsonl"),
                 [
-                    {"timestamp": "2026-10-08T01:00:00Z", "type": "session_meta", "payload": {"git": {"branch": "feat/WBS-4.1.3"}}},
-                    {"timestamp": "2026-10-08T01:00:00Z", "type": "turn_context", "payload": {"model": "gpt-5-codex"}},
-                    tc("2026-10-08T01:01:00Z", 100, 40, 10),
-                    tc("2026-10-08T01:02:00Z", 100, 40, 10),
-                    tc("2026-10-08T01:03:00Z", 250, 100, 30),
-                    "not json",
-                    tc("2026-10-08T01:04:00Z", 50, 0, 5),
+                    {"type": "session_meta", "timestamp": "2026-11-10T00:00:00Z", "payload": {"id": "cx-1", "git": {"branch": "main"}}},
+                    {"type": "response_item", "timestamp": "2026-11-10T00:01:00Z", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "MES-12 작업"}]}},
+                    {"type": "event_msg", "timestamp": "2026-11-10T00:03:00Z", "payload": {"type": "user_message", "message": "REQ-0051-DS 도"}},
                 ],
             )
-            rows, warnings = c.collect_codex(d, since=None, wbs_pattern=c.DEFAULT_WBS)
-        r = rows[("2026-10-08", "WBS-4.1.3", "gpt-5-codex")]
-        self.assertEqual(r["requests"], 3)
-        self.assertEqual(r["cache_read_tokens"], 40 + 60 + 0)
-        self.assertEqual(r["input_tokens"], (100 - 40) + (150 - 60) + 50)
-        self.assertEqual(r["output_tokens"], 10 + 20 + 5)
-        self.assertEqual(len(warnings), 1)
+            data, _ = c.build("", os.path.join(d, "codex"), None)
+            [r] = data["sessions"]
+            self.assertEqual((r["tool"], r["sessionId"], r["branch"], r["activeMin"]), ("Codex", "cx-1", "main", 3))
+            self.assertEqual(r["hints"], ["MES-12", "REQ-0051-DS", "REQ-0051"])
 
 
-class OutputTest(unittest.TestCase):
-    def test_csv_header_and_rows(self):
-        rows = {("2026-10-07", "WBS-1", "m"): {"requests": 1, "input_tokens": 2, "output_tokens": 3, "cache_read_tokens": 4, "cache_write_tokens": 5}}
-        text = c.to_csv(rows, "dev01", "claude")
-        lines = text.strip().splitlines()
-        self.assertEqual(lines[0], "date,user,wbs_id,model,requests,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,source")
-        self.assertEqual(lines[1], "2026-10-07,dev01,WBS-1,m,1,2,3,4,5,claude")
+class MainTest(unittest.TestCase):
+    def test_writes_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = os.path.join(d, "o.json")
+            self.assertEqual(c.main(["--claude-dir", d, "--codex-dir", d, "--out", out]), 0)
+            with open(out, encoding="utf-8") as f:
+                self.assertEqual(json.load(f)["sessions"], [])
 
 
 if __name__ == "__main__":

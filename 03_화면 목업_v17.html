@@ -1,0 +1,1326 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>AI 생산성 측정 관리 시스템</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: 상단 고정 앱 바(역할 + 3개 메뉴). 과제 현황 = 계층 표, 투입 공수 = 왼쪽 목록 1/3 + 오른쪽 상세 2/3, 대시보드 = 필터 → KPI → 분석 2 × 2. */
+:root{
+  --bg:#f3f6f6; --surface:#ffffff; --surface-2:#eaf0f0; --line:#d6dfe0; --line-2:#e6ecec;
+  --fg:#132024; --fg-2:#46575c; --fg-3:#76868a;
+  --accent:#0d5d6c; --accent-fg:#ffffff; --accent-soft:#d9ecef;
+  --ai:#2a78d6; --hum:#eb6834; --base:#b6c1c3; --save:#1baf7a; --c4:#8a5cd1; --c6:#b48a12;
+  --good:#17793a; --good-soft:#dff2e5; --warn:#a86400; --warn-soft:#fbeed4; --bad:#bf3030; --bad-soft:#f9e0e0;
+  --t1:#2a78d6; --t2:#1baf7a; --t3:#8a5cd1; --t4:#3a9bb0; --t5:#eb6834; --t6:#b48a12; --t7:#9aa6a9; --t8:#c2477f;
+  --font-body:"IBM Plex Sans KR",-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --r:6px; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1517; --surface:#162024; --surface-2:#1c282c; --line:#2b3a3f; --line-2:#223034;
+  --fg:#e6eef0; --fg-2:#a8b7bb; --fg-3:#7b8b8f;
+  --accent:#5fbccb; --accent-fg:#0b1c20; --accent-soft:#17383e;
+  --ai:#3f8fe8; --hum:#e0703f; --base:#4b5a5e; --save:#2bb886; --c4:#9e7ae2; --c6:#c9a23a;
+  --good:#52c47f; --good-soft:#163222; --warn:#e2a33a; --warn-soft:#3a2c12; --bad:#ef6d6d; --bad-soft:#3d1c1c;
+  --t1:#3f8fe8; --t2:#2bb886; --t3:#9e7ae2; --t4:#4fb3c8; --t5:#e0703f; --t6:#c9a23a; --t7:#5d6b6e; --t8:#d4609a;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1517; --surface:#162024; --surface-2:#1c282c; --line:#2b3a3f; --line-2:#223034;
+  --fg:#e6eef0; --fg-2:#a8b7bb; --fg-3:#7b8b8f;
+  --accent:#5fbccb; --accent-fg:#0b1c20; --accent-soft:#17383e;
+  --ai:#3f8fe8; --hum:#e0703f; --base:#4b5a5e; --save:#2bb886; --c4:#9e7ae2; --c6:#c9a23a;
+  --good:#52c47f; --good-soft:#163222; --warn:#e2a33a; --warn-soft:#3a2c12; --bad:#ef6d6d; --bad-soft:#3d1c1c;
+  --t1:#3f8fe8; --t2:#2bb886; --t3:#9e7ae2; --t4:#4fb3c8; --t5:#e0703f; --t6:#c9a23a; --t7:#5d6b6e; --t8:#d4609a;
+  color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:14px;line-height:1.55}
+.num,.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+h1,h2,h3,h4{text-wrap:balance;margin:0}
+h2{font-size:18px;font-weight:700}h3{font-size:15px;font-weight:600}h4{font-size:13px;font-weight:600}
+p{margin:0}
+button,select,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.bar{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+.bar-in{max-width:1320px;margin:0 auto;padding:10px 16px 0;display:flex;flex-direction:column;gap:8px}
+.bar-top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;justify-content:space-between}
+.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.brand h1{font-size:16px;font-weight:700;letter-spacing:-.01em}
+.brand .tag{font-size:11px;color:var(--fg-3)}
+.role{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg-2);flex-wrap:wrap}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;flex-wrap:wrap}
+.seg button{border:0;background:transparent;padding:5px 10px;cursor:pointer;font-size:12px;color:var(--fg-2)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);font-weight:600}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+.tabs button{border:0;background:none;padding:8px 14px 10px;cursor:pointer;color:var(--fg-2);font-size:14px;white-space:nowrap;border-bottom:2px solid transparent}
+.tabs button[aria-selected="true"]{color:var(--fg);font-weight:600;border-bottom-color:var(--accent)}
+.tabs .cnt{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;font-weight:600;text-align:center}
+
+main{max-width:1320px;margin:0 auto;padding:18px 16px 60px;display:flex;flex-direction:column;gap:14px}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel-h{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.panel-h .sub{font-size:12px;color:var(--fg-3)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:14px;align-items:start}
+
+.filters{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
+.fl{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--fg-2)}
+select,input[type=text],input[type=number],textarea{background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:4px 8px;font-size:13px;max-width:100%}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:5px;padding:5px 11px;cursor:pointer;font-size:12.5px;white-space:nowrap}
+.btn:hover{border-color:var(--fg-3)}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--fg-2)}
+.btn.ghost:hover{border-color:var(--line)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{padding:2px 8px;font-size:12px}
+.acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.muted{color:var(--fg-3)}.small{font-size:12px}.xs{font-size:11px}
+.ok{color:var(--good)}.ng{color:var(--bad)}.wn{color:var(--warn)}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;padding:1px 8px;border-radius:999px;white-space:nowrap;width:fit-content}
+.pill.good{background:var(--good-soft);color:var(--good)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.neutral{background:var(--surface-2);color:var(--fg-2)}
+.pill.accent{background:var(--accent-soft);color:var(--accent)}
+.kind{font-size:11px;font-weight:600;padding:1px 7px;border-radius:3px;white-space:nowrap}
+.kind.개발{background:color-mix(in srgb,var(--ai) 14%,transparent);color:var(--ai)}
+.kind.운영{background:color-mix(in srgb,var(--c4) 16%,transparent);color:var(--c4)}
+.ms-st{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;white-space:nowrap}
+.ms-st i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.ms-st.대기 i{background:var(--fg-3)}.ms-st.대기{color:var(--fg-2)}
+.ms-st.측정중 i{background:var(--warn)}.ms-st.측정중{color:var(--warn)}
+.ms-st.완료 i{background:var(--good)}.ms-st.완료{color:var(--good)}
+.stg{display:inline-block;font-size:11px;font-weight:600;padding:0 6px;border-radius:3px;background:var(--surface-2);color:var(--fg-2);white-space:nowrap}
+.tw{overflow-x:auto;border:1px solid var(--line-2);border-radius:5px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--line-2);vertical-align:middle}
+th{font-size:11.5px;font-weight:600;color:var(--fg-2);background:var(--surface-2);white-space:nowrap}
+td.r,th.r{text-align:right}td.c,th.c{text-align:center}
+tbody tr:last-child td{border-bottom:0}
+.hbar{display:flex;height:10px;border-radius:3px;overflow:hidden;background:var(--surface-2);min-width:70px}
+.hbar i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--fg-2);align-items:center}
+.legend i{display:inline-block;width:12px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.lock{color:var(--fg-3);font-size:12px}
+
+/* ---------- PoC 과제 현황 (양식 말판) ---------- */
+.board{border-collapse:separate;border-spacing:0;font-size:12.5px}
+.board th,.board td{border-bottom:1px solid var(--line-2);border-right:1px solid var(--line-2);padding:6px 9px;white-space:nowrap;max-width:280px;overflow:hidden;text-overflow:ellipsis;background:var(--surface)}
+.board thead th{position:sticky;top:0;z-index:2;background:var(--surface-2)}
+.board thead tr.band th{text-align:center;font-size:12px;color:var(--fg);top:0}
+.board thead tr.cols th{top:31px;white-space:normal;vertical-align:top;line-height:1.35;min-width:84px}
+.board thead tr.cols th .id{display:block;font-family:var(--font-mono);font-size:10.5px;color:var(--fg-3);font-weight:500}
+.board .stk{position:sticky;z-index:1}
+.board thead .stk{z-index:3}
+.board .s1{left:0;min-width:44px;max-width:44px}
+.board .s2{left:44px;min-width:230px;max-width:230px;box-shadow:2px 0 0 var(--line);white-space:normal}
+.board tbody tr:hover td{background:color-mix(in srgb,var(--accent-soft) 45%,var(--surface))}
+.board td.rep{color:var(--fg-3)}
+.board th.band-m{background:color-mix(in srgb,var(--accent) 16%,var(--surface-2))}
+.board .new{display:inline-block;margin-left:4px;font-size:10px;font-weight:700;color:var(--accent)}
+.board th.coll,.board td.coll{min-width:34px;max-width:34px;text-align:center;color:var(--fg-3);cursor:pointer;padding:6px 2px}
+.board th.bandh{cursor:pointer}
+.board th.bandh:hover{color:var(--accent)}
+.prog{display:flex;flex-direction:column;gap:3px;min-width:110px}
+.prog .hbar{height:6px}
+.kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr));gap:8px}
+.kp button{border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:9px 12px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:1px}
+.kp button b{font-family:var(--font-mono);font-size:21px;font-weight:500}
+.kp button span{font-size:12px;color:var(--fg-2)}
+.kp button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+
+/* ---------- 공수 실적 조회 ---------- */
+.hist td.v{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums;min-width:58px}
+.hist td.v.z{color:var(--line)}
+.hist td.v.unc{text-decoration:underline dotted var(--warn);text-underline-offset:3px}
+.hist tr.req td{font-weight:600;background:color-mix(in srgb,var(--surface-2) 55%,var(--surface))}
+.hist tr.prj td{background:var(--surface-2);font-weight:600;font-size:12px}
+.hist tr.tot td{background:var(--surface-2);font-weight:600}
+.hist td.nm{min-width:240px}
+.hist th.dh{text-align:right;min-width:58px}
+.hist th.dh small{display:block;font-weight:500;color:var(--fg-3)}
+.hist th.dh.today{color:var(--accent)}
+
+/* ---------- 투입 공수 입력 ---------- */
+.una{border:1.5px solid var(--bad);background:color-mix(in srgb,var(--bad-soft) 55%,var(--surface));border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.una-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.una-h b{color:var(--bad);font-size:14px}
+.una-item{display:grid;grid-template-columns:minmax(200px,280px) minmax(0,1fr);gap:8px 14px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:9px 11px}
+@media (max-width:760px){.una-item{grid-template-columns:1fr}}
+.una-item .when b{font-family:var(--font-mono);font-size:13px}
+.una-item .when div{font-size:11.5px;color:var(--fg-3)}
+.chipset{display:flex;flex-wrap:wrap;gap:6px}
+.chipset button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer}
+.chipset button:hover{border-color:var(--accent);color:var(--accent)}
+.chipset button.rec{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600}
+.chipset button.np{color:var(--fg-3)}
+.ig{min-width:900px;font-size:13px}
+.ig th,.ig td{padding:6px 8px}
+.ig td.nm,.ig th.nm{position:sticky;left:0;z-index:1;background:var(--surface);min-width:250px;box-shadow:1px 0 0 var(--line-2)}
+.ig th.nm{background:var(--surface-2)}
+.ig tr.rq td{background:color-mix(in srgb,var(--surface-2) 55%,var(--surface));padding-top:8px;padding-bottom:6px}
+.ig tr.rq td.nm{background:color-mix(in srgb,var(--surface-2) 55%,var(--surface))}
+.ig th.day{min-width:128px}
+.ig th.day .dst{display:block;font-weight:500;font-size:11px;margin-top:1px}
+.ig th.day.sel{background:var(--accent-soft)}
+.ig td.dc.sel{background:color-mix(in srgb,var(--accent-soft) 40%,var(--surface))}
+.ig td.dc.cf{background:color-mix(in srgb,var(--surface-2) 65%,var(--surface))}
+.ig tr.ft td{background:var(--surface-2);font-size:12px}
+.ig tr.ft td.nm{background:var(--surface-2)}
+.cell{display:flex;flex-direction:column;align-items:center;gap:2px}
+.cell .row{display:flex;align-items:center;gap:4px}
+.cell .tot{font-family:var(--font-mono);font-size:15px;font-weight:500;min-width:36px;text-align:center}
+.cell .tot.z{color:var(--line)}
+.cell .stp{width:24px;height:24px;border:1px solid var(--line);background:var(--surface);border-radius:4px;cursor:pointer;line-height:1;font-size:15px;color:var(--fg-2);padding:0}
+.cell .stp:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.cell .stp:disabled{opacity:.3;cursor:default}
+.cell .meta{font-size:10.5px;font-family:var(--font-mono);color:var(--fg-3);white-space:nowrap}
+.cell .meta .a{color:var(--ai)}
+.cell .meta .up{color:var(--hum);font-weight:600}
+.cell .meta .dn{color:var(--fg-2);font-weight:600}
+.cfbtn{width:100%}
+
+/* 업무 유형 */
+.ty{display:inline-flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap}
+.ty i{width:10px;height:10px;border-radius:2px;display:inline-block;flex:none}
+.tyrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:7px 10px;border:1px solid var(--line);border-radius:5px}
+.tyrow.on{border-color:var(--hum);background:color-mix(in srgb,var(--hum) 7%,var(--surface))}
+.tyrow .d{font-size:11.5px;color:var(--fg-3)}
+.stepper{display:flex;align-items:center;gap:6px}
+.stepper button{width:28px;height:28px;border:1px solid var(--line);background:var(--surface);border-radius:4px;cursor:pointer;font-size:16px;padding:0}
+.stepper b{font-family:var(--font-mono);font-size:14px;min-width:34px;text-align:center}
+.aut{font-size:10.5px;font-weight:600;padding:0 5px;border-radius:3px;margin-left:4px;vertical-align:1px}
+.aut.자동화{background:var(--good-soft);color:var(--good)}
+.aut.일부{background:var(--warn-soft);color:var(--warn)}
+.aut.사람{background:var(--surface-2);color:var(--fg-2)}
+.aut.보정{background:var(--bad-soft);color:var(--bad)}
+
+/* ---------- 대시보드 ---------- */
+.fbar{position:sticky;top:96px;z-index:15}
+.ms{position:relative}
+.ms-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:5px;padding:5px 10px;cursor:pointer;font-size:12.5px;max-width:280px}
+.ms-btn b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ms-btn.on{border-color:var(--accent);color:var(--accent)}
+.ms-pop{position:absolute;top:calc(100% + 4px);left:0;z-index:30;background:var(--surface);border:1px solid var(--line);border-radius:6px;box-shadow:0 8px 24px rgba(10,20,22,.16);width:min(340px,86vw);max-height:360px;display:flex;flex-direction:column}
+.ms-pop .top{display:flex;gap:6px;padding:8px;border-bottom:1px solid var(--line-2);align-items:center}
+.ms-pop .top input{flex:1;min-width:0}
+.ms-pop .list{overflow:auto;padding:4px 0}
+.ms-pop label{display:flex;gap:8px;align-items:center;padding:5px 12px;font-size:13px;cursor:pointer}
+.ms-pop label:hover{background:var(--surface-2)}
+.ms-pop .grp{padding:6px 12px 2px;font-size:11px;color:var(--fg-3);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chips span{display:inline-flex;align-items:center;gap:4px;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:1px 4px 1px 9px;font-size:12px}
+.chips span button{border:0;background:none;color:inherit;cursor:pointer;font-size:13px;padding:0 4px}
+.kpi4{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:10px}
+.kc{background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--accent);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.kc .area{font-size:12px;color:var(--fg-3);display:flex;justify-content:space-between;gap:6px}
+.kc .nm{font-size:13px;font-weight:600}
+.kc .vrow{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.kc .v{font-family:var(--font-mono);font-size:28px;font-weight:500;letter-spacing:-.02em;line-height:1.1}
+.kc .f{font-size:11px;color:var(--fg-3)}
+.kc .subs{border-top:1px dashed var(--line);padding-top:8px;display:flex;flex-direction:column;gap:5px}
+.kc .subs .sl{font-size:11px;color:var(--fg-3);font-weight:600}
+.mini{display:grid;grid-template-columns:52px minmax(0,1fr) 46px;gap:6px;align-items:center;font-size:11.5px}
+.mini .hbar{height:7px;min-width:0}
+.mini .num{text-align:right}
+.kv{display:flex;justify-content:space-between;font-size:12px;gap:8px}
+.kv b{font-family:var(--font-mono);font-weight:500}
+.chart{width:100%;height:auto;display:block;overflow:visible}
+.chart text{fill:var(--fg-2);font-family:var(--font-body);font-size:11px}
+.chart .val{fill:var(--fg);font-family:var(--font-mono);font-size:10.5px}
+.chart .grid{stroke:var(--line-2)}
+.chart .axis{stroke:var(--line)}
+.prow{display:grid;grid-template-columns:minmax(120px,190px) minmax(0,1fr) 60px 60px 60px;gap:6px 10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line-2);font-size:12.5px}
+.prow.h{font-size:11.5px;color:var(--fg-2);font-weight:600;padding-top:0}
+.prow.g{font-weight:600;cursor:pointer}
+.prow.g .nm::before{content:"▾ ";color:var(--fg-3)}
+.prow.g.closed .nm::before{content:"▸ "}
+.prow.s .nm{padding-left:16px;color:var(--fg-2)}
+.prow .r{text-align:right;font-family:var(--font-mono)}
+.bars2{display:flex;flex-direction:column;gap:3px}
+.bars2 .b{display:flex;align-items:center;gap:6px;font-size:10.5px;font-family:var(--font-mono);color:var(--fg-3)}
+.bars2 .b span.track{display:flex;height:9px;border-radius:2px;overflow:hidden}
+.bars2 .b span.track i{display:block;height:100%}
+@media (max-width:640px){.prow{grid-template-columns:110px minmax(0,1fr) 52px}.prow .hide-s{display:none}}
+
+/* v15 */
+main{gap:10px;padding-top:12px}
+.kp button{padding:6px 12px;flex-direction:row;align-items:baseline;gap:8px}
+.kp button b{font-size:18px}
+.filters{padding:7px 12px}
+.sumline{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;font-size:12.5px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:6px 12px}
+.una{padding:8px 12px;gap:6px}
+.una-item{padding:5px 10px;grid-template-columns:minmax(260px,360px) minmax(0,1fr)}
+.una-item .when b{font-size:12.5px}
+.ig th,.ig td{padding:4px 8px}
+.ig th.day.today{color:var(--accent)}
+.ig td.dc.ed{background:color-mix(in srgb,var(--warn-soft) 55%,var(--surface))}
+.cell{gap:0}
+.cell .tot{font-size:14px}
+.cell .stp{width:22px;height:22px;font-size:14px}
+.lnk{border:0;background:none;color:var(--accent);font-size:11.5px;cursor:pointer;padding:0 2px;text-decoration:underline}
+.modal.wide{max-width:780px}
+.tygrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:6px}
+.tyrow{padding:5px 9px}
+.hist thead th{position:sticky;top:0;z-index:2}
+.hist th,.hist td{padding:5px 9px}
+.kpi4{gap:8px;align-items:start}
+.kc{padding:10px 12px;gap:4px}
+.kc .area{font-size:11.5px}
+.kc .v{font-family:var(--font-mono);font-size:26px;font-weight:500;letter-spacing:-.02em;line-height:1.15}
+.subt{border:0;background:none;padding:2px 0 0;font-size:11.5px;color:var(--fg-2);cursor:pointer;text-align:left;width:fit-content}
+.subt:hover{color:var(--accent)}
+.kc .subs{margin-top:4px}
+.ana{height:300px;padding:10px 14px;gap:6px}
+.ana .scr{overflow:auto;flex:1;min-height:0}
+.ana .chart{max-height:212px}
+.grid2{gap:10px}
+@media (max-width:760px){.ana{height:auto}.una-item{grid-template-columns:1fr}}
+#tip{position:fixed;z-index:80;pointer-events:none;background:var(--fg);color:var(--bg);font-size:12px;padding:6px 9px;border-radius:5px;max-width:300px;line-height:1.45;white-space:pre-line}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:90;background:var(--fg);color:var(--bg);padding:9px 14px;border-radius:6px;font-size:13px;max-width:min(92vw,560px);box-shadow:0 4px 16px rgba(0,0,0,.18)}
+.modal-bg{position:fixed;inset:0;background:rgba(10,20,22,.45);z-index:70;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal{background:var(--surface);border-radius:8px;border:1px solid var(--line);max-width:560px;width:100%;padding:18px;display:flex;flex-direction:column;gap:12px;max-height:92vh;overflow:auto}
+.modal ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3px;font-size:13px}
+
+/* ================= v16 ================= */
+.bar-note{font-size:11.5px;color:var(--fg-2);display:inline-flex;align-items:center;gap:6px}
+.bar-note i{width:7px;height:7px;border-radius:50%;background:var(--good);display:inline-block}
+/* SDLC 측정 구간 바 */
+.sbar{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:2px;min-width:150px}
+.sbar i{height:11px;border-radius:2px;display:block}
+.sbar i.off{border:1px dashed var(--line);background:transparent}
+.sbar i.done{background:var(--good)}
+.sbar i.ing{background:var(--warn)}
+.sbar i.wait{background:color-mix(in srgb,var(--accent) 38%,var(--surface))}
+.sbar i.prj{background:color-mix(in srgb,var(--accent) 55%,var(--surface))}
+.sbar i.oth{opacity:.4}
+.saxis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:2px;font-size:10.5px;font-weight:500;color:var(--fg-3);text-align:center;margin-top:2px}
+.scap{font-size:11px;color:var(--fg-2);white-space:normal;line-height:1.35;margin-top:3px}
+.scap b{font-weight:600;color:var(--fg)}
+.sleg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px;color:var(--fg-2);align-items:center}
+.sleg i{display:inline-block;width:14px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+/* 과제 현황 계층 */
+.board .s2{box-shadow:none}
+.board .s3{left:274px;min-width:236px;max-width:236px;box-shadow:2px 0 0 var(--line);white-space:normal}
+.board tr.grp td{background:var(--surface-2);font-weight:600}
+.board tr.grp td.stk{background:var(--surface-2)}
+.board tr.grp td.s2{cursor:pointer}
+.board tr.grp:hover td{background:color-mix(in srgb,var(--accent-soft) 55%,var(--surface-2))}
+.board tr.rq td.s2{padding-left:22px}
+.board td.na,.board .na{color:var(--line)}
+.board td.dot{color:var(--line);text-align:center}
+.board th.bg-g{background:color-mix(in srgb,var(--accent) 10%,var(--surface-2))}
+.board thead tr.cols th.bg-g{min-width:118px}.board thead tr.cols th.nowrap{white-space:nowrap}
+.scell{display:flex;flex-direction:column;gap:0;line-height:1.3;min-width:104px}
+.scell b{font-size:12px;font-weight:600;white-space:nowrap}
+.scell span{font-size:11px;color:var(--fg-3)}
+.sst{font-size:10.5px;font-weight:600}
+.sst.done{color:var(--good)}.sst.ing{color:var(--warn)}.sst.wait{color:var(--fg-3)}
+sup.new{font-size:9.5px;font-weight:700;color:var(--accent);margin-left:2px}
+/* 투입 공수 (입력 · 실적) */
+.ef{display:grid;grid-template-columns:minmax(300px,1fr) minmax(0,2.1fr);gap:12px;align-items:start}
+@media (max-width:1000px){.ef{grid-template-columns:1fr}}
+.lp{position:sticky;top:104px;display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 120px);min-width:0}
+@media (max-width:1000px){.lp{position:static;max-height:none}}
+.lp .box{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;display:flex;flex-direction:column;gap:7px}
+.lp .list{overflow:auto;display:flex;flex-direction:column;gap:6px;min-height:0;padding:1px}
+@media (max-width:1000px){.lp .list{max-height:340px}}
+.cks{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px}
+.cks label{display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+.cks .num{color:var(--fg-3);font-size:11.5px}
+.chk{border:1.5px solid var(--bad);background:color-mix(in srgb,var(--bad-soft) 60%,var(--surface));border-radius:var(--r);padding:9px 12px;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:2px;width:100%}
+.chk b{color:var(--bad);font-size:13.5px}
+.chk.on{box-shadow:0 0 0 2px var(--bad) inset}
+.chk.none{border-color:var(--line);background:var(--surface);cursor:default}
+.chk.none b{color:var(--good)}
+.rc{border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:8px 10px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 8px;cursor:pointer;align-items:start}
+.rc:hover{border-color:var(--fg-3)}
+.rc.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;background:color-mix(in srgb,var(--accent-soft) 38%,var(--surface))}
+.rc input{margin-top:3px}
+.rcb{display:flex;flex-direction:column;gap:3px;min-width:0}
+.rcn{font-size:13px;line-height:1.35}
+.rcm{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rp{display:flex;flex-direction:column;gap:10px;min-width:0}
+.rq{gap:10px}
+.rqh{display:flex;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;align-items:flex-start}
+.rqh h3{font-size:16px}
+.rqs{display:flex;gap:6px 14px;align-items:center;flex-wrap:wrap}
+.strip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+@media (max-width:760px){.strip{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.sbox{border:1px solid var(--line);border-top-width:3px;border-radius:5px;padding:5px 8px 6px;display:flex;flex-direction:column;gap:1px;min-width:0;font-size:11.5px;background:var(--surface)}
+.sbox .sbh{display:flex;justify-content:space-between;gap:4px;align-items:baseline}
+.sbox .sbh b{font-size:12.5px}
+.sbox .wt{font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sbox.off{border-style:dashed;border-top-width:1px;color:var(--fg-3);background:transparent}
+.sbox.done{border-top-color:var(--good)}.sbox.ing{border-top-color:var(--warn)}.sbox.wait{border-top-color:color-mix(in srgb,var(--accent) 38%,var(--surface))}
+.sbox.mine{background:color-mix(in srgb,var(--accent-soft) 32%,var(--surface))}
+.sbox .hbar{height:4px;min-width:0;margin-top:3px}
+.cmds{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.cmd{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:5px;padding:2px 3px 2px 9px;font-family:var(--font-mono);font-size:12.5px;background:var(--surface-2)}
+.cmd .cp{border:1px solid var(--line);background:var(--surface);border-radius:4px;font-size:11.5px;padding:1px 7px;cursor:pointer;font-family:var(--font-body)}
+.cmd .cp:hover{border-color:var(--accent);color:var(--accent)}
+.etw{display:flex;flex-direction:column;gap:4px}
+.et{font-size:13px;min-width:760px}
+.et th{text-align:center;vertical-align:bottom;line-height:1.3}
+.et th:first-child{text-align:left}
+.et th small{display:block;font-weight:500;color:var(--fg-3);font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:108px;margin:0 auto}
+.et th.na,.et td.na{color:var(--line);background:color-mix(in srgb,var(--surface-2) 45%,var(--surface))}
+.et td{padding:5px 8px}
+.et td small{display:block;font-size:10.5px;color:var(--fg-3);font-weight:500}
+.et tr.sumr td{background:var(--surface-2);font-weight:600}
+.et tr.sumr td.na{background:var(--surface-2)}
+.et tr.er.need td,.et tr.er.edit td{background:color-mix(in srgb,var(--warn-soft) 42%,var(--surface))}
+.et tr.er.need td.na,.et tr.er.edit td.na{background:color-mix(in srgb,var(--warn-soft) 25%,var(--surface-2))}
+.et tr.er.today td{background:color-mix(in srgb,var(--accent-soft) 30%,var(--surface))}
+.et tr.hrow td{background:var(--surface);padding:6px 8px}
+.et tr.hrow td .acts{justify-content:flex-start}
+.et td.dcol{white-space:nowrap;min-width:92px}
+.et td.dcol small.wn{color:var(--warn)}
+.ecell{display:flex;align-items:center;gap:4px;justify-content:center}
+.ain{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;color:var(--ai);font-weight:600}
+.ain input{width:54px;text-align:right;font-family:var(--font-mono);padding:2px 5px;font-size:13px;border-color:color-mix(in srgb,var(--ai) 45%,var(--line))}
+.pend{font-size:10.5px;color:var(--fg-3);white-space:nowrap}
+.addb{border:1px dashed color-mix(in srgb,var(--hum) 55%,var(--line));background:var(--surface);border-radius:4px;padding:2px 6px;font-size:11.5px;color:var(--hum);cursor:pointer;white-space:nowrap;font-family:var(--font-mono)}
+.addb.on{border-style:solid;background:color-mix(in srgb,var(--hum) 9%,var(--surface));font-weight:600}
+.addb:hover{border-color:var(--hum)}
+.et .meta{display:block;font-size:10.5px;font-family:var(--font-mono);color:var(--fg-3);text-align:center;white-space:nowrap}
+.et .meta .up{color:var(--hum);font-weight:600}.et .meta .dn{color:var(--fg-2);font-weight:600}
+.tv{font-family:var(--font-mono);font-size:14px;font-weight:500;display:block;text-align:center}
+.tv.z{color:var(--line)}
+.lnk2{border:0;background:none;color:var(--fg);font-weight:600;font-size:12.5px;cursor:pointer;padding:2px 0}
+.lnk2:hover{color:var(--accent)}
+.unap{border:1.5px solid var(--bad);gap:8px}
+.una-item .why{color:var(--bad);font-size:11.5px}
+.una-item select{font-size:12px;padding:2px 6px;border-radius:999px}
+.tyrow input{width:66px;text-align:right;font-family:var(--font-mono)}
+.sp-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line-2);font-size:13px}
+.sp-row input{width:70px;text-align:right;font-family:var(--font-mono)}
+.radios{display:flex;flex-wrap:wrap;gap:6px}
+.radios label{border:1px solid var(--line);border-radius:5px;padding:4px 10px;font-size:12.5px;cursor:pointer;display:inline-flex;gap:5px;align-items:center}
+
+/* v17 */
+.modal.xwide{max-width:min(1280px,97vw)}
+.regw{max-height:52vh}
+table.reg{font-size:12.5px;min-width:1100px}
+table.reg th,table.reg td{padding:4px 5px;white-space:nowrap}
+table.reg select,table.reg input{font-size:12.5px;padding:3px 5px;max-width:170px}
+.gprog{display:grid;grid-template-columns:auto minmax(50px,1fr) auto;gap:6px;align-items:center;margin-top:3px;font-weight:500}
+.gprog .hbar{height:6px;min-width:0}
+.board th.coll.wide{min-width:46px;max-width:46px;line-height:1.25}
+.nowrap{white-space:nowrap}
+</style>
+</head>
+<body>
+<div id="tip" hidden></div>
+<div id="toast" hidden role="status"></div>
+<div id="modal" class="modal-bg" hidden></div>
+<header class="bar">
+  <div class="bar-in">
+    <div class="bar-top">
+      <div class="brand"><h1>AI 생산성 측정 관리 시스템</h1><span class="tag">목업 v17 · 가상 데이터 · 기준 시각 2026-11-13 (금) 16:20</span></div>
+      <div class="role"><span>로그인</span>
+        <div class="seg" id="roleSeg">
+          <button data-role="admin" aria-pressed="true">관리자</button>
+          <button data-role="dev" aria-pressed="false">개발자 김개발</button>
+        </div>
+        <button class="btn sm primary" id="exp">Master data 추출</button><button class="btn sm" id="scn">테스트 시나리오</button><button class="btn sm ghost" id="chg">v16 → v17 변경 내역</button>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist" id="tabs"></nav>
+  </div>
+</header>
+<main id="main"></main>
+
+<script>
+/* =================== 공통 =================== */
+const $=s=>document.querySelector(s);
+const $$=(s,el=document)=>[...el.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sum=(a,f=x=>x)=>a.reduce((s,x)=>s+f(x),0);
+const pct=(x,d=0)=>isFinite(x)?(x*100).toFixed(d)+'%':'—';
+const sp=(x,d=0)=>isFinite(x)?((x>0?'+':'')+(x*100).toFixed(d)+'%'):'—';
+const f1=x=>(Math.round(x*10)/10).toLocaleString('ko-KR',{minimumFractionDigits:1,maximumFractionDigits:1});
+const f2=x=>(Math.round(x*100)/100).toFixed(2);
+const f0=x=>Math.round(x).toLocaleString('ko-KR');
+const man=x=>f0(x/10000);
+const h1=h=>(Math.round(h*10)/10).toFixed(1);
+const q1=x=>Math.round((x+1e-9)*10)/10;
+function toast(t){const el=$('#toast');el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,3400);}
+function modal(html,onMount){const m=$('#modal');m.innerHTML=`<div class="modal" role="dialog" aria-modal="true">${html}</div>`;m.hidden=false;
+  m.onclick=e=>{if(e.target===m||e.target.closest('[data-close]'))m.hidden=true;};onMount&&onMount(m.firstElementChild);}
+const closeModal=()=>$('#modal').hidden=true;
+const tip=$('#tip');
+document.addEventListener('mouseover',e=>{const el=e.target.closest('[data-tip]');if(!el){tip.hidden=true;return;}tip.textContent=el.dataset.tip;tip.hidden=false;});
+document.addEventListener('mousemove',e=>{if(tip.hidden)return;const w=tip.offsetWidth;tip.style.left=Math.min(e.clientX+14,innerWidth-w-8)+'px';tip.style.top=(e.clientY+14)+'px';});
+document.addEventListener('scroll',()=>tip.hidden=true,{passive:true});
+
+/* =================== 기준 정보 =================== */
+const ME='김개발';
+const DAYS=['11/2','11/3','11/4','11/5','11/6','11/9','11/10','11/11','11/12','11/13'];
+const DOW=['월','화','수','목','금','월','화','수','목','금'];
+const dl=i=>`${DAYS[i]} (${DOW[i]})`;
+const TODAY=9;                     /* 11/13 (금) · AI 사용 시간은 다음 날 06:00 배치로 반영 */
+const ALLD=[...Array(10).keys()];
+/* SDLC 단계 → 업무 유형 (양식 REQ-03 선택값을 단계별로 분리 · 배포 · 운영은 추가 제안) */
+const SDLC=[['AN','분석'],['DS','설계'],['DV','개발'],['TS','테스트'],['DP','배포'],['OP','운영']];
+const SN=Object.fromEntries(SDLC),SC=SDLC.map(x=>x[0]);
+const WT={AN:['요구사항 분석·정의'],DS:['UI 설계','프로그램 설계','DB 설계','인터페이스 설계'],
+  DV:['UI 개발','백엔드 로직 신규','백엔드 로직 수정','인터페이스·연계','DB·SQL','배치','코드·플랫폼 전환','성능 개선'],
+  TS:['단위 테스트','통합·회귀 테스트'],DP:['배포·이행','배포 후 검증'],OP:['장애 분석·조치','데이터 조치','운영 요청 처리']};
+const WT_NEW=new Set([...WT.DP,...WT.OP]);
+const PRICE={'특급':750000,'고급':620000,'중급':480000,'초급':360000};
+/* AI 도구 외 작업 유형 (8개) */
+const TYPES=[
+ ['A1','코드 작성 · 수정','직접 코딩, AI 생성 코드 수정 · 리팩터링','var(--t1)'],
+ ['A2','테스트 · 검증','테스트 수행 · 결과 확인, 배포 후 검증','var(--t2)'],
+ ['A3','분석 · 검토','요구사항 · 산출물 · 코드 검토, 장애 원인 분석, 현황 조사','var(--t3)'],
+ ['A4','문서 작성','설계서 · 산출물 · 보고 자료 작성','var(--t4)'],
+ ['A5','협의 · 소통','회의, 현업 · 고객 문의 대응, 리뷰 의견 협의','var(--t5)'],
+ ['A6','환경 · 배포 · 운영 조치','환경 구성, 배포, 데이터 조치, 권한 · 설정 변경','var(--t6)'],
+ ['A7','AI 사용 미수집','AI 도구를 썼지만 시간이 잡히지 않은 경우 (오프라인 · 미설치 PC 등)','var(--t7)'],
+ ['A8','기타','위 유형에 없는 업무 · 메모 필수','var(--t8)']];
+const TY=Object.fromEntries(TYPES.map(t=>[t[0],t]));
+const tyChip=c=>`<span class="ty"><i style="background:${TY[c][3]}"></i>${c} ${TY[c][1]}</span>`;
+
+const PROJECTS=[
+ {id:'P1',name:'설비 이벤트 수신 통합',sys:'FAB MOS',dept:'MES',team:'FAB MOS팀',pm:'이영희',grade:'L1',deploy:'서버 전용 (UI 없음)',area:'기능 개선',wbs:'있음',vcs:'Bitbucket',pms:'Jira',kind:'개발'},
+ {id:'P2',name:'품질 알람 고도화',sys:'smartMES',dept:'MES',team:'품질시스템팀',pm:'홍길동',grade:'L2',deploy:'Web — On-Premise',area:'기능 개선',wbs:'있음',vcs:'Bitbucket',pms:'Jira',kind:'개발'},
+ {id:'P3',name:'물류 조회 화면 개선',sys:'LMS',dept:'MES',team:'물류시스템팀',pm:'박민수',grade:'L3',deploy:'Web — On-Premise',area:'기능 개선',wbs:'있음',vcs:'GitLab',pms:'Redmine',kind:'개발'},
+ {id:'P4',name:'MES 운영 개선 요청',sys:'FAB MOS',dept:'MES',team:'MES운영팀',pm:'정수진',grade:'L1',deploy:'복합',area:'기능 개선',wbs:'있음',vcs:'Bitbucket',pms:'사내 작업관리 시스템',kind:'운영'},
+ {id:'P5',name:'경영 리포트 전환',sys:'MIS Portal',dept:'MIS',team:'경영정보팀',pm:'최현우',grade:'L3',deploy:'Web — Cloud',area:'전환',wbs:'없음',vcs:'GitHub',pms:'Jira',kind:'개발'},
+ {id:'P6',name:'물류 운영 SR 처리',sys:'LMS',dept:'MES',team:'물류운영팀',pm:'박민수',grade:'L3',deploy:'Web — On-Premise',area:'기능 개선',wbs:'있음',vcs:'GitLab',pms:'사내 작업관리 시스템',kind:'운영'}];
+const prj=id=>PROJECTS.find(p=>p.id===id);
+/* 요구사항: 과제 1 : N 요구사항 1 : N SDLC 단계 (단계마다 업무 유형 · 기준 공수 · 담당) */
+const R=(id,pid,name,diff,grade,src,stages,done,o={})=>{
+  const st=stages.map(([c,wt,owner,base])=>({c,wt,owner,base}));
+  const base=q1(sum(st,s=>s.base));const main=[...st].sort((a,b)=>b.base-a.base)[0].owner;
+  return Object.assign({id,pid,name,diff,grade,src,stages:st,base,owner:main,done,
+  llm:'Public LLM (외부)',tool:'Claude Code',acct:1,model:'',plan:'개인 고사용량 (Max급)',tok:'10만~100만',
+  f1:'명확',f2:'가능',f3:'패턴 반복',evaluator:main,exp:'상',reason:'',people:[...new Set(st.map(s=>s.owner))].join(', '),aiexp:'실무 상시 사용',cert:'AI 부트캠프',note:'',it:true},o);};
+const CX={tool:'Codex',plan:'Team·Enterprise'};
+const IN={llm:'사내 LLM',tool:'사내 소스코딩 에이전트',plan:'사내 (과금 없음)'};
+const REQS=[
+ R('REQ-0047','P1','설비 이벤트 수신 로직 변경','상','고급','WBS 실적',[['AN','요구사항 분석·정의','박개발',1.0],['DV','인터페이스·연계',ME,5.5],['TS','통합·회귀 테스트',ME,1.5]],false,{f1:'일부 명확',f2:'어려움',f3:'신규 설계 판단',exp:'하',tok:'100만~1,000만',reason:'설비 다중 연계와 암묵 규칙이 많아 코드 분석 부담이 큼'}),
+ R('REQ-0033','P1','중복 이벤트 처리','중','중급','WBS 실적',[['DV','백엔드 로직 수정','박개발',3.5],['TS','단위 테스트','박개발',1.0]],true,{f3:'패턴 변형',exp:'중',reason:'기존 로직 수정 범위가 명확함'}),
+ R('REQ-0038','P1','수신 실패 재처리 배치','중','중급','WBS 실적',[['DS','프로그램 설계','박개발',1.0],['DV','배치','박개발',3.0],['TS','통합·회귀 테스트','박개발',1.0]],true,{...CX,exp:'중',reason:'배치 패턴 재사용 가능'}),
+ R('REQ-0051','P2','알람 등급별 필터','하','중급','WBS 실적',[['DS','UI 설계',ME,1.0],['DV','UI 개발',ME,3.0]],false,{reason:'기존 필터 화면 패턴 복제'}),
+ R('REQ-0012','P2','설비 상태 조회 조건 추가','하','중급','WBS 실적',[['DV','UI 개발',ME,1.5],['TS','단위 테스트',ME,0.5]],true,{reason:'조회 화면 패턴 복제 위주, 화면 정의서 있음'}),
+ R('REQ-0055','P2','알람 확인 처리 API','중','고급','WBS 실적',[['DV','백엔드 로직 신규','최개발',4.5],['TS','단위 테스트','최개발',1.0]],true,{f1:'일부 명확',f3:'패턴 변형',exp:'중',reason:'API 명세는 있으나 상태 전이 규칙 확인 필요'}),
+ R('REQ-0058','P2','알람 이력 테이블 설계','중','고급','WBS 실적',[['DS','DB 설계','최개발',2.5]],true,{reason:'테이블 정의서 양식이 정형화됨',it:false}),
+ R('REQ-0060','P2','알람 통계 화면 신규','상','특급','WBS 실적',[['DS','UI 설계','최개발',2.0],['DV','UI 개발','최개발',4.0],['TS','통합·회귀 테스트','최개발',1.0]],false,{f3:'신규 설계 판단',exp:'중',tok:'100만~1,000만',reason:'신규 차트 화면, 디자인 가이드 없음'}),
+ R('REQ-0021','P3','조회 화면 엑셀 다운로드','하','중급','WBS 실적',[['DV','UI 개발','이개발',2.5],['TS','단위 테스트','이개발',0.5]],true,{reason:'공통 다운로드 모듈 재사용'}),
+ R('REQ-0024','P3','입고 지연 표시','하','초급','WBS 실적',[['DV','DB·SQL','정개발',2.0],['TS','단위 테스트','정개발',0.5]],false,{...CX,aiexp:'시범·개인 사용',cert:'AI 리터러시',reason:'조회 SQL 조건 추가'}),
+ R('REQ-0027','P3','대용량 다운로드 성능 개선','상','중급','WBS 실적',[['DV','성능 개선','이개발',3.5],['TS','통합·회귀 테스트','이개발',1.0]],true,{f2:'일부 가능',f3:'신규 설계 판단',exp:'하',reason:'실데이터 기반 튜닝이라 AI 검증이 어려움'}),
+ R('REQ-0071','P4','설비 코드 매핑 변경','하','중급','담당자 추정',[['DV','DB·SQL','박개발',1.0],['TS','단위 테스트','박개발',0.3],['DP','배포·이행','박개발',0.2]],true,{reason:'운영 SR 반복 유형'}),
+ R('REQ-0072','P4','일 마감 배치 오류 수정','중','고급','담당자 추정',[['DV','배치','최개발',1.0],['TS','통합·회귀 테스트','최개발',0.5],['OP','장애 분석·조치','최개발',0.5]],true,{f1:'일부 명확',exp:'중',reason:'오류 재현 데이터 필요'}),
+ R('REQ-0073','P4','조회 권한 추가','하','초급','담당자 추정',[['DV','백엔드 로직 수정','정개발',0.8],['DP','배포·이행','정개발',0.2]],false,{...CX,aiexp:'시범·개인 사용',cert:'AI 리터러시',reason:'권한 코드 추가 반복 유형'}),
+ R('REQ-0074','P4','알람 수신자 변경','하','초급','담당자 추정',[['DV','백엔드 로직 수정',ME,0.3],['DP','배포·이행',ME,0.2]],true,{reason:'설정성 변경'}),
+ R('REQ-0083','P5','리포트 요구사항 정의','중','고급','공수 산정서',[['AN','요구사항 분석·정의','한개발',2.0]],true,{...IN,f1:'일부 명확',exp:'중',reason:'기존 리포트 역분석',it:false}),
+ R('REQ-0081','P5','월 손익 리포트 화면 전환','중','중급','공수 산정서',[['DV','코드·플랫폼 전환','한개발',6.0]],false,{...IN,f3:'패턴 변형',exp:'중',reason:'화면 구조는 유지, 프레임워크만 전환'}),
+ R('REQ-0085','P5','리포트 단위 테스트 보강','하','초급','공수 산정서',[['TS','단위 테스트','한개발',1.5]],false,{...IN,reason:'테스트 코드 생성에 적합'}),
+ R('REQ-0092','P6','입고 데이터 보정','하','초급','담당자 추정',[['OP','데이터 조치','정개발',1.0]],true,{...CX,aiexp:'시범·개인 사용',cert:'AI 리터러시',reason:'데이터 보정 SQL 반복',it:false}),
+ R('REQ-0093','P6','라벨 출력 오류 수정','중','중급','담당자 추정',[['DV','백엔드 로직 수정','이개발',0.7],['TS','단위 테스트','이개발',0.3],['OP','장애 분석·조치','이개발',0.5]],true,{f1:'모호',f2:'일부 가능',exp:'하',reason:'재현 조건이 불명확'}),
+ R('REQ-0094','P6','출고 지연 알림 추가','하','초급','담당자 추정',[['DV','배치','정개발',0.8],['DP','배포·이행','정개발',0.2]],false,{...CX,aiexp:'시범·개인 사용',cert:'AI 리터러시',reason:'기존 알림 배치 복제'})];
+const req=id=>REQS.find(r=>r.id===id);
+const DEVS=['김개발','박개발','최개발','이개발','정개발','한개발'];
+const unitsOf=r=>r.stages.map(s=>({r,s,code:r.id+'-'+s.c}));
+const ALLU=REQS.flatMap(unitsOf);
+const UC=Object.fromEntries(ALLU.map(u=>[u.code,u]));
+const isOwner=(r,dev)=>r.stages.some(s=>s.owner===dev);
+const myUnits=(r,dev)=>unitsOf(r).filter(u=>u.s.owner===dev);
+const ownersOf=r=>[...new Set(r.stages.map(s=>s.owner))];
+const cname=c=>`${UC[c].r.name} · ${SN[UC[c].s.c]}`;
+const FIT_LV={명확:0,'일부 명확':1,모호:2,가능:0,'일부 가능':1,어려움:2,'패턴 반복':0,'패턴 변형':1,'신규 설계 판단':2};
+function fitGrade(r){const l=[['명세',FIT_LV[r.f1]],['맥락',FIT_LV[r.f2]],['생성',FIT_LV[r.f3]]];const mx=Math.max(...l.map(x=>x[1]));
+  if(mx===0)return'상';const b=l.filter(x=>x[1]===mx).map(x=>x[0]).join(', ');return`${mx===1?'중':'하'} (병목: ${b})`;}
+
+/* =================== 일별 공수 데이터 ===================
+   D[업무 코드 = 요구사항-SDLC단계] = { ai:[분 x10일, 배치 수집], add:[{작업 유형:시간} x10일], minus:[시간 x10일], memo }
+   투입 = (AI 수집 − 감소) + AI 도구 외 */
+const D={};
+const blank=()=>({ai:Array(10).fill(0),add:Array.from({length:10},()=>({})),minus:Array(10).fill(0),memo:Array(10).fill('')});
+ALLU.forEach(u=>D[u.code]=blank());
+function gen(code,idxs,aiH,addH,mix){const d=D[code];const n=idxs.length;let ra=aiH,rd=addH;
+  idxs.forEach((i,k)=>{const last=k===n-1;
+    const a=last?Math.max(0,ra):Math.round(aiH/n*2)/2;ra-=a;d.ai[i]+=Math.max(0,Math.round(a*60)+(last||!a?0:((i*13)%9)-4));
+    const ad=last?Math.max(0,rd):Math.round(addH/n*2)/2;rd-=ad;if(ad>0){const t=mix[k%mix.length];d.add[i][t]=q1((d.add[i][t]||0)+ad);}});}
+gen('REQ-0033-DV',[0,1,2,3],13,5,['A1','A3','A5']);gen('REQ-0033-TS',[4,5],4,2,['A2']);
+gen('REQ-0038-DS',[2,3],3,2,['A3','A4']);gen('REQ-0038-DV',[4,5,6,7],14,7,['A1','A6','A3']);gen('REQ-0038-TS',[8],4,3,['A2']);
+gen('REQ-0055-DV',[0,1,2,3,4],22,12,['A1','A5','A3','A1']);gen('REQ-0055-TS',[5,6],4,3.5,['A2','A5']);
+gen('REQ-0058-DS',[7,8],7,6,['A4','A3']);
+gen('REQ-0021-DV',[0,1,2],9,4,['A1','A3']);gen('REQ-0021-TS',[3],3,3,['A2']);
+gen('REQ-0027-DV',[4,5,6,7,8],24,10,['A1','A2','A6']);gen('REQ-0027-TS',[8],2,2.5,['A2']);
+gen('REQ-0071-DV',[6],4,2,['A6']);gen('REQ-0071-TS',[7],1,1,['A2']);gen('REQ-0071-DP',[8],.5,1,['A6']);
+gen('REQ-0072-OP',[2],1.5,1.5,['A3']);gen('REQ-0072-DV',[3,4],5,2,['A3','A1']);gen('REQ-0072-TS',[5],1.5,1.5,['A2']);
+gen('REQ-0083-AN',[0,1],6,3.5,['A5','A4']);
+gen('REQ-0024-DV',[3,4,5,6,7,8],10,4,['A1','A3']);
+gen('REQ-0073-DV',[7,8,9],3,1,['A6']);
+gen('REQ-0081-DV',[2,3,4,5,6,7,8,9],20,8,['A1','A1','A2']);
+gen('REQ-0060-DS',[5,6],8,3,['A4','A5']);gen('REQ-0060-DV',[7,8,9],15,4,['A1','A3']);
+gen('REQ-0092-OP',[5],1.5,0,['A6']);gen('REQ-0093-OP',[6],1,2,['A3','A5']);gen('REQ-0093-DV',[7],1,4,['A1','A5']);gen('REQ-0093-TS',[8],.5,2,['A2']);
+gen('REQ-0047-AN',[0,1],3,2,['A5','A4']);
+/* 나 (김개발): W45 */
+gen('REQ-0047-DV',[0,1,2,3,4],18,3,['A5','A3','A1']);gen('REQ-0051-DS',[2,3,4],6,2,['A4','A3']);
+gen('REQ-0012-DV',[0,1,2],6,2,['A1']);gen('REQ-0012-TS',[3],2,1,['A2']);gen('REQ-0074-DV',[1],2,.5,['A6']);gen('REQ-0074-DP',[2],.5,.5,['A6']);
+/* 나: W46 (텔레메트리 원값 · 분) */
+[['REQ-0047-DV',[210,165,240,90,60]],['REQ-0047-TS',[0,0,0,120,95]],['REQ-0051-DS',[60,30,0,0,0]],['REQ-0051-DV',[0,120,75,150,40]]]
+ .forEach(([c,a])=>a.forEach((m,k)=>D[c].ai[5+k]=m));
+D['REQ-0047-DV'].add[5]={A5:1};
+/* 시나리오 데이터 */
+D['REQ-0092-OP'].add[5]={A6:2,A3:1};                               /* 운영 SR: 데이터 조치 위주 */
+D['REQ-0024-DV'].ai[6]=0;D['REQ-0024-DV'].add[6]={A7:2.5,A1:.5};   /* AI 사용 미수집 (오프라인) */
+D['REQ-0081-DV'].minus[7]=1;                                       /* AI 실행 대기 중 자리 비움 */
+D['REQ-0058-DS'].ai[8]=0;D['REQ-0058-DS'].add[8]={A4:3,A3:2};      /* AI 없이 문서 · 검토만 */
+D['REQ-0033-DV'].add[3]={A8:1};D['REQ-0033-DV'].memo[3]='보안 점검 대응 자료 작성';D['REQ-0047-DV'].minus[6]=.5;D['REQ-0051-DV'].add[6]={A3:.5};
+/* 오늘(11/13)분 AI 사용은 내일 06:00 배치로 들어옴 → 지금은 0 · 오늘 미리 넣은 AI 도구 외 시간만 있음 */
+ALLU.forEach(u=>D[u.code].ai[TODAY]=0);
+D['REQ-0047-TS'].add[TODAY]={A5:.5};
+/* AI 비용 단가 (원/시간, 도구 · 모델 혼합 예시) */
+const RATE=u=>u.r.plan.startsWith('사내')?1500:10500+(u.code.charCodeAt(7)%5)*900;
+/* 확인 필요: 업무 코드 없이 잡힌 AI 사용 (배치 판정 결과) */
+let UNA=[
+ {id:1,dev:ME,d:7,min:70,t:'14:10 ~ 15:20',tool:'Claude Code',branch:'feature/REQ-0051-alarm',why:'poc 명령 없음 · 브랜치 요구사항(REQ-0051)에 측정 단계가 2개 (설계 · 개발)',rec:'REQ-0051-DV',cands:['REQ-0051-DS','REQ-0051-DV']},
+ {id:2,dev:ME,d:8,min:25,t:'09:10 ~ 09:35',tool:'Claude Code',branch:'feature/REQ-0047-recv',why:'같은 세션의 첫 poc 명령(09:35 · REQ-0047-DV) 이전 대화',rec:'REQ-0047-DV',cands:['REQ-0047-DV','REQ-0047-TS']},
+ {id:3,dev:ME,d:8,min:45,t:'10:05 ~ 10:50',tool:'Codex',branch:'main',why:'poc 명령 없음 · 브랜치 · 세션 제목에 요구사항 정보 없음',rec:null},
+ {id:4,dev:ME,d:6,min:30,t:'16:30 ~ 17:00',tool:'Claude Code',branch:'feature/REQ-0033-dup',why:'브랜치 요구사항(REQ-0033)이 다른 담당자(박개발) · 측정 완료',rec:null},
+ {id:5,dev:'정개발',d:7,min:25,t:'16:40 ~ 17:05',tool:'Codex',branch:'feature/REQ-0024-delay',why:'poc 명령 없음 · 브랜치 요구사항(REQ-0024)에 측정 단계가 2개 (개발 · 테스트)',rec:'REQ-0024-DV',cands:['REQ-0024-DV','REQ-0024-TS']},
+ {id:6,dev:'정개발',d:8,min:40,t:'13:30 ~ 14:10',tool:'Codex',branch:'main',why:'poc 명령 없음 · 요구사항 정보 없음',rec:null}];
+let EXCL=0;
+/* 일 확정: 개발자 × 요구사항 × 일자 */
+const k3=(d,r,i)=>`${d}|${r}|${i}`;
+const CONF=new Set(),EDIT=new Set(),EXTRA=new Set(),REVC=new Map();
+const UNCONF={'김개발':[7,8],'정개발':[7,8]};
+ALLU.forEach(u=>{for(let i=0;i<TODAY;i++){const d=D[u.code];if(d.ai[i]>0||Object.keys(d.add[i]).length||d.minus[i]>0){if((UNCONF[u.s.owner]||[]).includes(i))continue;CONF.add(k3(u.s.owner,u.r.id,i));}}});
+REVC.set(k3('김개발','REQ-0047',6),1);REVC.set(k3('박개발','REQ-0033',3),1);
+/* 결함 (통합 테스트 · 리뷰, 산식 협의 중) · 산출물 신뢰도 설문 */
+const DEF={'REQ-0033':0,'REQ-0038':1,'REQ-0012':0,'REQ-0055':1,'REQ-0021':0,'REQ-0027':1,'REQ-0071':0,'REQ-0072':0,'REQ-0074':0,'REQ-0093':0};
+const SURVEY={'REQ-0033':4.2,'REQ-0038':3.8,'REQ-0012':4.5,'REQ-0055':3.6,'REQ-0058':4.4,'REQ-0021':4.3,'REQ-0027':3.2,'REQ-0071':4.6,'REQ-0072':3.9,'REQ-0074':4.8,'REQ-0083':4.0,'REQ-0092':4.1,'REQ-0093':3.5};
+
+/* =================== 계산 =================== */
+const addSum=o=>sum(Object.values(o));
+function cell(code,i){const d=D[code];const ai=Math.round(d.ai[i]/6)/10;const add=q1(addSum(d.add[i]));const mn=Math.min(ai,d.minus[i]);const inT=q1(Math.max(0,ai-mn));return{ai,add,mn,inT,tot:q1(inT+add)};}
+function uStats(u,days=ALLD){let inT=0,out=0,cost=0,last=-1;const byType={};
+  days.forEach(i=>{const x=cell(u.code,i);inT+=x.inT;out+=x.add;cost+=x.ai*RATE(u);if(x.ai||x.add)last=i;Object.entries(D[u.code].add[i]).forEach(([t,h])=>byType[t]=(byType[t]||0)+h);});
+  const tot=inT+out,md=tot/8,price=PRICE[u.r.grade];
+  return{inT,out,tot,md,base:u.s.base,cost,baseCost:u.s.base*price,labor:md*price,byType,last};}
+function aggU(units){const S=units.map(u=>uStats(u));
+  const o={n:new Set(units.map(u=>u.r.id)).size,base:sum(S,x=>x.base),md:sum(S,x=>x.md),inT:sum(S,x=>x.inT),tot:sum(S,x=>x.tot),bc:sum(S,x=>x.baseCost),lc:sum(S,x=>x.labor),ai:sum(S,x=>x.cost),byType:{}};
+  S.forEach(x=>Object.entries(x.byType).forEach(([t,h])=>o.byType[t]=(o.byType[t]||0)+h));
+  o.out=o.tot-o.inT;o.tc=o.lc+o.ai;o.save=o.base?(o.base-o.md)/o.base:NaN;o.net=o.bc?(o.bc-o.lc-o.ai)/o.bc:NaN;o.use=o.tot?o.inT/o.tot:NaN;return o;}
+const agg=list=>aggU(list.flatMap(unitsOf));
+const reqStats=r=>aggU(unitsOf(r));
+const ST_NAME={done:'완료',ing:'진행 중',wait:'대기'};
+function stageSt(r,s){if(r.done)return'done';const us=unitsOf(r).map(u=>({u,st:uStats(u)}));const me=us.find(x=>x.u.s===s);
+  if(me.st.last<0)return'wait';const mx=Math.max(...us.map(x=>x.st.last));return me.st.last>=mx-1?'ing':'done';}  /* 최근 활동일 기준 추정 · 실제로는 관리자 · 담당자가 단계 완료 지정 */
+function status(r){if(r.done)return'완료';return reqStats(r).tot>0?'측정중':'대기';}
+const stLabel={대기:'측정 대기',측정중:'측정 중',완료:'측정 완료'};
+const stChip=s=>`<span class="ms-st ${s}"><i></i>${stLabel[s]}</span>`;
+const canSee=r=>role==='admin'||isOwner(r,ME);
+/* 확정 행 상태 */
+function rowHas(dev,r,i){if(EXTRA.has(k3(dev,r.id,i)))return true;return myUnits(r,dev).some(u=>{const d=D[u.code];return d.ai[i]>0||Object.keys(d.add[i]).length>0||d.minus[i]>0;});}
+function rowSt(dev,r,i){const key=k3(dev,r.id,i);
+  if(i===TODAY)return(!r.done||rowHas(dev,r,i))?'today':null;
+  if(CONF.has(key))return'conf';if(EDIT.has(key))return'edit';return rowHas(dev,r,i)?'need':null;}
+const needDays=(dev,r)=>ALLD.filter(i=>i<TODAY&&['need','edit'].includes(rowSt(dev,r,i)));
+const needOf=(dev,r)=>dev?needDays(dev,r).length:sum(ownersOf(r),o=>needDays(o,r).length);
+const myUna=dev=>UNA.filter(u=>!dev||u.dev===dev);
+function badgeN(){return sum(REQS.filter(r=>isOwner(r,ME)),r=>needDays(ME,r).length)+myUna(ME).length;}
+/* SDLC 측정 구간 바 */
+function sdlcBar(r,dev){
+  return`<div class="sbar">${SC.map(c=>{const s=r.stages.find(x=>x.c===c);
+    if(!s)return`<i class="off" data-tip="${SN[c]} · 측정 대상 아님"></i>`;const ss=stageSt(r,s);
+    return`<i class="${ss} ${dev&&s.owner!==dev?'oth':''}" data-tip="${SN[c]} · ${esc(s.wt)}\n담당 ${s.owner} · 기준 ${f1(s.base)} M/D · ${ST_NAME[ss]}"></i>`;}).join('')}</div>`;}
+const sdlcCap=r=>r.stages.map(s=>`<b>${SN[s.c]}</b> ${esc(s.wt)}`).join(' · ');
+const saxis=`<div class="saxis">${SDLC.map(x=>`<span>${x[1]}</span>`).join('')}</div>`;
+const sleg=`<div class="sleg"><span><i style="background:var(--good)"></i>완료</span><span><i style="background:var(--warn)"></i>진행 중</span><span><i style="background:color-mix(in srgb,var(--accent) 38%,var(--surface))"></i>대기</span><span><i style="border:1px dashed var(--line)"></i>측정 대상 아님</span></div>`;
+
+
+/* =================== 1. PoC 과제 현황 (과제 정보 · 진척 우선) =================== */
+const AXTEAM={P1:'AX MES개발1팀',P2:'AX MES개발2팀',P3:'AX 물류DX팀',P4:'AX MES운영팀',P5:'AX 경영DX팀',P6:'AX 물류DX팀'};
+PROJECTS.forEach(p=>{p.axTeam=AXTEAM[p.id]||'';});
+const ST1={kind:'',st:'',dept:'',q:'',coll:new Set(['g']),pc:new Set()};
+const BANDS=[['p','① 과제'],['r','② 요구사항 규모'],['g','SDLC 단계별 상세 (업무 유형 · 기준 · 담당)']];
+const sCell=(r,c)=>{const s=r.stages.find(x=>x.c===c);if(!s)return'<span class="na">·</span>';const ss=stageSt(r,s);
+  return`<div class="scell"><b>${esc(s.wt)}${WT_NEW.has(s.wt)?'<sup class="new" data-tip="양식에 없는 업무 유형 · 추가 제안">추가</sup>':''}</b><span>${f1(s.base)} M/D · ${s.owner}</span><span class="sst ${ss}">${ST_NAME[ss]}</span></div>`;};
+const COLS={
+ p:[['','구분',null,p=>`<span class="kind ${p.kind}">${p.kind}</span>`],['PRJ-02','대상 시스템명',null,p=>esc(p.sys)],['추가','SK AX 소속팀',null,p=>esc(p.axTeam)],['PRJ-03','하이닉스 담당',null,p=>p.dept],['PRJ-04','하이닉스 시스템 담당팀',null,p=>esc(p.team)],['PRJ-05','작성자 (PM)',null,p=>p.pm],
+   ['PRJ-06','시스템 등급',null,p=>p.grade],['PRJ-07','배포 형식',null,p=>p.deploy],['PRJ-08','과제 영역',null,p=>p.area],['PRJ-09','기존 WBS 실적',null,p=>p.wbs],['PRJ-10','버전관리 도구',null,p=>p.vcs],['PRJ-11','작업관리 도구',null,p=>p.pms]],
+ r:[['REQ-04','구현 난이도',r=>r.diff],['REQ-05','필요 개발자 등급',r=>r.grade],['REQ-06','기준 공수 (M/D)',r=>`<span class="num">${f1(r.base)}</span>`],['REQ-07','공수 출처',r=>r.src]],
+ g:SC.map(c=>[`REQ-03 · ${c}`,SN[c],r=>sCell(r,c),p=>{const n=REQS.filter(r=>r.pid===p.id&&r.stages.some(s=>s.c===c)&&canSee(r)).length;return n?`<span class="small muted">요구사항 ${n}</span>`:'<span class="na">·</span>';}])};
+function renderStatus(){
+  const mine=REQS.filter(canSee);
+  const rows=mine.filter(r=>{const p=prj(r.pid);return(!ST1.kind||p.kind===ST1.kind)&&(!ST1.st||status(r)===ST1.st)&&(!ST1.dept||p.dept===ST1.dept)
+    &&(!ST1.q||(r.name+r.id+p.name+p.sys+p.axTeam+p.team+r.people+r.stages.map(s=>s.wt).join('')).toLowerCase().includes(ST1.q.toLowerCase()));});
+  const cnt=s=>mine.filter(r=>status(r)===s).length;
+  const vis=b=>!ST1.coll.has(b);
+  let band=`<th class="stk s1 band-m" rowspan="2">No</th><th class="stk s2 band-m">과제 · 요구사항 · 진척</th><th class="stk s3 band-m">SDLC 측정 구간</th>`;
+  let cols=`<th class="stk s2 band-m">과제명 → 요구사항 · 투입 / 기준 M/D</th><th class="stk s3 band-m">${saxis}</th>`;
+  BANDS.forEach(([b,n])=>{const cs=COLS[b];
+    if(!vis(b)){band+=`<th class="bandh coll ${b==='g'?'wide':''}" data-band="${b}" data-tip="${n} 펼치기" rowspan="2">▸<br>${b==='g'?'SDLC<br>상세':n.replace(/^[①②]\s*/,'').slice(0,2)}</th>`;return;}
+    band+=`<th class="bandh ${b==='g'?'bg-g':''}" data-band="${b}" colspan="${cs.length}" data-tip="접기">${n} ◂</th>`;
+    cs.forEach(c=>cols+=`<th class="${b==='g'?'bg-g':'nowrap'}"><span class="id">${c[0]||'&nbsp;'}</span>${c[1]}${c[0]==='추가'?'':''}</th>`);});
+  const pids=[...new Set(rows.map(r=>r.pid))];let n=0;
+  const body=pids.map((pid,pi)=>{const p=prj(pid);const rs=rows.filter(r=>r.pid===pid);const all=mine.filter(r=>r.pid===pid);const cl=ST1.pc.has(pid);
+    const A=agg(all),done=all.filter(r=>r.done).length;
+    const ubar=`<div class="sbar">${SC.map(c=>{const k=all.filter(r=>r.stages.some(s=>s.c===c)).length;return k?`<i class="prj" data-tip="${SN[c]} · 요구사항 ${k}건"></i>`:`<i class="off" data-tip="${SN[c]} · 측정 대상 없음"></i>`;}).join('')}</div>`;
+    let g=`<tr class="grp"><td class="stk s1 num">${String.fromCharCode(65+pi)}</td><td class="stk s2" data-pc="${pid}" data-tip="${cl?'요구사항 펼치기':'요구사항 접기'}"><div>${cl?'▸':'▾'} ${esc(p.name)} <span class="kind ${p.kind}">${p.kind}</span></div>
+      <div class="gprog"><span class="xs muted">완료 ${done}/${all.length}</span><div class="hbar" data-tip="과제 투입 ${f1(A.md)} / 기준 ${f1(A.base)} M/D"><i style="width:${Math.min(100,A.md/A.base*100)}%;background:var(--accent)"></i></div><span class="xs num">${f1(A.md)} / ${f1(A.base)}</span></div></td><td class="stk s3">${ubar}</td>`;
+    BANDS.forEach(([b])=>{if(!vis(b)){g+=`<td class="coll" data-band="${b}">…</td>`;return;}COLS[b].forEach(c=>g+=`<td>${c[3]?c[3](p):''}</td>`);});
+    g+='</tr>';
+    if(cl)return g;
+    return g+rs.map(r=>{n++;const st=status(r),s=reqStats(r);
+      const head=`<div class="small" style="margin-bottom:3px"><span class="xs muted mono">${r.id}</span> <b>${esc(r.name)}</b>${r.reg==='화면'?' <span class="pill accent" data-tip="화면에서 등록">신규</span>':''}</div>`;
+      const prog=`<div class="prog">${stChip(st)}<div class="hbar" data-tip="투입 ${f1(s.md)} / 기준 ${f1(r.base)} M/D"><i style="width:${Math.min(100,s.md/r.base*100)}%;background:${st==='완료'?'var(--good)':'var(--warn)'}"></i></div><span class="xs muted num">${f1(s.md)} / ${f1(r.base)} M/D</span></div>`;
+      let tds=`<td class="stk s1 num">${n}</td><td class="stk s2">${head}${prog}</td><td class="stk s3">${sdlcBar(r)}<div class="scap">${sdlcCap(r)}</div></td>`;
+      BANDS.forEach(([b])=>{if(!vis(b)){tds+=`<td class="coll" data-band="${b}">…</td>`;return;}
+        COLS[b].forEach(c=>tds+=b==='p'?`<td class="dot">·</td>`:`<td>${c[2](r)}</td>`);});
+      return`<tr class="rq">${tds}</tr>`;}).join('');}).join('');
+  const dev=role==='dev';
+  return`<div class="head"><h2>PoC 과제 현황</h2>
+    <div class="acts">${dev?'<span class="small muted">내 담당 요구사항이 있는 과제만 표시</span>':''}<button class="btn primary" id="regOpen">＋ 기준정보 입력</button><button class="btn" id="upXls">양식 올리기 (xlsx)</button><button class="btn" id="dnXls">양식 내려받기</button></div></div>
+  <div class="kp" id="kp">
+    <button data-st="" aria-pressed="${!ST1.st}"><b>${mine.length}</b><span>요구사항 · 과제 ${new Set(mine.map(r=>r.pid)).size}</span></button>
+    <button data-st="완료" aria-pressed="${ST1.st==='완료'}"><b class="ok">${cnt('완료')}</b><span>측정 완료</span></button>
+    <button data-st="측정중" aria-pressed="${ST1.st==='측정중'}"><b class="wn">${cnt('측정중')}</b><span>측정 중</span></button>
+    <button data-st="대기" aria-pressed="${ST1.st==='대기'}"><b>${cnt('대기')}</b><span>측정 대기</span></button>
+  </div>
+  <div class="filters">
+    <span class="fl">구분</span><div class="seg" id="s1Kind">${['','개발','운영'].map(k=>`<button data-k="${k}" aria-pressed="${ST1.kind===k}">${k||'전체'}</button>`).join('')}</div>
+    <label class="fl">하이닉스 담당 <select id="s1Dept"><option value="">전체</option>${['MES','MIS'].map(d=>`<option ${ST1.dept===d?'selected':''}>${d}</option>`).join('')}</select></label>
+    <input type="text" id="s1Q" placeholder="과제 · 시스템 · 팀 · 요구사항 검색" value="${esc(ST1.q)}" style="width:220px">
+    <span style="margin-left:auto">${sleg}</span>
+  </div>
+  <div class="tw" style="max-height:calc(100vh - 262px);background:var(--surface)"><table class="board"><thead><tr class="band">${band}</tr><tr class="cols">${cols}</tr></thead><tbody>${body||`<tr><td colspan="50" class="muted">조건에 맞는 요구사항이 없습니다.</td></tr>`}</tbody></table></div>
+  <p class="xs muted">과제 행을 누르면 요구사항을 접고 펼칩니다 · 열 묶음 제목을 누르면 접힘 · SDLC 단계별 상세는 맨 뒤 (기본 접힘) · AI 적용 계획 · 적합도 · 참여 인력은 기준정보 입력과 Master data 추출에서 확인</p>`;
+}
+function bindStatus(){
+  $('#kp').onclick=e=>{const b=e.target.closest('button');if(!b)return;ST1.st=b.dataset.st;render();};
+  $('#s1Kind').onclick=e=>{const b=e.target.closest('button');if(!b)return;ST1.kind=b.dataset.k;render();};
+  $('#s1Dept').onchange=e=>{ST1.dept=e.target.value;render();};
+  const q=$('#s1Q');q.oninput=()=>{ST1.q=q.value;const pos=q.selectionStart;render();const n=$('#s1Q');n.focus();n.setSelectionRange(pos,pos);};
+  $$('.board [data-band]').forEach(el=>el.onclick=()=>{const b=el.dataset.band;ST1.coll.has(b)?ST1.coll.delete(b):ST1.coll.add(b);render();});
+  $$('.board [data-pc]').forEach(el=>el.onclick=()=>{const p=el.dataset.pc;ST1.pc.has(p)?ST1.pc.delete(p):ST1.pc.add(p);render();});
+  $('#dnXls').onclick=()=>toast('PoC 과제 선정 양식 v3.3 (SDLC 단계 시트 · SK AX 소속팀 열 추가본)을 내려받습니다. (목업)');
+  $('#regOpen').onclick=()=>openReg();
+  $('#upXls').onclick=()=>modal(`<h3>양식 올리기</h3>
+    <div class="tw"><table><tbody>
+      <tr><td>파일</td><td class="mono small">AI_PoC_과제선정_v3.3.xlsx</td></tr>
+      <tr><td>과제 · 요구사항 · SDLC 단계</td><td class="num">${role==='dev'?'1 과제 · 2 요구사항 · 3 단계 (내 담당)':`${PROJECTS.length} 과제 · ${REQS.length} 요구사항 · ${ALLU.length} 단계 (변경 2 · 추가 0)`}</td></tr>
+      <tr><td>필수 입력 완료율</td><td><span class="pill good">100%</span></td></tr>
+      <tr><td>단계 기준 공수 합 = REQ-06</td><td><span class="pill good">모두 일치</span></td></tr>
+      <tr><td>선택값 (드롭다운) 검사</td><td><span class="pill good">코드값과 일치</span></td></tr></tbody></table></div>
+    <p class="small muted">${role==='dev'?'개발자가 올린 기준정보는 본인이 담당하는 단계만 반영되고, 관리자 화면 기준정보 변경 이력에 남습니다.':'측정이 시작된 단계의 기준 공수 · 담당자가 바뀌면 사유를 남겨야 반영됩니다.'} 보안 정책상 업로드가 막히면 「기준정보 입력」에서 직접 등록합니다.</p>
+    <div class="acts"><button class="btn primary" id="upOk">반영</button><button class="btn" data-close>취소</button></div>`,m=>m.querySelector('#upOk').onclick=()=>{closeModal();REGLOG.unshift({at:'11/13 16:2x',who:role==='dev'?ME:'관리자',what:'양식 업로드 반영',n:role==='dev'?3:ALLU.length});toast('기준정보를 반영했습니다.');render();});
+}
+
+/* =================== 기준정보 입력 (행 추가 · 드롭다운) =================== */
+let REGLOG=[{at:'10/30 17:40',who:'관리자',what:'양식 업로드 반영 (최초)',n:43},{at:'11/04 09:12',who:'박개발',what:'REQ-0047 분석 단계 담당 변경 (김개발 → 박개발)',n:1}];
+const OPT={kind:['개발','운영'],dept:['MES','MIS','기타'],grade:['L0','L1','L2','L3','L4','미확인'],deploy:['Web — On-Premise','Web — Cloud','C/S — 설치형','Mobile','서버 전용 (UI 없음)','설비·Embedded','복합'],
+  area:['신규 구축','기능 개선','전환','재구축 (차세대)','혼합'],wbs:['있음','없음'],vcs:['Bitbucket','GitHub','GitLab','Azure Repos','SVN','기타','없음'],pms:['Jira','Redmine','Azure Boards','사내 작업관리 시스템','엑셀·문서','기타','없음'],
+  diff:['상','중','하'],dgrade:['특급','고급','중급','초급'],src:['WBS 실적','공수 산정서','담당자 추정']};
+const sel=(name,opts,val,attrs='')=>`<select data-f="${name}" ${attrs}><option value="">선택</option>${opts.map(o=>`<option ${o===val?'selected':''}>${esc(o)}</option>`).join('')}</select>`;
+let REG=null;
+function blankReqRow(){return{pid:REG.lastPid||'',id:'',name:'',sdlc:'',wt:'',base:'',owner:role==='dev'?ME:'',diff:'',grade:'',src:''};}
+function openReg(){
+  REG={tab:'req',rows:[],prj:[],lastPid:''};REG.rows=[blankReqRow(),blankReqRow(),blankReqRow()];REG.prj=[{name:'',kind:'',sys:'',axTeam:'',dept:'',team:'',pm:'',grade:'',deploy:'',area:'',wbs:'',vcs:'',pms:''}];
+  modal('<div id="regBox"></div>',m=>{m.classList.add('xwide');drawReg(m);});
+}
+function pidOpts(){const ps=PROJECTS.filter(p=>role==='admin'||REQS.some(r=>r.pid===p.id&&isOwner(r,ME))||p.newBy===ME);return ps;}
+function drawReg(m){
+  const box=m.querySelector('#regBox');const dev=role==='dev';
+  const reqRows=REG.rows.map((r,i)=>`<tr data-i="${i}">
+    <td class="num xs muted">${i+1}</td>
+    <td><select data-f="pid"><option value="">과제 선택</option>${pidOpts().map(p=>`<option value="${p.id}" ${p.id===r.pid?'selected':''}>${esc(p.name)}</option>`).join('')}</select></td>
+    <td><input type="text" data-f="id" value="${esc(r.id)}" placeholder="REQ-0000" style="width:96px"></td>
+    <td><input type="text" data-f="name" value="${esc(r.name)}" placeholder="요구사항명" style="width:160px"></td>
+    <td>${sel('sdlc',SDLC.map(x=>x[1]),r.sdlc?SN[r.sdlc]:'')}</td>
+    <td>${sel('wt',r.sdlc?WT[r.sdlc]:[],r.wt,r.sdlc?'':'disabled')}</td>
+    <td><input type="number" step="0.1" min="0" data-f="base" value="${r.base}" placeholder="0.0" style="width:64px"></td>
+    <td>${dev?`<span class="small">${ME}</span>`:sel('owner',DEVS,r.owner)}</td>
+    <td>${sel('diff',OPT.diff,r.diff)}</td><td>${sel('grade',OPT.dgrade,r.grade)}</td><td>${sel('src',OPT.src,r.src)}</td>
+    <td class="nowrap"><button class="btn sm ghost" data-dup="${i}" data-tip="아래에 복제 (다른 단계 입력용)">복제</button><button class="btn sm ghost" data-del="${i}" aria-label="행 삭제">✕</button></td></tr>`).join('');
+  const prjRows=REG.prj.map((p,i)=>`<tr data-i="${i}">
+    <td class="num xs muted">${i+1}</td>
+    <td><input type="text" data-f="name" value="${esc(p.name)}" placeholder="과제명" style="width:150px"></td>
+    <td>${sel('kind',OPT.kind,p.kind)}</td>
+    <td><input type="text" data-f="sys" value="${esc(p.sys)}" placeholder="대상 시스템" style="width:100px"></td>
+    <td><input type="text" data-f="axTeam" value="${esc(p.axTeam)}" placeholder="AX 팀" style="width:100px"></td>
+    <td>${sel('dept',OPT.dept,p.dept)}</td>
+    <td><input type="text" data-f="team" value="${esc(p.team)}" placeholder="하이닉스 팀" style="width:100px"></td>
+    <td><input type="text" data-f="pm" value="${esc(p.pm)}" placeholder="PM" style="width:70px"></td>
+    <td>${sel('grade',OPT.grade,p.grade)}</td><td>${sel('deploy',OPT.deploy,p.deploy)}</td><td>${sel('area',OPT.area,p.area)}</td>
+    <td>${sel('wbs',OPT.wbs,p.wbs)}</td><td>${sel('vcs',OPT.vcs,p.vcs)}</td><td>${sel('pms',OPT.pms,p.pms)}</td>
+    <td><button class="btn sm ghost" data-pdel="${i}" aria-label="행 삭제">✕</button></td></tr>`).join('');
+  box.innerHTML=`<div class="panel-h"><h3>기준정보 입력</h3><div class="seg" id="regTab"><button data-t="req" aria-pressed="${REG.tab==='req'}">요구사항 · SDLC 단계</button><button data-t="prj" aria-pressed="${REG.tab==='prj'}">과제</button></div></div>
+  <p class="small muted">${REG.tab==='req'?'한 줄 = 요구사항 × SDLC 단계. 같은 요구사항의 단계가 여러 개면 「복제」로 줄을 늘려 단계만 바꿉니다. 선택값은 과제 선정 양식 코드값과 같습니다.':'과제를 먼저 등록하면 요구사항 줄의 과제 목록에 나타납니다.'}${dev?' 개발자는 본인 담당 단계만 등록할 수 있고, 등록 내역은 관리자에게 이력으로 남습니다.':''}</p>
+  <div class="tw regw">${REG.tab==='req'?`<table class="reg"><thead><tr><th>#</th><th>과제</th><th>요구사항 ID</th><th>요구사항명</th><th>SDLC 단계</th><th>업무 유형</th><th>단계 기준 M/D</th><th>담당</th><th>난이도</th><th>필요 등급</th><th>공수 출처</th><th></th></tr></thead><tbody>${reqRows}</tbody></table>`
+    :`<table class="reg"><thead><tr><th>#</th><th>과제명</th><th>구분</th><th>대상 시스템</th><th>SK AX 소속팀</th><th>하이닉스 담당</th><th>하이닉스 시스템 담당팀</th><th>PM</th><th>시스템 등급</th><th>배포 형식</th><th>과제 영역</th><th>WBS 실적</th><th>버전관리</th><th>작업관리</th><th></th></tr></thead><tbody>${prjRows}</tbody></table>`}</div>
+  <div class="acts"><button class="btn" id="regAdd">＋ 행 추가</button><button class="btn" id="regAdd5">＋ 5행</button><span class="small ng" id="regErr" style="flex:1"></span><button class="btn primary" id="regSave">저장</button><button class="btn" data-close>닫기</button></div>`;
+  const list=REG.tab==='req'?REG.rows:REG.prj;
+  box.querySelector('#regTab').onclick=e=>{const b=e.target.closest('button');if(!b)return;REG.tab=b.dataset.t;drawReg(m);};
+  box.querySelectorAll('[data-f]').forEach(el=>{const tr=el.closest('tr');const i=+tr.dataset.i;const f=el.dataset.f;
+    el.onchange=el.oninput=()=>{let v=el.value;const row=list[i];
+      if(f==='sdlc'){const c=SDLC.find(x=>x[1]===v);row.sdlc=c?c[0]:'';row.wt='';drawReg(m);return;}
+      if(f==='pid'){row.pid=v;REG.lastPid=v;return;}
+      row[f]=v;};});
+  box.querySelector('#regAdd').onclick=()=>{list.push(REG.tab==='req'?blankReqRow():{name:'',kind:'',sys:'',axTeam:'',dept:'',team:'',pm:'',grade:'',deploy:'',area:'',wbs:'',vcs:'',pms:''});drawReg(m);};
+  box.querySelector('#regAdd5').onclick=()=>{for(let k=0;k<5;k++)list.push(REG.tab==='req'?blankReqRow():{name:'',kind:'',sys:'',axTeam:'',dept:'',team:'',pm:'',grade:'',deploy:'',area:'',wbs:'',vcs:'',pms:''});drawReg(m);};
+  box.querySelectorAll('[data-dup]').forEach(b=>b.onclick=()=>{const i=+b.dataset.dup;const c={...REG.rows[i],sdlc:'',wt:'',base:''};REG.rows.splice(i+1,0,c);drawReg(m);});
+  box.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{REG.rows.splice(+b.dataset.del,1);if(!REG.rows.length)REG.rows.push(blankReqRow());drawReg(m);});
+  box.querySelectorAll('[data-pdel]').forEach(b=>b.onclick=()=>{REG.prj.splice(+b.dataset.pdel,1);drawReg(m);});
+  box.querySelector('#regSave').onclick=()=>saveReg(m);
+}
+function saveReg(m){
+  const err=t=>{m.querySelector('#regErr').textContent=t;};
+  if(REG.tab==='prj'){
+    const ps=REG.prj.filter(p=>p.name.trim());if(!ps.length)return err('과제명을 넣어 주세요.');
+    const bad=ps.find(p=>!p.kind||!p.sys||!p.axTeam||!p.dept||!p.team||!p.grade||!p.deploy||!p.area);if(bad)return err(`「${bad.name}」 필수 칸(구분 · 시스템 · 소속팀 · 담당 · 등급 · 배포 · 영역)이 비었습니다.`);
+    ps.forEach(p=>{const id='P'+(PROJECTS.length+1);PROJECTS.push({id,name:p.name.trim(),sys:p.sys,dept:p.dept,team:p.team,pm:p.pm||'-',grade:p.grade,deploy:p.deploy,area:p.area,wbs:p.wbs||'없음',vcs:p.vcs||'없음',pms:p.pms||'없음',kind:p.kind,axTeam:p.axTeam,newBy:role==='dev'?ME:'관리자'});});
+    REGLOG.unshift({at:'11/13 16:2x',who:role==='dev'?ME:'관리자',what:`과제 ${ps.length}건 등록 (${ps.map(p=>p.name).join(', ')})`,n:ps.length});
+    REG.prj=[{name:'',kind:'',sys:'',axTeam:'',dept:'',team:'',pm:'',grade:'',deploy:'',area:'',wbs:'',vcs:'',pms:''}];REG.tab='req';toast(`과제 ${ps.length}건을 등록했습니다. 이제 요구사항 줄에서 고를 수 있습니다.`);drawReg(m);return;}
+  const rs=REG.rows.filter(r=>r.id.trim()||r.name.trim()||r.sdlc);if(!rs.length)return err('입력한 줄이 없습니다.');
+  for(const[k,r]of rs.entries()){const no=REG.rows.indexOf(r)+1;
+    if(!r.pid||!r.id.trim()||!r.name.trim()||!r.sdlc||!r.wt||!(parseFloat(r.base)>0)||!r.owner||!r.diff||!r.grade||!r.src)return err(`${no}번 줄: 필수 칸이 비었습니다.`);
+    if(!/^REQ-\d{4}$/i.test(r.id.trim()))return err(`${no}번 줄: 요구사항 ID는 REQ-0000 형식입니다.`);
+    const ex=req(r.id.trim().toUpperCase());if(ex&&ex.stages.some(s=>s.c===r.sdlc))return err(`${no}번 줄: ${ex.id} ${SN[r.sdlc]} 단계는 이미 있습니다.`);}
+  const keys=rs.map(r=>r.id.trim().toUpperCase()+'-'+r.sdlc);if(new Set(keys).size!==keys.length)return err('같은 요구사항 · 단계 줄이 두 번 있습니다.');
+  const byReq={};rs.forEach(r=>{const id=r.id.trim().toUpperCase();(byReq[id]=byReq[id]||[]).push(r);});
+  let nReq=0,nSt=0;
+  Object.entries(byReq).forEach(([id,list])=>{const f=list[0];let r=req(id);
+    if(!r){r=R(id,f.pid,f.name.trim(),f.diff,f.grade,f.src,list.map(x=>[x.sdlc,x.wt,x.owner,q1(parseFloat(x.base))]),false,{reg:'화면'});r.stages.sort((a,b)=>SC.indexOf(a.c)-SC.indexOf(b.c));REQS.push(r);nReq++;}
+    else{list.forEach(x=>r.stages.push({c:x.sdlc,wt:x.wt,owner:x.owner,base:q1(parseFloat(x.base))}));r.stages.sort((a,b)=>SC.indexOf(a.c)-SC.indexOf(b.c));r.base=q1(sum(r.stages,s=>s.base));}
+    list.forEach(x=>{const code=id+'-'+x.sdlc;const u={r,s:r.stages.find(s=>s.c===x.sdlc),code};ALLU.push(u);UC[code]=u;D[code]=blank();nSt++;});});
+  REGLOG.unshift({at:'11/13 16:2x',who:role==='dev'?ME:'관리자',what:`요구사항 ${Object.keys(byReq).join(', ')} · SDLC 단계 ${nSt}개 등록`,n:nSt});
+  closeModal();toast(`요구사항 ${Object.keys(byReq).length}건 · SDLC 단계 ${nSt}개를 등록했습니다. 측정 대기로 표시됩니다.`);render();
+}
+
+/* =================== 2. 투입 공수 (입력 · 실적) =================== */
+const ST2={dev:'',prj:'',f:new Set(['need','ing']),sel:new Set(),una:false,hist:new Set()};
+const effDev=()=>role==='dev'?ME:ST2.dev;
+function effBase(){const dev=effDev();return REQS.filter(r=>(dev?isOwner(r,dev):true)&&(!ST2.prj||(ST2.prj==='개발'||ST2.prj==='운영'?prj(r.pid).kind===ST2.prj:r.pid===ST2.prj)));}
+const FKEYS=[['need','확정 필요'],['ing','측정 중'],['done','측정 완료'],['wait','측정 대기']];
+function fHit(r,k){const st=status(r);return k==='need'?needOf(effDev(),r)>0:k==='ing'?st==='측정중':k==='done'?st==='완료':st==='대기';}
+const passF=r=>[...ST2.f].some(k=>fHit(r,k));
+function reqCard(r,dev){const p=prj(r.pid);const need=needOf(dev,r);const st=status(r);const s=reqStats(r);const sel=ST2.sel.has(r.id);
+  return`<div class="rc ${sel?'sel':''}" data-rc="${r.id}" role="button" tabindex="0" aria-pressed="${sel}">
+    <input type="checkbox" data-mc="${r.id}" ${sel?'checked':''} aria-label="${esc(r.name)} 함께 보기" data-tip="체크하면 여러 요구사항을 함께 봅니다">
+    <div class="rcb"><div class="xs muted">${esc(p.name)} <span class="kind ${p.kind}">${p.kind}</span>${!dev?` · ${ownersOf(r).join(', ')}`:''}</div>
+      <div class="rcn"><b>${esc(r.name)}</b> <span class="xs muted mono">${r.id}</span></div>
+      ${sdlcBar(r,dev)}
+      <div class="rcm">${stChip(st)}${need?`<span class="pill warn">확정 필요 ${need}일</span>`:''}<span class="xs muted num" style="margin-left:auto">${f1(s.md)} / ${f1(r.base)} M/D</span></div></div></div>`;}
+function renderEffort(){
+  const dev=effDev(),ro=role!=='dev';
+  const base=effBase(),list=base.filter(passF),una=myUna(dev);
+  [...ST2.sel].forEach(id=>{if(!base.some(r=>r.id===id))ST2.sel.delete(id);});
+  if(!ST2.sel.size&&!ST2.una&&list.length){const f=list.find(r=>needOf(dev,r)>0)||list[0];ST2.sel.add(f.id);}
+  const prjOpts=PROJECTS.filter(p=>REQS.some(r=>r.pid===p.id&&(dev?isOwner(r,dev):true)));
+  const left=`<aside class="lp" aria-label="요구사항 목록">
+    <div class="box">
+      ${role==='admin'?`<label class="fl">담당자 <select id="e2Dev"><option value="">전체</option>${DEVS.map(d=>`<option ${ST2.dev===d?'selected':''}>${d}</option>`).join('')}</select><span class="pill neutral">조회 전용</span></label>`:''}
+      <label class="fl">과제 <select id="e2Prj" style="flex:1;min-width:0"><option value="">전체</option><option value="개발" ${ST2.prj==='개발'?'selected':''}>개발 과제 전체</option><option value="운영" ${ST2.prj==='운영'?'selected':''}>운영 과제 전체</option>
+        ${prjOpts.map(p=>`<option value="${p.id}" ${ST2.prj===p.id?'selected':''}>${esc(p.name)} · ${p.kind}</option>`).join('')}</select></label>
+      <div class="cks">${FKEYS.map(([k,l])=>`<label><input type="checkbox" data-fk="${k}" ${ST2.f.has(k)?'checked':''}>${l} <span class="num">${base.filter(r=>fHit(r,k)).length}</span></label>`).join('')}</div>
+    </div>
+    ${una.length?`<button class="chk ${ST2.una?'on':''}" id="e2Una" aria-expanded="${ST2.una}"><b>확인 필요 · 업무 코드 없이 잡힌 AI 사용 ${una.length}건 · ${h1(sum(una,u=>u.min)/60)}h</b><span class="small">${ro?'개발자가 요구사항에 배정하거나 업무 외로 표시해야 합니다':'요구사항 · 단계에 배정하거나 업무 외 사용으로 표시해 주세요'}</span></button>`
+      :`<div class="chk none"><b>확인 필요 없음</b><span class="small muted">업무 코드 없이 잡힌 AI 사용이 없습니다${EXCL?` · 업무 외 표시 ${EXCL}건`:''}</span></div>`}
+    <div class="small muted" style="display:flex;justify-content:space-between;gap:6px"><span>${dev?`${dev} 담당`:'전체'} 요구사항 ${list.length}건</span><span>☐ 체크 = 함께 보기</span></div>
+    <div class="list">${list.map(r=>reqCard(r,dev)).join('')||'<p class="muted small">조건에 맞는 요구사항이 없습니다. 위 체크를 바꿔 보세요.</p>'}</div>
+  </aside>`;
+  const panels=[...ST2.sel].map(id=>reqPanel(req(id),dev,ro)).join('');
+  const right=`<section class="rp">${ST2.una?unaPanel(dev,ro):''}${panels||(!ST2.una?'<div class="panel"><p class="muted">왼쪽에서 요구사항을 고르세요.</p></div>':'')}</section>`;
+  return`<div class="head"><h2>투입 공수 <span class="muted" style="font-weight:500">· 입력 · 실적</span></h2>
+    <span class="bar-note"><i></i>AI 사용 시간은 매일 06:00에 전일분 반영 · 최근 반영 11/13 06:00 (11/12분) · 오늘분은 내일 아침 확정</span></div>
+  <div class="ef">${left}${right}</div>`;
+}
+function reqPanel(r,dev,ro){const p=prj(r.pid);const st=status(r);const A=reqStats(r);
+  const owners=dev?[dev]:ownersOf(r);
+  const strip=`<div class="strip">${SC.map(c=>{const s=r.stages.find(x=>x.c===c);
+    if(!s)return`<div class="sbox off"><div class="sbh"><b>${SN[c]}</b></div><span>측정 대상 아님</span></div>`;
+    const u=UC[r.id+'-'+c],us=uStats(u),ss=stageSt(r,s);
+    return`<div class="sbox ${ss} ${dev&&s.owner===dev?'mine':''}"><div class="sbh"><b>${SN[c]}</b><span class="sst ${ss}">${ST_NAME[ss]}</span></div>
+      <span class="wt" data-tip="${esc(s.wt)}">${esc(s.wt)}</span><span class="xs muted">${s.owner}${dev&&s.owner!==dev?' 담당':''}</span>
+      <span class="num xs">${f1(us.md)} / ${f1(s.base)} M/D</span><div class="hbar"><i style="width:${Math.min(100,us.md/s.base*100)}%;background:${ss==='done'?'var(--good)':'var(--warn)'}"></i></div></div>`;}).join('')}</div>`;
+  const cmds=role==='dev'&&!r.done?myUnits(r,ME).map(u=>`<span class="cmd">poc ${u.code}<button class="cp" data-cp="poc ${u.code}">복사</button></span>`).join(''):'';
+  return`<article class="panel rq" data-rp="${r.id}">
+    <div class="rqh"><div><div class="small muted">${esc(p.name)} <span class="kind ${p.kind}">${p.kind}</span> · ${esc(p.sys)} · ${p.team}</div>
+      <h3>${esc(r.name)} <span class="mono small muted">${r.id}</span></h3></div>
+      <div class="rqs">${stChip(st)}<span class="small">투입 <b class="num">${f1(A.md)}</b> / 기준 <b class="num">${f1(r.base)}</b> M/D</span>
+        <span class="small">AI 도구 내 <b class="num" style="color:var(--ai)">${h1(A.inT)}h</b> · 외 <b class="num" style="color:var(--hum)">${h1(A.out)}h</b></span>
+        ${ST2.sel.size>1?`<button class="btn sm ghost" data-xrp="${r.id}">닫기</button>`:''}</div></div>
+    ${strip}
+    ${cmds?`<div class="cmds"><span class="small muted">AI 도구 명령어 · 대화를 시작할 때 입력</span>${cmds}<span class="xs muted">업무 외 사용: <span class="mono">poc off</span> · 없는 코드 · 남의 단계는 입력 즉시 안내</span></div>`:''}
+    ${owners.filter(o=>isOwner(r,o)).map(o=>effTable(r,o,ro)).join('')}
+  </article>`;}
+function effTable(r,dev,ro){
+  const us=myUnits(r,dev),myC=new Set(us.map(u=>u.s.c));
+  const rows=ALLD.slice().reverse().map(i=>({i,st:rowSt(dev,r,i)})).filter(x=>x.st);
+  const act=rows.filter(x=>x.st!=='conf'),hist=rows.filter(x=>x.st==='conf');
+  const hk=`${dev}|${r.id}`,open=ST2.hist.has(hk);
+  const tot=c=>{const u=us.find(u=>u.s.c===c);return u?sum(hist,x=>cell(u.code,x.i).tot):0;};
+  const allTot=sum(SC,tot);
+  const head=`<tr><th>일자</th>${SC.map(c=>{const s=r.stages.find(x=>x.c===c);return`<th class="${myC.has(c)?'':'na'}">${SN[c]}<small>${s?(myC.has(c)?esc(s.wt):s.owner+' 담당'):'—'}</small></th>`;}).join('')}<th class="r">합계 (h)</th><th>확정</th></tr>`;
+  const sumRow=`<tr class="sumr"><td>확정 합계<small>${hist.length}일</small></td>${SC.map(c=>`<td class="c num ${myC.has(c)?'':'na'}">${myC.has(c)?h1(tot(c)):''}</td>`).join('')}<td class="r num">${h1(allTot)}<small>${f2(allTot/8)} M/D</small></td><td></td></tr>`;
+  const needN=act.filter(x=>x.st!=='today').length;
+  return`<div class="etw">${!effDev()&&ownersOf(r).length>1?`<div class="small"><b>${dev}</b> 담당 단계</div>`:''}
+  <div class="tw"><table class="et"><thead>${head}</thead><tbody>${sumRow}
+    ${act.map(x=>rowHtml(r,dev,x.i,x.st,ro,us,myC)).join('')||`<tr><td colspan="9" class="muted small">확정할 날이 없습니다.</td></tr>`}
+    <tr class="hrow"><td colspan="9"><div class="acts"><button class="lnk2" data-hist="${hk}" aria-expanded="${open}">${open?'▾':'▸'} 상세 실적 · 일별 이력 (확정 ${hist.length}일)</button>
+      ${!ro?`<button class="btn sm ghost" data-addday="${hk}">＋ 기록 없는 날 추가</button>`:''}
+      ${!ro&&needN>1?`<button class="btn sm" data-cfall="${hk}" style="margin-left:auto">확정 필요 ${needN}일 모두 확정</button>`:''}</div></td></tr>
+    ${open?hist.map(x=>rowHtml(r,dev,x.i,'conf',ro,us,myC)).join(''):''}</tbody></table></div></div>`;}
+function rowHtml(r,dev,i,st,ro,us,myC){
+  const edit=!ro&&st!=='conf';
+  const tds=SC.map(c=>{if(!myC.has(c))return`<td class="c na">·</td>`;const u=us.find(u=>u.s.c===c);const x=cell(u.code,i);const key=`${u.code}|${i}`;
+    const tipT=`${dl(i)} · ${SN[c]}\nAI 수집 ${h1(x.ai)}h${x.mn?` − 감소 ${h1(x.mn)}h`:''} = AI 도구 내 ${h1(x.inT)}h`+(x.add?`\nAI 도구 외 ${h1(x.add)}h · `+Object.entries(D[u.code].add[i]).map(([k,h])=>`${k} ${h1(h)}`).join(', '):'')+(D[u.code].memo[i]?`\n메모: ${D[u.code].memo[i]}`:'');
+    if(!edit)return`<td class="c"><span class="tv ${x.tot?'':'z'}" data-tip="${esc(tipT)}">${h1(x.tot)}</span><span class="meta">${x.tot?`AI ${h1(x.inT)}${x.add?` <span class="up">+${h1(x.add)}</span>`:''}`:'&nbsp;'}</span></td>`;
+    const aiIn=st==='today'?`<span class="pend" data-tip="오늘 AI 사용 시간은 내일 06:00 배치로 반영됩니다">AI 수집 전</span>`
+      :x.ai>0?`<label class="ain">AI<input type="number" inputmode="decimal" step="0.1" min="0" max="${x.ai}" value="${h1(x.inT)}" data-ai="${key}" aria-label="${dl(i)} ${SN[c]} AI 도구 내 시간"></label>`:`<span class="pend">AI 0</span>`;
+    return`<td class="c"><div class="ecell">${aiIn}<button class="addb ${x.add?'on':''}" data-add="${key}" data-tip="AI 도구 외 시간 입력 (작업 유형 8개)">＋${x.add?h1(x.add):' 외'}</button></div><span class="meta" data-tip="${esc(tipT)}">${x.ai>0?`수집 ${h1(x.ai)}${x.mn?` <span class="dn">−${h1(x.mn)}</span>`:''}`:'&nbsp;'}${x.add&&x.ai>0?` · 계 ${h1(x.tot)}`:''}</span></td>`;});
+  const rt=sum(us,u=>cell(u.code,i).tot);const key=k3(dev,r.id,i);const rev=REVC.get(key)||0;
+  let stc;
+  if(st==='today')stc=`<span class="xs muted">내일 06시 AI 반영 후 확정</span>`;
+  else if(st==='conf')stc=`<span class="ok small">✓ 확정</span>${rev?` <span class="xs muted">수정 ${rev}회</span>`:''}${ro?'':` <button class="lnk" data-ed="${key}">수정</button>`}`;
+  else if(ro)stc=`<span class="wn small">${st==='edit'?'수정 중':'확정 필요'}</span>`;
+  else stc=`<button class="btn sm primary" data-cf="${key}">${st==='edit'?'재확정':'확정'}</button>`;
+  const lab=i===TODAY?'오늘':i===TODAY-1?'어제':i===TODAY-2?'그제':'';
+  return`<tr class="er ${st}"><td class="dcol"><b>${dl(i)}</b>${lab?` <span class="xs muted">${lab}</span>`:''}${st==='need'?'<small class="wn">확정 필요</small>':st==='edit'?'<small class="wn">수정 중 · 재확정 필요</small>':''}</td>${tds.join('')}<td class="r num"><b>${h1(rt)}</b></td><td class="c">${stc}</td></tr>`;}
+function unaPanel(dev,ro){const list=myUna(dev);
+  return`<section class="panel unap" aria-label="확인 필요"><div class="panel-h"><h3>확인 필요 · 업무 코드 없이 잡힌 AI 사용</h3><button class="btn sm ghost" id="e2UnaX">닫기</button></div>
+  <p class="small muted">poc 명령 없이 쓴 시간이라 어느 요구사항인지 정해지지 않았습니다. 배정하면 그날 그 단계의 AI 시간에 더해지고, 이미 확정한 날이면 다시 확정해야 합니다. 업무 외 사용으로 표시하면 집계에서 빠집니다.</p>
+  ${list.length?list.map(u=>unaItem(u,ro)).join(''):'<p class="muted">확인할 시간이 없습니다.</p>'}</section>`;}
+function openCodes(dev){return REQS.filter(r=>!r.done&&isOwner(r,dev)).flatMap(r=>myUnits(r,dev)).map(x=>x.code);}
+function unaItem(u,ro){const cands=[...(u.cands||[])].sort((a,b)=>(b===u.rec)-(a===u.rec));const others=openCodes(u.dev).filter(c=>!cands.includes(c));
+  return`<div class="una-item"><div class="when"><b>${dl(u.d)} ${u.t}</b> <span class="num">${h1(u.min/60)}h</span>${!effDev()?` <span class="xs">· ${u.dev}</span>`:''}<div>${u.tool} · 브랜치 ${esc(u.branch)}</div><div class="why">${esc(u.why)}</div></div>
+    <div class="chipset">${ro?'<span class="small muted">개발자 본인이 처리합니다</span>':
+      cands.map(c=>`<button class="${u.rec===c?'rec':''}" data-una="${u.id}" data-to="${c}">${u.rec===c?'추천 · ':''}${esc(cname(c))}</button>`).join('')+
+      `<select data-unasel="${u.id}" aria-label="요구사항 · 단계 선택"><option value="">${cands.length?'다른 요구사항 · 단계':'요구사항 · 단계 선택'}</option>${others.map(c=>`<option value="${c}">${esc(cname(c))}</option>`).join('')}</select>
+       <button data-split="${u.id}">나눠서 배정</button><button class="np" data-una="${u.id}" data-to="">업무 외 사용</button>`}</div></div>`;}
+function assignUna(u,parts){
+  parts.forEach(([to,min])=>{if(!min)return;D[to].ai[u.d]+=min;const key=k3(u.dev,UC[to].r.id,u.d);if(CONF.has(key)){CONF.delete(key);EDIT.add(key);}});
+  UNA=UNA.filter(x=>x.id!==u.id);
+  const reopened=parts.some(([to])=>EDIT.has(k3(u.dev,UC[to].r.id,u.d)));
+  parts.forEach(([to])=>ST2.sel.add(UC[to].r.id));
+  toast(parts.map(([to,m])=>`${cname(to)} ${h1(m/60)}h`).join(', ')+' 배정'+(reopened?` · ${dl(u.d)} 확정을 다시 해야 합니다`:''));render();}
+function openAdd(code,i){
+  const u=UC[code],x=cell(code,i);const cur={...D[code].add[i]};const memo=D[code].memo[i]||'';
+  modal(`<h3>AI 도구 외 투입 시간</h3>
+    <p class="small">${dl(i)} · <b>${esc(u.r.name)}</b> · ${SN[u.s.c]} (${esc(u.s.wt)}) · 0.1시간 단위로 입력</p>
+    <div id="tyList" class="tygrid">${TYPES.map(([k,n,d])=>`<label class="tyrow ${cur[k]?'on':''}" data-row="${k}"><div>${tyChip(k)}<div class="d">${d}</div></div>
+      <span><input type="number" inputmode="decimal" step="0.1" min="0" max="12" value="${cur[k]?h1(cur[k]):''}" placeholder="0.0" data-ty="${k}" aria-label="${n} 시간"> h</span></label>`).join('')}</div>
+    <label class="small" id="memoW" style="display:flex;flex-direction:column;gap:4px">메모 <span class="xs muted" id="memoHint">A8 기타는 필수</span><input type="text" id="tyMemo" value="${esc(memo)}" placeholder="어떤 일이었는지 한 줄"></label>
+    <p class="small" id="tySum"></p>
+    <div class="acts"><button class="btn primary" id="tyOk">저장</button><button class="btn" data-close>취소</button><span class="small ng" id="tyErr"></span></div>`,m=>{
+    m.classList.add('wide');
+    const read=()=>{const o={};m.querySelectorAll('[data-ty]').forEach(el=>{const v=q1(Math.max(0,parseFloat(el.value)||0));if(v>0)o[el.dataset.ty]=v;});return o;};
+    const draw=()=>{const o=read();const t=q1(addSum(o));
+      m.querySelectorAll('[data-row]').forEach(el=>el.classList.toggle('on',!!o[el.dataset.row]));
+      m.querySelector('#tySum').innerHTML=`${i===TODAY?'AI 수집 전':'AI 도구 내 '+h1(x.inT)+'h'} <b style="color:var(--hum)">+ AI 도구 외 ${h1(t)}h</b> = 이 단계 투입 <b>${h1(x.inT+t)}h</b>`;};
+    draw();m.querySelectorAll('[data-ty]').forEach(el=>{el.oninput=draw;el.onblur=()=>{if(el.value!==''){el.value=h1(q1(Math.max(0,parseFloat(el.value)||0)));}draw();};});
+    m.querySelector('[data-ty]').focus();
+    m.querySelector('#tyOk').onclick=()=>{const o=read();const mm=m.querySelector('#tyMemo').value.trim();
+      if(o.A8&&!mm){m.querySelector('#tyErr').textContent='A8 기타는 메모를 적어 주세요.';return;}
+      if(q1(addSum(o)+x.inT)>16){m.querySelector('#tyErr').textContent='한 단계 하루 투입이 16시간을 넘습니다. 값을 확인해 주세요.';return;}
+      D[code].add[i]=o;D[code].memo[i]=mm;closeModal();toast(addSum(o)?`AI 도구 외 ${h1(addSum(o))}시간을 저장했습니다.`:'AI 도구 외 시간을 지웠습니다.');render();};});}
+function bindEffort(){
+  const v=$('#main');
+  const ed=$('#e2Dev');ed&&(ed.onchange=e=>{ST2.dev=e.target.value;ST2.sel.clear();render();});
+  $('#e2Prj').onchange=e=>{ST2.prj=e.target.value;ST2.sel.clear();render();};
+  $$('[data-fk]',v).forEach(cb=>cb.onchange=()=>{cb.checked?ST2.f.add(cb.dataset.fk):ST2.f.delete(cb.dataset.fk);render();});
+  const eu=$('#e2Una');eu&&(eu.onclick=()=>{ST2.una=!ST2.una;render();if(ST2.una)$('.unap')?.scrollIntoView({block:'nearest'});});
+  const ux=$('#e2UnaX');ux&&(ux.onclick=()=>{ST2.una=false;render();});
+  $$('[data-rc]',v).forEach(el=>{const pick=e=>{if(e.target.closest('[data-mc]'))return;ST2.sel=new Set([el.dataset.rc]);ST2.una=false;render();};
+    el.onclick=pick;el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(e);}};});
+  $$('[data-mc]',v).forEach(cb=>cb.onchange=()=>{const id=cb.dataset.mc;cb.checked?ST2.sel.add(id):ST2.sel.delete(id);render();});
+  $$('[data-xrp]',v).forEach(b=>b.onclick=()=>{ST2.sel.delete(b.dataset.xrp);render();});
+  $$('[data-cp]',v).forEach(b=>b.onclick=()=>{const t=b.dataset.cp;try{navigator.clipboard.writeText(t).then(()=>toast(`"${t}" 복사됨 · AI 도구 대화창에 붙여 넣으세요`),()=>toast(`복사: ${t}`));}catch(e){toast(`복사: ${t}`);}});
+  $$('[data-ai]',v).forEach(inp=>inp.onchange=()=>{const [code,is]=inp.dataset.ai.split('|');const i=+is;const x=cell(code,i);let val=parseFloat(inp.value);
+    if(!isFinite(val))val=x.inT;val=q1(Math.max(0,val));
+    if(val>x.ai){val=x.ai;toast(`수집값 ${h1(x.ai)}h보다 크게 넣을 수 없습니다. 수집되지 않은 AI 사용은 ＋에서 A7로 넣어 주세요.`);}
+    D[code].minus[i]=q1(x.ai-val);render();});
+  $$('[data-add]',v).forEach(b=>b.onclick=()=>{const [c,i]=b.dataset.add.split('|');openAdd(c,+i);});
+  $$('[data-cf]',v).forEach(b=>b.onclick=()=>{const key=b.dataset.cf;const [,rid,is]=key.split('|');CONF.add(key);
+    if(EDIT.delete(key)){REVC.set(key,(REVC.get(key)||0)+1);toast(`${dl(+is)} ${req(rid).name}을 다시 확정했습니다. 수정 이력이 남습니다.`);}else{EXTRA.delete(key);toast(`${dl(+is)} ${req(rid).name}을 확정했습니다.`);}render();});
+  $$('[data-cfall]',v).forEach(b=>b.onclick=()=>{const [dev,rid]=b.dataset.cfall.split('|');const r=req(rid);const ds=needDays(dev,r);
+    ds.forEach(i=>{const key=k3(dev,rid,i);CONF.add(key);if(EDIT.delete(key))REVC.set(key,(REVC.get(key)||0)+1);});toast(`${r.name} · ${ds.length}일을 확정했습니다.`);render();});
+  $$('[data-ed]',v).forEach(b=>b.onclick=()=>{const key=b.dataset.ed;const [,rid,is]=key.split('|');
+    modal(`<h3>${dl(+is)} 확정 수정</h3><p class="small">${esc(req(rid).name)} · 확정을 풀고 값을 고친 뒤 다시 확정합니다. 수정 전 값과 횟수가 기록으로 남고, 다시 확정하기 전까지 그날은 집계에서 빠집니다.</p>
+    <div class="acts"><button class="btn primary" id="edOk">수정하기</button><button class="btn" data-close>취소</button></div>`,m=>m.querySelector('#edOk').onclick=()=>{
+      CONF.delete(key);EDIT.add(key);closeModal();toast(`${dl(+is)}을 고칠 수 있습니다. 위쪽 확정 필요 줄에서 고친 뒤 재확정하세요.`);render();});});
+  $$('[data-hist]',v).forEach(b=>b.onclick=()=>{const k=b.dataset.hist;ST2.hist.has(k)?ST2.hist.delete(k):ST2.hist.add(k);render();});
+  $$('[data-addday]',v).forEach(b=>b.onclick=()=>{const [dev,rid]=b.dataset.addday.split('|');const r=req(rid);
+    const free=ALLD.filter(i=>i<TODAY&&!rowSt(dev,r,i));
+    modal(`<h3>기록 없는 날 추가</h3><p class="small">AI 도구를 쓰지 않고 ${esc(r.name)} 작업을 한 날을 고르면 입력 줄이 생깁니다. ＋ 로 작업 유형별 시간을 넣고 확정하세요.</p>
+      <div class="radios">${free.map((i,k)=>`<label><input type="radio" name="ad" value="${i}" ${k===free.length-1?'checked':''}>${dl(i)}</label>`).join('')||'<span class="muted small">추가할 수 있는 날이 없습니다.</span>'}</div>
+      <div class="acts"><button class="btn primary" id="adOk" ${free.length?'':'disabled'}>추가</button><button class="btn" data-close>취소</button></div>`,m=>{const ok=m.querySelector('#adOk');ok.onclick=()=>{const i=+m.querySelector('input[name=ad]:checked').value;EXTRA.add(k3(dev,rid,i));closeModal();
+        toast(`${dl(i)} 줄을 추가했습니다. ＋ 로 시간을 넣고 확정하세요.`);render();};});});
+  $$('[data-una]',v).forEach(b=>b.onclick=()=>{const u=UNA.find(x=>x.id===+b.dataset.una);const to=b.dataset.to;
+    if(to)confirmAssign(u,to,()=>assignUna(u,[[to,u.min]]));else confirmAssign(u,'',()=>{UNA=UNA.filter(x=>x.id!==u.id);EXCL++;toast(`${dl(u.d)} ${u.t}을 업무 외 사용으로 표시했습니다. 집계에서 빠집니다.`);render();});});
+  $$('[data-unasel]',v).forEach(s=>s.onchange=()=>{const to=s.value;if(!to)return;s.value='';const u=UNA.find(x=>x.id===+s.dataset.unasel);confirmAssign(u,to,()=>assignUna(u,[[to,u.min]]));});
+  $$('[data-split]',v).forEach(b=>b.onclick=()=>{const u=UNA.find(x=>x.id===+b.dataset.split);const codes=[...new Set([...(u.cands||[]),...openCodes(u.dev)])];const tot=q1(u.min/60);
+    modal(`<h3>나눠서 배정</h3><p class="small">${dl(u.d)} ${u.t} · ${h1(tot)}h · 0.1시간 단위. 남는 시간은 업무 외 사용으로 처리됩니다.</p>
+      <div>${codes.map(c=>`<div class="sp-row"><span>${esc(cname(c))}${u.rec===c?' <span class="pill accent">추천</span>':''}</span><span><input type="number" step="0.1" min="0" max="${tot}" data-sp="${c}" placeholder="0.0"> h</span></div>`).join('')}</div>
+      <p class="small" id="spSum"></p><div class="acts"><button class="btn primary" id="spOk">배정</button><button class="btn" data-close>취소</button><span class="small ng" id="spErr"></span></div>`,m=>{
+      const rd=()=>[...m.querySelectorAll('[data-sp]')].map(el=>[el.dataset.sp,q1(Math.max(0,parseFloat(el.value)||0))]).filter(x=>x[1]>0);
+      const dr=()=>{const s=q1(sum(rd(),x=>x[1]));m.querySelector('#spSum').innerHTML=`배정 <b>${h1(s)}h</b> / ${h1(tot)}h · 남는 시간 ${h1(Math.max(0,tot-s))}h → 업무 외`;return s;};dr();
+      m.querySelectorAll('[data-sp]').forEach(el=>el.oninput=dr);
+      m.querySelector('#spOk').onclick=()=>{const s=dr();if(!s){m.querySelector('#spErr').textContent='시간을 넣어 주세요.';return;}
+        if(s>tot+1e-9){m.querySelector('#spErr').textContent=`${h1(tot)}h를 넘을 수 없습니다.`;return;}
+        closeModal();const parts=rd().map(([c,h])=>[c,Math.round(h*60)]);if(s<tot)EXCL++;assignUna(u,parts);};});});
+}
+
+
+/* =================== 3. 측정 결과 대시보드 =================== */
+const F={kind:new Set(),prj:new Set(),req:new Set(),inc:false,open:null,q:'',wf:'cost',color:'kind',closed:new Set(SC),subs:new Set()};
+const optKinds=()=>['개발','운영'];
+const optPrj=()=>PROJECTS.filter(p=>(!F.kind.size||F.kind.has(p.kind))&&REQS.some(r=>r.pid===p.id&&canSee(r)));
+const optReq=()=>{const ps=optPrj().filter(p=>!F.prj.size||F.prj.has(p.id)).map(p=>p.id);return REQS.filter(r=>ps.includes(r.pid)&&canSee(r)&&(F.inc?status(r)!=='대기':r.done));};
+const selReqs=()=>{const o=optReq();return F.req.size?o.filter(r=>F.req.has(r.id)):o;};
+function msel(id,label,opts,set,search){
+  const all=!set.size,lab=all?'전체':set.size===1?opts.find(o=>set.has(o.v))?.l||'1개':`${set.size}개`;
+  const groups=[...new Set(opts.map(o=>o.g||''))];
+  const list=groups.map(g=>(g?`<div class="grp">${esc(g)}</div>`:'')+opts.filter(o=>(o.g||'')===g&&(!search||!F.q||o.l.includes(F.q)||o.v.includes(F.q))).map(o=>`<label><input type="checkbox" data-ms="${id}" value="${o.v}" ${set.has(o.v)?'checked':''}>${o.h||esc(o.l)}</label>`).join('')).join('');
+  return`<div class="ms"><button class="ms-btn ${all?'':'on'}" data-open="${id}" aria-expanded="${F.open===id}">${label} <b>${esc(lab)}</b> ▾</button>
+    <div class="ms-pop" ${F.open===id?'':'hidden'}><div class="top">${search?`<input type="text" id="msQ" placeholder="검색" value="${esc(F.q)}">`:''}<button class="btn sm" data-all="${id}">전체</button></div><div class="list">${list||'<div class="grp">선택할 항목이 없습니다</div>'}</div></div></div>`;}
+const unitsIn=list=>list.flatMap(unitsOf);
+const stagesIn=list=>SC.filter(c=>unitsIn(list).some(u=>u.s.c===c));
+const byStage=(list,c)=>aggU(unitsIn(list).filter(u=>u.s.c===c));
+function renderDash(){
+  const op=optPrj().map(p=>p.id);[...F.prj].forEach(x=>{if(!op.includes(x))F.prj.delete(x);});
+  const orq=optReq().map(r=>r.id);[...F.req].forEach(x=>{if(!orq.includes(x))F.req.delete(x);});
+  const list=selReqs(),A=agg(list);
+  const chips=[...[...F.kind].map(k=>['kind',k,k]),...[...F.prj].map(k=>['prj',k,prj(k).name]),...[...F.req].map(k=>['req',k,req(k).name])];
+  const stages=stagesIn(list);
+  const miniRows=(fn,clr)=>stages.map(c=>{const a=byStage(list,c);const v=fn(a);return`<div class="mini"><span>${SN[c]}</span><div class="hbar"><i style="width:${Math.min(100,Math.max(0,Math.abs(v)*100))}%;background:${clr}"></i></div><span class="num">${pct(v)}</span></div>`;}).join('');
+  const qa=list.filter(r=>r.it&&DEF[r.id]!=null);const defN=sum(qa,r=>DEF[r.id]);const svy=list.filter(r=>SURVEY[r.id]);
+  const types=TYPES.map(t=>[t,A.byType[t[0]]||0]).filter(x=>x[1]>0);const tyTot=sum(types,x=>x[1]);
+  const card=(k,area,name,val,formula,subs)=>{const o=F.subs.has(k);return`<div class="kc"><div class="area">${area}</div><div class="nm">${name}</div><div class="v">${val}</div><div class="f">${formula}</div>
+    <button class="subt" data-sub="${k}" aria-expanded="${o}">${o?'▾':'▸'} 보조 지표</button>${o?`<div class="subs">${subs}</div>`:''}</div>`;};
+  const kpis=`<div class="kpi4">
+   ${card('p','생산성','투입 공수 절감률',pct(A.save,1),`(기준 ${f1(A.base)} − 투입 ${f1(A.md)}) ÷ 기준 ${f1(A.base)} M/D`,
+     `<span class="sl">SDLC 단계별 투입 공수 절감률</span>${miniRows(a=>a.save,'var(--fg-3)')}`)}
+   ${card('e','경제성','순절감률',pct(A.net,1),`(기준 ${man(A.bc)} − 측정 ${man(A.lc)} − AI ${man(A.ai)}) ÷ 기준 · 만 원`,
+     `<span class="sl">SDLC 단계별 인건비 · AI 비용 (만 원)</span><div class="kv xs muted"><span>단계</span><span>기준 → 측정 · AI</span></div>${stages.map(c=>{const a=byStage(list,c);return`<div class="kv"><span>${SN[c]}</span><b>${man(a.bc)} → ${man(a.lc)} · ${man(a.ai)}</b></div>`;}).join('')}`)}
+   ${card('q','품질 · 산식 협의 중','결함 발생률',qa.length?(defN/qa.length).toFixed(2):'—',`결함 ${defN}건 ÷ 통합 테스트 가능 요구사항 ${qa.length}건`,
+     `<div class="kv"><span>산출물 신뢰도 (개발자 설문 평균)</span><b>${svy.length?(sum(svy,r=>SURVEY[r.id])/svy.length).toFixed(1):'—'} / 5</b></div><div class="kv"><span>설문 응답 요구사항</span><b>${svy.length}건</b></div><div class="kv"><span>QA 산출물 리뷰 지적</span><b>${Math.round(defN*1.5)}건</b></div>`)}
+   ${card('u','활용성','AI 활용률',pct(A.use),`AI 도구 내 ${h1(A.inT)}h ÷ 투입 ${h1(A.tot)}h`,
+     `<span class="sl">SDLC 단계별 AI 활용률</span>${miniRows(a=>a.use,'var(--ai)')}
+      <span class="sl" style="margin-top:4px">AI 도구 외 작업 유형 · ${h1(tyTot)}h</span>
+      <div class="hbar" style="height:8px">${types.map(([t,h])=>`<i style="width:${h/tyTot*100}%;background:${t[3]}" data-tip="${t[0]} ${t[1]} ${h1(h)}h"></i>`).join('')}</div>
+      ${types.map(([t,h])=>`<div class="kv xs"><span>${tyChip(t[0])}</span><b>${h1(h)}h · ${pct(h/tyTot)}</b></div>`).join('')}`)}
+  </div>`;
+  return`<div class="head"><h2>측정 결과 대시보드</h2><span class="small muted">${role==='dev'?'내가 담당한 요구사항 기준 · ':''}측정 완료 요구사항 · 확정 공수 기준 · 매일 06시 갱신</span></div>
+  <div class="filters fbar">
+    ${msel('kind','구분',optKinds().map(k=>({v:k,l:k})),F.kind)}
+    ${msel('prj','과제',optPrj().map(p=>({v:p.id,l:p.name,g:p.kind})),F.prj)}
+    ${msel('req','요구사항',optReq().map(r=>({v:r.id,l:r.name,g:prj(r.pid).name,h:`${esc(r.name)} <span class="xs muted mono">${r.id}</span>`})),F.req,true)}
+    <label class="fl"><input type="checkbox" id="dInc" ${F.inc?'checked':''}> 측정 중 포함</label>
+    <div class="chips">${chips.map(([t,v,l])=>`<span>${esc(l)}<button data-rm="${t}|${v}" aria-label="${esc(l)} 빼기">×</button></span>`).join('')}</div>
+    ${chips.length?'<button class="btn sm ghost" id="dClr">선택 초기화</button>':''}
+    <span class="small muted" style="margin-left:auto">요구사항 ${A.n}건 · SDLC 단계 ${unitsIn(list).length}개 집계</span><button class="btn sm" id="subAll">보조 지표 ${F.subs.size===4?'모두 접기':'모두 펼치기'}</button>
+  </div>
+  ${A.n?kpis+`
+  <div class="grid2">
+    <div class="panel ana"><div class="panel-h"><h3>비용 워터폴</h3><div class="seg" id="wfT">${[['cost','인건비 + AI'],['md','투입 공수'],['ai','AI 비용']].map(([k,n])=>`<button data-k="${k}" aria-pressed="${F.wf===k}">${n}</button>`).join('')}</div></div>
+      ${waterfall(list,stages)}</div>
+    <div class="panel ana"><div class="panel-h"><h3>SDLC 단계별 결과</h3><span class="sub">단계 → 업무 유형 · 단계별 기준 공수 대비</span></div>
+      <div class="scr">${stageResult(list,stages)}</div></div>
+  </div>
+  <div class="grid2">
+    <div class="panel ana"><div class="panel-h"><h3>과제별 결과</h3><span class="sub">만 원 · 오른쪽 = 순절감률</span></div><div class="scr">${projectResult(list)}</div></div>
+    <div class="panel ana"><div class="panel-h"><h3>과제 통합 결과</h3><label class="fl">색 구분 <select id="scC">${[['kind','개발 · 운영'],['area','과제 영역'],['diff','구현 난이도'],['exp','예상 기대효과']].map(([k,n])=>`<option value="${k}" ${F.color===k?'selected':''}>${n}</option>`).join('')}</select></label></div>${scatter(list)}</div>
+  </div>`:`<div class="panel"><p class="muted">선택한 조건에 측정 완료된 요구사항이 없습니다. '측정 중 포함'을 켜거나 선택을 바꿔 보세요.</p></div>`}`;
+}
+function nice(v){const e=Math.pow(10,Math.floor(Math.log10(v)));const f=v/e;return(f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*e;}
+function waterfall(list,stages){
+  const W=560,H=250,L=48,B=H-34,T=18;
+  let steps=[];const base=agg(list);
+  if(F.wf==='cost'){steps.push(['기준 인건비',base.bc,'b']);stages.forEach(c=>{const a=byStage(list,c);steps.push([SN[c],a.lc-a.bc,'d']);});steps.push(['AI 비용',base.ai,'ai']);steps.push(['측정 총비용',base.tc,'t']);}
+  else if(F.wf==='md'){steps.push(['기준 공수',base.base,'b']);stages.forEach(c=>{const a=byStage(list,c);steps.push([SN[c],a.md-a.base,'d']);});steps.push(['투입 공수',base.md,'t']);}
+  else{stages.forEach(c=>{const a=byStage(list,c);steps.push([SN[c],a.ai,'ai']);});steps.push(['AI 비용 합계',base.ai,'t']);}
+  const isMD=F.wf==='md',fmt=v=>isMD?(Math.abs(v)<10?f1(v):f0(v)):man(v);
+  let acc=0;const bars=[];steps.forEach(([l,v,k])=>{let a,b;
+    if(k==='b'||k==='t'){a=0;b=v;acc=k==='b'?v:acc;}else{a=acc;b=acc+v;acc=b;}
+    if(F.wf==='ai'&&k==='ai'){a=acc-v;b=acc;}bars.push({l,v,k,a,b});});
+  const raw=Math.max(...bars.map(x=>Math.max(x.a,x.b)))*1.1||1;const st=nice(raw/4);const mx=st*Math.ceil(raw/st);
+  const y=v=>B-(v/mx)*(B-T);const gx=(W-L-8)/bars.length,bw=Math.min(54,gx*.62);
+  const ticks=[];for(let t=0;t<=mx+1e-9;t+=st)ticks.push(t);
+  const col=x=>x.k==='b'?'var(--base)':x.k==='t'?'var(--accent)':x.k==='ai'?'var(--ai)':x.v<0?'var(--save)':'var(--hum)';
+  return`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="워터폴">
+   ${ticks.map(t=>`<line class="grid" x1="${L}" x2="${W-4}" y1="${y(t)}" y2="${y(t)}"></line><text x="${L-6}" y="${y(t)+4}" text-anchor="end">${fmt(t)}</text>`).join('')}
+   ${bars.map((x,i)=>{const X=L+i*gx+(gx-bw)/2,y1=y(Math.max(x.a,x.b)),y0=y(Math.min(x.a,x.b));const nx=bars[i+1];
+     return`<rect x="${X}" y="${y1}" width="${bw}" height="${Math.max(1,y0-y1)}" rx="2" fill="${col(x)}" data-tip="${x.l} ${x.k==='d'&&x.v>0?'+':''}${fmt(x.v)}${isMD?' M/D':'만 원'}"></rect>
+     <text class="val" x="${X+bw/2}" y="${y1-5}" text-anchor="middle">${x.k==='d'&&x.v>0?'+':''}${fmt(x.v)}</text>
+     <text x="${X+bw/2}" y="${H-16}" text-anchor="middle">${x.l}</text>
+     ${nx&&x.k!=='t'&&F.wf!=='ai'?`<line x1="${X+bw}" x2="${X+gx}" y1="${y(x.b)}" y2="${y(x.b)}" stroke="var(--fg-3)" stroke-dasharray="2 2"></line>`:''}`;}).join('')}
+   <line class="axis" x1="${L}" x2="${W-4}" y1="${B}" y2="${B}"></line></svg>
+   <div class="legend">${F.wf==='ai'?'<span><i style="background:var(--ai)"></i>단계별 AI 비용</span>':`<span><i style="background:var(--base)"></i>기준</span><span><i style="background:var(--save)"></i>감소</span><span><i style="background:var(--hum)"></i>증가</span>${F.wf==='cost'?'<span><i style="background:var(--ai)"></i>AI 비용</span>':''}<span><i style="background:var(--accent)"></i>측정 결과</span>`}<span class="muted">${isMD?'M/D':'만 원'}</span></div>`;
+}
+function stageResult(list,stages){
+  const us=unitsIn(list);
+  const mx=Math.max(1,...stages.map(c=>{const a=byStage(list,c);return Math.max(a.bc,a.tc);}));
+  const bar=a=>`<div class="bars2"><div class="b"><span class="track" style="width:${a.bc/mx*100}%"><i style="width:100%;background:var(--base)"></i></span>${man(a.bc)}</div>
+    <div class="b"><span class="track" style="width:${a.tc/mx*100}%"><i style="width:${a.tc?a.lc/a.tc*100:0}%;background:var(--hum)"></i><i style="width:${a.tc?a.ai/a.tc*100:0}%;background:var(--ai)"></i></span>${man(a.lc)} + ${man(a.ai)}</div></div>`;
+  let html=`<div class="prow h"><span>SDLC 단계 · 업무 유형</span><span>기준 · 측정 (인건비 + AI)</span><span class="r">공수</span><span class="r hide-s">AI 활용</span><span class="r">순절감</span></div>`;
+  stages.forEach(c=>{const su=us.filter(u=>u.s.c===c),a=aggU(su),cl=F.closed.has(c);
+    html+=`<div class="prow g ${cl?'closed':''}" data-stg="${c}"><span class="nm">${SN[c]} <span class="xs muted">${su.length}건</span></span>${bar(a)}<span class="r">${pct(a.save)}</span><span class="r hide-s">${pct(a.use)}</span><span class="r">${pct(a.net)}</span></div>`;
+    if(!cl)[...new Set(su.map(u=>u.s.wt))].forEach(t=>{const b=aggU(su.filter(u=>u.s.wt===t));
+      html+=`<div class="prow s"><span class="nm small">${esc(t)} <span class="xs muted">${su.filter(u=>u.s.wt===t).length}</span></span>${bar(b)}<span class="r small">${pct(b.save)}</span><span class="r small hide-s">${pct(b.use)}</span><span class="r">${pct(b.net)}</span></div>`;});});
+  return html+`<div class="legend"><span><i style="background:var(--base)"></i>기준 인건비</span><span><i style="background:var(--hum)"></i>측정 인건비</span><span><i style="background:var(--ai)"></i>AI 비용</span><span class="muted">만 원 · 행을 누르면 업무 유형이 펼쳐짐</span></div>`;
+}
+function projectResult(list){
+  const ps=PROJECTS.filter(p=>list.some(r=>r.pid===p.id));
+  const rows=ps.map(p=>{const rs=list.filter(r=>r.pid===p.id);return{p,a:agg(rs),all:REQS.filter(r=>r.pid===p.id&&canSee(r)).length};});
+  const mx=Math.max(...rows.map(x=>Math.max(x.a.bc,x.a.tc)))||1;
+  const gc='grid-template-columns:minmax(120px,190px) minmax(0,1fr) 60px 60px';
+  return`<div class="prow h" style="${gc}"><span>과제</span><span>기준 · 측정 (인건비 + AI)</span><span class="r">공수</span><span class="r">순절감</span></div>`+
+  rows.map(({p,a,all})=>`<div class="prow" style="${gc}"><span><b>${esc(p.name)}</b><div class="xs muted"><span class="kind ${p.kind}">${p.kind}</span> 완료 ${a.n}/${all} · AI 활용 ${pct(a.use)}</div></span>
+    <div class="bars2"><div class="b"><span class="track" style="width:${a.bc/mx*100}%"><i style="width:100%;background:var(--base)"></i></span>${man(a.bc)}</div>
+    <div class="b"><span class="track" style="width:${a.tc/mx*100}%"><i style="width:${a.lc/a.tc*100}%;background:var(--hum)"></i><i style="width:${a.ai/a.tc*100}%;background:var(--ai)"></i></span>${man(a.lc)} + ${man(a.ai)}</div></div>
+    <span class="r">${pct(a.save)}</span><span class="r">${pct(a.net)}</span></div>`).join('')+
+  (rows.length>1?(()=>{const t=agg(list);return`<div class="prow" style="${gc};border-bottom:0"><span><b>선택 합계</b><div class="xs muted">${t.n}건</div></span><span class="small muted num">${man(t.bc)} → ${man(t.tc)}</span><span class="r">${pct(t.save)}</span><span class="r">${pct(t.net)}</span></div>`;})():'');
+}
+function scatter(list){
+  const W=560,H=300,L=46,Rr=12,T=14,B=H-40;
+  const pts=list.map(r=>{const s=reqStats(r);return{r,s,x:s.lc/s.bc-1,y:s.ai/10000,sz:r.base};});
+  const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y);
+  const x0=Math.min(-.6,Math.floor(Math.min(...xs)*10)/10-.05),x1=Math.max(.2,Math.ceil(Math.max(...xs)*10)/10+.05),y1=Math.max(5,Math.ceil(Math.max(...ys)/5)*5);
+  const X=v=>L+(v-x0)/(x1-x0)*(W-L-Rr),Y=v=>B-v/y1*(B-T);
+  const key={kind:r=>prj(r.pid).kind,area:r=>prj(r.pid).area,diff:r=>r.diff,exp:r=>r.exp}[F.color];
+  const cats=[...new Set(list.map(key))];const pal=['var(--ai)','var(--hum)','var(--c4)','var(--save)','var(--c6)'];
+  const cc=c=>pal[cats.indexOf(c)%pal.length];
+  const xt=[];for(let v=Math.ceil(x0*5)/5;v<=x1+1e-9;v+=.2)xt.push(+v.toFixed(2));
+  return`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="요구사항 분포">
+   ${[0,.25,.5,.75,1].map(t=>`<line class="grid" x1="${L}" x2="${W-Rr}" y1="${Y(t*y1)}" y2="${Y(t*y1)}"></line><text x="${L-6}" y="${Y(t*y1)+4}" text-anchor="end">${f0(t*y1)}</text>`).join('')}
+   ${xt.map(v=>`<text x="${X(v)}" y="${B+16}" text-anchor="middle">${v>0?'+':''}${Math.round(v*100)}%</text>`).join('')}
+   <line x1="${X(0)}" x2="${X(0)}" y1="${T}" y2="${B}" stroke="var(--fg-3)" stroke-dasharray="3 3"></line><text x="${X(0)+4}" y="${B-6}">기준 인건비</text>
+   <line class="axis" x1="${L}" x2="${W-Rr}" y1="${B}" y2="${B}"></line>
+   ${pts.sort((a,b)=>b.sz-a.sz).map(p=>{const net=p.s.net;
+     return`<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="${5+Math.sqrt(p.sz)*3.2}" fill="${cc(key(p.r))}" fill-opacity="${p.r.done?.85:.25}" stroke="${cc(key(p.r))}" stroke-width="1.5" data-tip="${esc(p.r.name)} · ${esc(prj(p.r.pid).name)}\n인건비 ${sp(p.x)} · AI 비용 ${f1(p.y)}만 원\n기준 ${f1(p.r.base)} M/D · 순절감 ${pct(net)}${p.r.done?'':'\n측정 중'}"></circle>
+     <text class="val" x="${X(p.x)+7+Math.sqrt(p.sz)*3.2}" y="${Y(p.y)+3}">${pct(net)}</text>`;}).join('')}
+   <text x="${(L+W)/2}" y="${H-4}" text-anchor="middle">← 인건비 감소 · 인건비 증감률 (측정 ÷ 기준 − 1) · 증가 →</text>
+   <text x="12" y="${(T+B)/2}" text-anchor="middle" transform="rotate(-90 12 ${(T+B)/2})">AI 비용 (만 원)</text></svg>
+  <div class="legend">${cats.map(c=>`<span><i style="background:${cc(c)};border-radius:50%"></i>${c} ${list.filter(r=>key(r)===c).length}</span>`).join('')}<span class="muted">원 크기 = 기준 M/D · 숫자 = 순절감률${F.inc?' · 옅은 원 = 측정 중':''}</span></div>`;
+}
+function bindDash(){
+  const v=$('#main');
+  $$('[data-open]',v).forEach(b=>b.onclick=e=>{e.stopPropagation();F.open=F.open===b.dataset.open?null:b.dataset.open;F.q='';render();});
+  $$('.ms-pop',v).forEach(p=>p.onclick=e=>e.stopPropagation());
+  $$('input[data-ms]',v).forEach(cb=>cb.onchange=()=>{const s=F[cb.dataset.ms];cb.checked?s.add(cb.value):s.delete(cb.value);render();});
+  $$('[data-all]',v).forEach(b=>b.onclick=()=>{F[b.dataset.all].clear();render();});
+  const q=$('#msQ');q&&(q.oninput=()=>{F.q=q.value;const pos=q.selectionStart;render();const n=$('#msQ');n.focus();n.setSelectionRange(pos,pos);});
+  $$('[data-rm]',v).forEach(b=>b.onclick=()=>{const [t,val]=b.dataset.rm.split('|');F[t].delete(val);render();});
+  const c=$('#dClr');c&&(c.onclick=()=>{F.kind.clear();F.prj.clear();F.req.clear();render();});
+  $('#dInc').onchange=e=>{F.inc=e.target.checked;render();};
+  const wf=$('#wfT');wf&&(wf.onclick=e=>{const b=e.target.closest('button');if(!b)return;F.wf=b.dataset.k;render();});
+  const sc=$('#scC');sc&&(sc.onchange=e=>{F.color=e.target.value;render();});
+  $$('[data-sub]',v).forEach(b=>b.onclick=()=>{const k=b.dataset.sub;F.subs.has(k)?F.subs.delete(k):F.subs.add(k);render();});
+  const sa=$('#subAll');sa&&(sa.onclick=()=>{if(F.subs.size===4)F.subs.clear();else['p','e','q','u'].forEach(k=>F.subs.add(k));render();});
+  $$('[data-stg]',v).forEach(g=>g.onclick=()=>{const s=g.dataset.stg;F.closed.has(s)?F.closed.delete(s):F.closed.add(s);render();});
+}
+document.addEventListener('click',()=>{if(F.open&&tab==='dash'){F.open=null;render();}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#modal').hidden)closeModal();else if(F.open){F.open=null;render();}}});
+
+
+/* =================== 4. 시스템 관리 (관리자 전용) =================== */
+const ST5={tab:'dev'};
+const DEVINFO={'김개발':{key:'D-7F3A',org:'AX',team:'AX MES개발1팀',consent:'10/28',hook:'정상',otel:'정상',last:'11/13 16:12'},
+ '박개발':{key:'D-21C9',org:'AX',team:'AX MES개발1팀',consent:'10/28',hook:'정상',otel:'정상',last:'11/13 15:40'},
+ '최개발':{key:'D-9B04',org:'AX',team:'AX MES개발2팀',consent:'10/29',hook:'정상',otel:'정상',last:'11/13 14:55'},
+ '이개발':{key:'D-55E1',org:'AX',team:'AX 물류DX팀',consent:'10/29',hook:'정상',otel:'지연',last:'11/12 18:20'},
+ '정개발':{key:'D-0C7D',org:'AX',team:'AX 물류DX팀',consent:'10/30',hook:'미수신',otel:'정상',last:'11/13 11:03'},
+ '한개발':{key:'D-6A2F',org:'AX',team:'AX 경영DX팀',consent:'10/30',hook:'정상',otel:'정상',last:'11/13 16:01'}};
+const TARGET={};DEVS.forEach(d=>TARGET[d]=true);
+const BATCH=[['11/13','06:00','05:00 ~ 05:41','성공',1842,'v1.2'],['11/12','06:00','05:00 ~ 05:38','성공',1796,'v1.2'],['11/11','06:00','05:00 ~ 05:44','성공',1905,'v1.2'],['11/10','06:00','05:00 ~ 06:12','지연 (재실행 성공)',1688,'v1.2'],['11/09','06:00','05:00 ~ 05:30','성공',412,'v1.2']];
+function renderAdmin(){
+  const tabs=[['dev','개발자 관리'],['conf','확정 현황'],['batch','배치 · 수집 상태'],['reg','기준정보 변경 이력'],['code','코드 · 단가']];
+  let body='';
+  if(ST5.tab==='dev'){
+    body=`<div class="acts" style="justify-content:space-between"><span class="small muted">측정 대상 인력 · 수집 설치 상태 · 확정 지연을 한 곳에서 관리 (PMO · 시스템 운영자용)</span><button class="btn sm" id="addDev">＋ 개발자 등록</button></div>
+    <div class="tw"><table><thead><tr><th>성명</th><th>가명 키</th><th>소속</th><th>SK AX 소속팀</th><th class="c">측정 대상</th><th>동의</th><th>훅</th><th>텔레메트리</th><th>마지막 수신</th><th class="r">담당 요구사항</th><th class="r">확정 필요</th><th class="r">확인 필요</th><th></th></tr></thead><tbody>
+    ${DEVS.map(d=>{const i=DEVINFO[d];const rq=REQS.filter(r=>isOwner(r,d));const need=sum(rq,r=>needDays(d,r).length);const una=myUna(d).length;
+      const st=v=>v==='정상'?`<span class="ok small">● 정상</span>`:v==='지연'?`<span class="wn small">● 지연</span>`:`<span class="ng small">● ${v}</span>`;
+      return`<tr><td><b>${d}</b></td><td class="mono small">${i.key}</td><td>${i.org}</td><td>${i.team}</td><td class="c"><input type="checkbox" data-tg="${d}" ${TARGET[d]?'checked':''} aria-label="${d} 측정 대상"></td><td class="small">${i.consent}</td><td>${st(i.hook)}</td><td>${st(i.otel)}</td><td class="small num">${i.last}</td>
+      <td class="r num">${rq.length}</td><td class="r num ${need?'wn':''}">${need}일</td><td class="r num ${una?'ng':''}">${una}건</td><td><button class="btn sm" data-nudge="${d}" ${need||una?'':'disabled'}>확정 요청 알림</button></td></tr>`;}).join('')}</tbody></table></div>
+    <p class="xs muted">훅 · 텔레메트리 상태 = 최근 24시간 수신 여부 (미수신이면 PC 설정 배포 확인) · 측정 대상을 끄면 그 개발자의 원천은 수신 즉시 폐기</p>`;}
+  else if(ST5.tab==='conf'){
+    const days=ALLD.filter(i=>i<TODAY);
+    body=`<p class="small muted">개발자 × 일자별 확정 상태 (요구사항 단위 확정을 하루로 묶어 표시) · 숫자 = 확정 필요 요구사항 수</p>
+    <div class="tw"><table class="hist"><thead><tr><th>개발자</th>${days.map(i=>`<th class="dh">${dl(i)}</th>`).join('')}<th class="dh">확정률</th></tr></thead><tbody>
+    ${DEVS.map(d=>{const rq=REQS.filter(r=>isOwner(r,d));let tot=0,ok=0;
+      const cells=days.map(i=>{const st=rq.map(r=>rowSt(d,r,i)).filter(Boolean);tot+=st.length;const n=st.filter(s=>s==='need'||s==='edit').length;ok+=st.length-n;
+        return st.length?`<td class="v ${n?'':'z'}">${n?`<b class="wn">${n}</b>`:'✓'}</td>`:'<td class="v z">·</td>';}).join('');
+      return`<tr><td class="nm">${d}</td>${cells}<td class="v">${tot?pct(ok/tot):'—'}</td></tr>`;}).join('')}</tbody></table></div>`;}
+  else if(ST5.tab==='batch'){
+    body=`<div class="tw"><table><thead><tr><th>대상 일자</th><th>예정</th><th>실행</th><th>상태</th><th class="r">처리 이벤트</th><th>산정 버전</th></tr></thead><tbody>
+    ${BATCH.map(b=>`<tr><td>${b[0]}</td><td>${b[1]}</td><td class="small">${b[2]}</td><td>${b[3]==='성공'?'<span class="ok small">● 성공</span>':`<span class="wn small">● ${b[3]}</span>`}</td><td class="r num">${f0(b[4])}</td><td class="mono small">${b[5]}</td></tr>`).join('')}</tbody></table></div>
+    <div class="acts"><button class="btn sm" id="rerun">11/12분 다시 산정 · 집계</button><span class="small muted">(개발자, 일자) 단위 재작성이라 다시 돌려도 결과가 같음 · 확정된 값은 바뀌지 않음</span></div>`;}
+  else if(ST5.tab==='reg'){
+    body=`<div class="tw"><table><thead><tr><th>일시</th><th>등록자</th><th>내용</th><th class="r">건수</th></tr></thead><tbody>${REGLOG.map(x=>`<tr><td class="small">${x.at}</td><td>${x.who}${x.who!=='관리자'?' <span class="pill neutral">개발자</span>':''}</td><td>${esc(x.what)}</td><td class="r num">${x.n}</td></tr>`).join('')}</tbody></table></div>
+    <p class="xs muted">개발자가 화면 · 양식으로 등록한 기준정보도 여기에 남음 · 측정이 시작된 단계의 기준 공수 · 담당 변경은 사유 필수</p>`;}
+  else{
+    body=`<div class="grid2"><div class="panel"><h3>SDLC 단계 · 업무 유형</h3><div class="tw"><table><thead><tr><th>단계</th><th>업무 유형</th></tr></thead><tbody>${SDLC.map(([c,n])=>`<tr><td><b>${n}</b> <span class="mono xs muted">${c}</span></td><td class="small">${WT[c].map(w=>esc(w)+(WT_NEW.has(w)?' <sup class="new">추가</sup>':'')).join(' · ')}</td></tr>`).join('')}</tbody></table></div></div>
+    <div class="panel"><h3>AI 도구 외 작업 유형 · 등급 단가</h3><div class="tw"><table><tbody>${TYPES.map(t=>`<tr><td>${tyChip(t[0])}</td><td class="small muted">${t[2]}</td></tr>`).join('')}</tbody></table></div>
+    <div class="tw"><table><thead><tr><th>등급</th><th class="r">M/D 단가 (원)</th></tr></thead><tbody>${Object.entries(PRICE).map(([k,v])=>`<tr><td>${k}</td><td class="r num">${f0(v)}</td></tr>`).join('')}</tbody></table></div></div></div>`;}
+  return`<div class="head"><h2>시스템 관리 <span class="pill neutral">관리자 전용</span></h2></div>
+  <div class="seg" id="s5Tab" style="width:fit-content">${tabs.map(([k,l])=>`<button data-t="${k}" aria-pressed="${ST5.tab===k}">${l}</button>`).join('')}</div>
+  <div class="panel">${body}</div>`;
+}
+function bindAdmin(){
+  $('#s5Tab').onclick=e=>{const b=e.target.closest('button');if(!b)return;ST5.tab=b.dataset.t;render();};
+  $$('[data-tg]').forEach(cb=>cb.onchange=()=>{TARGET[cb.dataset.tg]=cb.checked;toast(`${cb.dataset.tg} 측정 대상 ${cb.checked?'켬':'끔 · 이후 원천은 수신 즉시 폐기'}`);});
+  $$('[data-nudge]').forEach(b=>b.onclick=()=>toast(`${b.dataset.nudge}에게 확정 · 확인 필요 처리 요청 알림을 보냈습니다. (목업)`));
+  const a=$('#addDev');a&&(a.onclick=()=>toast('개발자 등록: 성명 · 소속 · SK AX 소속팀 입력 → 가명 키 · 설치 패키지 발급 (목업)'));
+  const rr=$('#rerun');rr&&(rr.onclick=()=>toast('11/12분 산정 · 집계를 다시 실행했습니다. 결과 변화 없음 (목업)'));
+}
+/* 확인 필요 배정 확인 게이트 */
+function confirmAssign(u,to,onOk){
+  const tgt=to?UC[to]:null;const key=tgt?k3(u.dev,tgt.r.id,u.d):'';const reopen=tgt&&CONF.has(key);
+  modal(`<h3>${to?'배정 확인':'업무 외 사용 확인'}</h3>
+    <div class="tw"><table><tbody>
+      <tr><td>AI 사용</td><td><b>${dl(u.d)} ${u.t}</b> · ${h1(u.min/60)}h · ${u.tool}</td></tr>
+      <tr><td>단서</td><td class="small">브랜치 ${esc(u.branch)} · ${esc(u.why)}</td></tr>
+      <tr><td>${to?'배정 대상':'처리'}</td><td>${to?`<b>${esc(tgt.r.name)}</b> · ${SN[tgt.s.c]} (${esc(tgt.s.wt)}) <span class="mono xs muted">${to}</span>`:'<b>업무 외 사용</b> · 집계에서 제외'}</td></tr>
+      ${to?`<tr><td>반영</td><td class="small">${dl(u.d)} ${SN[tgt.s.c]} AI 시간 +${h1(u.min/60)}h${reopen?' · <span class="wn">이미 확정한 날이라 다시 확정해야 합니다</span>':' · 그날 확정할 때 함께 확정'}</td></tr>`:''}</tbody></table></div>
+    <div class="acts"><button class="btn primary" id="caOk">확인</button><button class="btn" data-close>취소</button></div>`,m=>{m.querySelector('#caOk').focus();m.querySelector('#caOk').onclick=()=>{closeModal();onOk();};});
+}
+
+/* =================== Master data 추출 =================== */
+const strip=h=>String(h??'').replace(/<[^>]+>/g,'').replace(/&nbsp;/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').trim();
+const r2=x=>Math.round(x*100)/100;
+const wkOf=i=>i<5?'W45':'W46';
+const isoD=i=>{const [m,d]=DAYS[i].split('/');return`2026-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;};
+const XCOLS=[['AIS-01','LLM 구분',r=>r.llm],['AIS-02','AI 도구',r=>r.tool],['AIS-03','필요 계정 수',r=>r.acct],['AIS-04','LLM 모델',r=>r.model],['AIS-05','요금제',r=>r.plan],['AIS-06','예상 토큰량',r=>r.tok],
+ ['FIT-01','명세 명확성',r=>r.f1],['FIT-02','맥락 주입 가능성',r=>r.f2],['FIT-03','생성 패턴',r=>r.f3],['FIT-04','평가자 (개발자)',r=>r.evaluator],['FIT-05','참고 등급',r=>fitGrade(r)],['FIT-06','예상 기대효과',r=>r.exp],['FIT-07','판단 사유',r=>r.reason],
+ ['REF-01','참여 인력 (AX)',r=>r.people],['REF-02','AI 활용 개발 경험',r=>r.aiexp],['REF-03','AI 인증 등급',r=>r.cert],['REF-04','비고',r=>r.note],['REF-05','필수 입력 완료율',()=>'100%'],['추가','등록 출처',r=>r.reg||'양식']];
+function dsMaster(scope){const pc=COLS.p,rc=[...COLS.r,...XCOLS];
+  return[['과제 ID','PRJ-01 과제명',...pc.map(c=>(c[0]?c[0]+' ':'')+c[1]),'요구사항 ID','REQ-02 요구사항명','측정 상태',...SC.map(c=>`SDLC ${SN[c]} 업무 유형`),...SC.map(c=>`SDLC ${SN[c]} 기준 M/D`),...SC.map(c=>`SDLC ${SN[c]} 담당`),...rc.map(c=>c[0]+' '+c[1])],
+  ...scope.map(r=>{const p=prj(r.pid);const st=c=>r.stages.find(s=>s.c===c);
+    return[p.id,p.name,...pc.map(c=>strip(c[3](p))),r.id,r.name,stLabel[status(r)],...SC.map(c=>st(c)?.wt||''),...SC.map(c=>st(c)?st(c).base:''),...SC.map(c=>st(c)?.owner||''),...rc.map(c=>strip(c[2](r)))];})];}
+function dsStage(scope){const out=[['과제 ID','과제명','구분','요구사항 ID','요구사항명','SDLC 단계','업무 유형','담당자','단계 상태','기준 M/D','투입 (h)','투입 M/D','AI 도구 내 (h)','AI 도구 외 (h)','AI 비용 (원)']];
+  scope.forEach(r=>{const p=prj(r.pid);unitsOf(r).forEach(u=>{const s=uStats(u);out.push([p.id,p.name,p.kind,r.id,r.name,SN[u.s.c],u.s.wt,u.s.owner,ST_NAME[stageSt(r,u.s)],u.s.base,r2(s.tot),r2(s.md),r2(s.inT),r2(s.out),Math.round(s.cost)]);});});return out;}
+function dsDaily(scope,devs){const out=[['일자','요일','주차','과제 ID','과제명','구분','요구사항 ID','요구사항명','SDLC 단계','업무 유형','담당자','AI 수집 (h)','감소 (h)','AI 도구 내 (h)',...TYPES.map(t=>`${t[0]} ${t[1]} (h)`),'AI 도구 외 (h)','투입 (h)','투입 (M/D)','AI 비용 (원)','확정','수정 횟수','메모']];
+  scope.forEach(r=>{const p=prj(r.pid);unitsOf(r).filter(u=>devs.includes(u.s.owner)).forEach(u=>{for(let i=0;i<10;i++){const x=cell(u.code,i);if(!x.ai&&!x.add&&!x.mn)continue;const key=k3(u.s.owner,r.id,i);
+    out.push([isoD(i),DOW[i],wkOf(i),p.id,p.name,p.kind,r.id,r.name,SN[u.s.c],u.s.wt,u.s.owner,x.ai,x.mn,x.inT,...TYPES.map(t=>D[u.code].add[i][t[0]]||0),x.add,x.tot,r2(x.tot/8),Math.round(x.ai*RATE(u)),CONF.has(key)?'Y':i===TODAY?'수집 전':'N',REVC.get(key)||0,D[u.code].memo[i]||'']);}});});return out;}
+function dsResult(scope){const out=[['과제 ID','과제명','구분','요구사항 ID','요구사항명','측정 단계','담당자','측정 상태','적용 등급','기준 M/D','투입 M/D','AI 도구 내 (h)','AI 도구 외 (h)','AI 활용률','기준 인건비 (원)','측정 인건비 (원)','AI 비용 (원)','측정 총비용 (원)','투입 공수 절감률','순절감률','통합 테스트 가능','결함 (건)','산출물 신뢰도 (5점)',...SC.map(c=>`${SN[c]} 투입 (h)`),...TYPES.map(t=>`${t[0]} ${t[1]} (h)`)]];
+  scope.forEach(r=>{const p=prj(r.pid),s=reqStats(r);out.push([p.id,p.name,p.kind,r.id,r.name,r.stages.map(x=>SN[x.c]).join(' · '),ownersOf(r).join(', '),stLabel[status(r)],r.grade,r.base,r2(s.md),r2(s.inT),r2(s.out),s.tot?r2(s.inT/s.tot):'',
+    Math.round(s.bc),Math.round(s.lc),Math.round(s.ai),Math.round(s.tc),r2(s.save),r2(s.net),r.it?'Y':'N',DEF[r.id]??'',SURVEY[r.id]??'',
+    ...SC.map(c=>{const u=UC[r.id+'-'+c];return u?r2(uStats(u).tot):'';}),...TYPES.map(t=>r2(s.byType[t[0]]||0))]);});return out;}
+function dsUna(devs){return[['일자','담당자','시간대','분','도구','브랜치','확인 사유','추천 업무 코드'],...UNA.filter(u=>devs.includes(u.dev)).map(u=>[isoD(u.d),u.dev,u.t,u.min,u.tool,u.branch,u.why,u.rec||''])];}
+function dsCode(){return[['코드 그룹','코드','이름','설명'],...SDLC.map(([c,n])=>['SDLC 단계',c,n,c==='DP'||c==='OP'?'추가 제안':'']),
+  ...SC.flatMap(c=>WT[c].map((w,k)=>['업무 유형',`${c}${String(k+1).padStart(2,'0')}`,w,`${SN[c]} 단계${WT_NEW.has(w)?' · 추가 제안':' · 양식 REQ-03'}`])),
+  ...TYPES.map(t=>['AI 도구 외 작업 유형',t[0],t[1],t[2]]),...Object.entries(PRICE).map(([k,v])=>['등급 단가 (원/M·D)',k,v,'']),
+  ['측정 상태','대기','측정 대기',''],['측정 상태','측정중','측정 중',''],['측정 상태','완료','측정 완료',''],['단계 상태','wait','대기',''],['단계 상태','ing','진행 중',''],['단계 상태','done','완료','']];}
+function exportSets(){const adm=role==='admin';const scope=REQS.filter(canSee);const devs=adm?DEVS:[ME];
+  return[['기준정보',dsMaster(scope),'과제 · 요구사항 양식 전체 열 + SDLC 단계별 업무 유형 · 기준 공수 · 담당'],
+    ['SDLC 단계',dsStage(scope),'요구사항 × SDLC 단계 · 업무 유형 · 기준 · 투입 · 단계 상태'],
+    ['일별 투입 공수',dsDaily(scope,devs),'요구사항 × SDLC 단계 × 일자 · 작업 유형별 시간 · 확정 · 수정 이력'],
+    ['측정 결과',dsResult(scope),'요구사항별 기준 · 투입 · 비용 · 지표 값'],
+    ['확인 필요 AI 시간',dsUna(devs),'업무 코드 없이 잡힌 AI 사용 (배정 전)'],
+    ['코드',dsCode(),'SDLC 단계 · 업무 유형 · 작업 유형 · 단가 · 상태 코드']];}
+
+function dl_(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);}
+const toCSV=rows=>'﻿'+rows.map(r=>r.map(v=>{v=String(v??'');return/[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v;}).join(',')).join('\r\n');
+/* 외부 라이브러리 없이 xlsx 생성 (무압축 zip + SpreadsheetML) */
+const CRCT=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(u){let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRCT[(c^u[i])&0xFF]^(c>>>8);return(c^0xFFFFFFFF)>>>0;}
+function zipStore(files){const enc=new TextEncoder();const parts=[],cen=[];let off=0;
+  files.forEach(f=>{const nm=enc.encode(f.name),d=enc.encode(f.text),crc=crc32(d),sz=d.length;
+    const l=new DataView(new ArrayBuffer(30));l.setUint32(0,0x04034b50,true);l.setUint16(4,20,true);l.setUint16(6,0x0800,true);l.setUint16(12,0x21,true);l.setUint32(14,crc,true);l.setUint32(18,sz,true);l.setUint32(22,sz,true);l.setUint16(26,nm.length,true);
+    parts.push(new Uint8Array(l.buffer),nm,d);
+    const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(14,0x21,true);c.setUint32(16,crc,true);c.setUint32(20,sz,true);c.setUint32(24,sz,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);
+    cen.push(new Uint8Array(c.buffer),nm);off+=30+nm.length+sz;});
+  const cs=cen.reduce((a,b)=>a+b.length,0);const e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cs,true);e.setUint32(16,off,true);
+  return new Blob([...parts,...cen,new Uint8Array(e.buffer)],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});}
+const xe=v=>String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');
+const colL=n=>{let s='';n++;while(n){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26);}return s;};
+function sheetXml(rows){const w=rows[0].map((h,c)=>Math.max(8,Math.min(30,Math.max(...rows.slice(0,60).map(r=>String(r[c]??'').length))*1.5+2)));
+  const body=rows.map((r,ri)=>`<row r="${ri+1}">${r.map((v,ci)=>{const ref=colL(ci)+(ri+1),st=ri===0?' s="1"':'';
+    return typeof v==='number'&&isFinite(v)?`<c r="${ref}"${st}><v>${v}</v></c>`:`<c r="${ref}" t="inlineStr"${st}><is><t xml:space="preserve">${xe(v??'')}</t></is></c>`;}).join('')}</row>`).join('');
+  return`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${w.map((x,i)=>`<col min="${i+1}" max="${i+1}" width="${x}" customWidth="1"/>`).join('')}</cols><sheetData>${body}</sheetData><autoFilter ref="A1:${colL(rows[0].length-1)}${rows.length}"/></worksheet>`;}
+function makeXlsx(sets){const n=sets.length;const f=[];
+  f.push({name:'[Content_Types].xml',text:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`});
+  f.push({name:'_rels/.rels',text:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`});
+  f.push({name:'xl/workbook.xml',text:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sets.map((x,i)=>`<sheet name="${xe(x[0])}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets></workbook>`});
+  f.push({name:'xl/_rels/workbook.xml.rels',text:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sets.map((_,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${n+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`});
+  f.push({name:'xl/styles.xml',text:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="10"/><name val="맑은 고딕"/></font><font><b/><sz val="10"/><name val="맑은 고딕"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF0F0"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf fontId="0" fillId="0" borderId="0" xfId="0"/><xf fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`});
+  sets.forEach((x,i)=>f.push({name:`xl/worksheets/sheet${i+1}.xml`,text:sheetXml(x[1])}));
+  return zipStore(f);}
+
+const stamp='20261113';
+$('#exp').onclick=()=>{const sets=exportSets();
+  modal(`<h3>Master data 추출</h3><p class="small muted">${role==='admin'?'전체 과제 · 요구사항 · 인력':'내가 담당한 요구사항'} 기준 · 기준 시각 11/13 16:20 · AI 사용은 11/12분까지</p>
+  <div class="tw"><table><thead><tr><th><input type="checkbox" id="exAll" checked aria-label="전체 선택"></th><th>시트</th><th>내용</th><th class="r">행</th><th class="r">열</th><th></th></tr></thead><tbody>
+  ${sets.map((x,k)=>`<tr><td><input type="checkbox" data-ex="${k}" checked aria-label="${x[0]}"></td><td><b>${x[0]}</b></td><td class="small muted">${x[2]}</td><td class="r num">${x[1].length-1}</td><td class="r num">${x[1][0].length}</td><td><button class="btn sm" data-csv="${k}">CSV</button></td></tr>`).join('')}</tbody></table></div>
+  <div class="acts"><button class="btn primary" id="exX">선택 시트 Excel로 받기</button><button class="btn" id="exC">선택 시트 CSV로 받기</button><button class="btn" data-close>닫기</button></div>`,m=>{
+    m.classList.add('wide');
+    const picked=()=>[...m.querySelectorAll('[data-ex]')].filter(c=>c.checked).map(c=>sets[+c.dataset.ex]);
+    m.querySelector('#exAll').onchange=e=>m.querySelectorAll('[data-ex]').forEach(c=>c.checked=e.target.checked);
+    m.querySelectorAll('[data-csv]').forEach(b=>b.onclick=()=>{const x=sets[+b.dataset.csv];dl_(`PoC_${x[0]}_${stamp}.csv`,new Blob([toCSV(x[1])],{type:'text/csv;charset=utf-8'}));});
+    m.querySelector('#exC').onclick=()=>{const ps=picked();ps.forEach((x,k)=>setTimeout(()=>dl_(`PoC_${x[0]}_${stamp}.csv`,new Blob([toCSV(x[1])],{type:'text/csv;charset=utf-8'})),k*300));toast(`${ps.length}개 시트를 CSV로 내려받습니다.`);};
+    m.querySelector('#exX').onclick=()=>{const ps=picked();if(!ps.length){toast('시트를 골라 주세요.');return;}
+      dl_(`PoC_Master_${stamp}.xlsx`,makeXlsx(ps));toast(`${ps.length}개 시트를 Excel 파일 1개로 내려받았습니다.`);};});};
+
+/* =================== 테스트 시나리오 =================== */
+const resetE=()=>{ST2.dev='';ST2.prj='';ST2.f=new Set(['need','ing']);ST2.sel=new Set();ST2.una=false;ST2.hist=new Set();};
+const SCN=[
+ ['개발자','본인 과제만 보이는 현황','개발자 로그인 시 내 담당 요구사항이 있는 과제만 · 과제 행에 진척',()=>go('status','dev')],
+ ['개발자','기준정보 입력 (행 추가)','＋ 기준정보 입력 → 과제 선택 · 요구사항 · SDLC 단계 · 업무 유형 드롭다운 → 복제로 단계 추가 → 저장',()=>{go('status','dev');openReg();}],
+ ['관리자','과제 등록 → 요구사항 등록','기준정보 입력 → 과제 탭에서 과제 추가 → 요구사항 탭에서 그 과제로 여러 줄 입력',()=>{go('status','admin');openReg();REG.tab='prj';drawReg($('.modal'));}],
+ ['관리자','과제 정보 · 진척 우선 현황','SDLC 측정 구간 → 과제(SK AX 소속팀 · 하이닉스 담당팀) → 요구사항 규모 → SDLC 상세(맨 뒤 접힘)',()=>go('status','admin')],
+ ['개발자','어제분 확정','설비 이벤트 수신 로직 변경 · 11/12 · 11/11 확정 필요 줄 → 확정',()=>go('effort','dev',()=>{ST2.sel=new Set(['REQ-0047']);})],
+ ['개발자','확인 필요 배정 (확인 게이트)','빨간 카드 → 추천 칩 → 확인 창에서 대상 · 반영 내용 확인 후 확인',()=>go('effort','dev',()=>{ST2.una=true;})],
+ ['개발자','나눠서 배정 · 업무 외','11/11 70분 → 설계 0.5h + 개발 0.6h 나머지 업무 외',()=>go('effort','dev',()=>{ST2.una=true;})],
+ ['개발자','AI 시간 직접 고치기','AI 칸에 0.1 단위로 입력 · 수집값보다 크게는 불가',()=>go('effort','dev',()=>{ST2.sel=new Set(['REQ-0047']);})],
+ ['개발자','AI 도구 외 시간 넣기','＋ → 작업 유형 8개 0.1 단위 · A8 기타는 메모 필수',()=>{go('effort','dev',()=>{ST2.sel=new Set(['REQ-0051']);});openAdd('REQ-0051-DV',8);}],
+ ['개발자','확정한 날 수정 · 재확정','상세 실적 펼치기 → 수정 → 재확정',()=>go('effort','dev',()=>{ST2.sel=new Set(['REQ-0047']);ST2.hist.add(`${ME}|REQ-0047`);})],
+ ['개발자','여러 요구사항 함께 보기','목록 체크박스로 2건 선택',()=>go('effort','dev',()=>{ST2.sel=new Set(['REQ-0047','REQ-0051']);})],
+ ['개발자','훅 명령어 복사','요약 아래 poc 업무 코드 복사 버튼',()=>go('effort','dev',()=>{ST2.sel=new Set(['REQ-0051']);})],
+ ['관리자','시스템 관리 · 개발자 관리','수집 설치 상태 (정개발 훅 미수신) · 확정 필요 · 확정 요청 알림',()=>go('admin','admin')],
+ ['관리자','시스템 관리 · 확정 현황','개발자 × 일자 확정 필요 수 · 확정률',()=>go('admin','admin',()=>{ST5.tab='conf';})],
+ ['관리자','시스템 관리 · 배치 상태','06시 배치 이력 · 11/10 지연 후 재실행',()=>go('admin','admin',()=>{ST5.tab='batch';})],
+ ['관리자','개발자별 투입 공수 조회','정개발 · 확정 필요 2일 · 확인 필요 2건 (조회 전용)',()=>go('effort','admin',()=>{ST2.dev='정개발';})],
+ ['관리자','AI 사용 미수집 (A7)','정개발 입고 지연 표시 11/10',()=>go('effort','admin',()=>{ST2.dev='정개발';ST2.sel=new Set(['REQ-0024']);ST2.hist.add('정개발|REQ-0024');})],
+ ['관리자','SDLC 단계별 결과','대시보드 · 단계 → 업무 유형 펼치기',()=>go('dash','admin',()=>{F.closed=new Set(SC.filter(c=>c!=='DV'));})],
+ ['관리자','운영 과제만 집계','구분 = 운영',()=>go('dash','admin',()=>{F.kind=new Set(['운영']);})],
+ ['개발자','내 실적만 집계되는 대시보드','개발자 로그인 시 본인 담당 요구사항만',()=>go('dash','dev')]];
+function go(t,r,fn){role=r;$$('#roleSeg button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.role===r));
+  F.kind.clear();F.prj.clear();F.req.clear();F.inc=false;F.open=null;F.closed=new Set(SC);ST1.st='';ST1.q='';ST1.kind='';ST1.pc.clear();ST1.coll=new Set(['g']);resetE();ST5.tab='dev';tab=t;fn&&fn();closeModal();scrollTo(0,0);render();}
+$('#scn').onclick=()=>modal(`<h3>테스트 시나리오</h3><div class="tw"><table><thead><tr><th>로그인</th><th>시나리오</th><th>확인할 것</th><th></th></tr></thead><tbody>${SCN.map((x,k)=>`<tr><td class="small">${x[0]}</td><td class="small"><b>${x[1]}</b></td><td class="small muted">${x[2]}</td><td><button class="btn sm" data-scn="${k}">열기</button></td></tr>`).join('')}</tbody></table></div><div class="acts"><button class="btn" data-close>닫기</button></div>`,
+  m=>{m.classList.add('wide');m.querySelectorAll('[data-scn]').forEach(b=>b.onclick=()=>SCN[+b.dataset.scn][3]());});
+
+/* =================== 변경 내역 =================== */
+$('#chg').onclick=()=>modal(`<h3>v16 → v17 변경 내역</h3><ul>
+<li>PoC 과제 현황: 과제 정보 · 진척 우선 (과제 행에 완료 수 · 투입 / 기준 막대), SDLC 측정 구간 다음에 과제 → 요구사항 규모 순</li>
+<li>SDLC 단계별 상세(업무 유형 · 기준 · 담당)는 맨 뒤로 옮기고 기본 접힘, AI 적용 계획 · 적합도 · 참여 인력은 현황에서 제외 (기준정보 입력 · 추출에는 유지)</li>
+<li>담당을 SK AX 소속팀 · 하이닉스 담당 · 하이닉스 시스템 담당팀으로 분리</li>
+<li>권한: 개발자는 본인 담당 요구사항이 있는 과제만 보임 (현황 · 투입 공수 · 대시보드), 관리자만 전체</li>
+<li>기준정보 입력: 관리자 · 개발자 모두, 「＋ 행 추가 · ＋ 5행 · 복제」로 여러 줄을 드롭다운으로 한 번에 등록 (요구사항 × SDLC 단계 / 과제)</li>
+<li>시스템 관리 메뉴 (관리자 전용): 개발자 관리 · 확정 현황 · 배치 · 수집 상태 · 기준정보 변경 이력 · 코드 · 단가</li>
+<li>확인 필요: 추천 칩 · 선택 · 업무 외를 누르면 바로 반영하지 않고 확인 창에서 한 번 더 확인</li></ul>
+<div class="acts"><button class="btn" data-close>닫기</button></div>`);
+
+/* =================== 역할 · 탭 =================== */
+const TABS=[['status','PoC 과제 현황'],['effort','투입 공수 (입력 · 실적)'],['dash','측정 결과 대시보드'],['admin','시스템 관리']];
+const VIEWS={status:[renderStatus,bindStatus],effort:[renderEffort,bindEffort],dash:[renderDash,bindDash],admin:[renderAdmin,bindAdmin]};
+let role='admin',tab='status';
+function render(){
+  const n=role==='dev'?badgeN():0;if(tab==='admin'&&role!=='admin')tab='status';
+  $('#tabs').innerHTML=TABS.filter(t=>t[0]!=='admin'||role==='admin').map(([k,l])=>`<button role="tab" data-tab="${k}" aria-selected="${k===tab}">${l}${k==='effort'&&n?`<span class="cnt" data-tip="확정 필요 일수 + 확인 필요 건수">${n}</span>`:''}${k==='admin'?' <span class="xs muted">관리자</span>':''}</button>`).join('');
+  const [r,b]=VIEWS[tab];const y=scrollY;$('#main').innerHTML=r();b();scrollTo(0,y);
+  try{localStorage.setItem('mock17',JSON.stringify({role,tab}));}catch(e){}
+}
+$('#tabs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.tab;F.open=null;scrollTo(0,0);render();});
+$('#roleSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;role=b.dataset.role;
+  $$('#roleSeg button').forEach(x=>x.setAttribute('aria-pressed',x===b));F.kind.clear();F.prj.clear();F.req.clear();F.open=null;ST1.pc.clear();resetE();render();});
+try{const s=JSON.parse(localStorage.getItem('mock17')||'null');if(s&&VIEWS[s.tab]&&(s.role==='admin'||s.role==='dev')){role=s.role;tab=s.tab;$$('#roleSeg button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.role===role));}}catch(e){}
+render();
+
+</script>
+</body>
+</html>

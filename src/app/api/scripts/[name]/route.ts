@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { fail } from "@/lib/api";
 import { route } from "@/lib/route";
 
-const ALLOWED = new Set(["collect_ai_usage.py", "extract_commits.py", "README.md"]);
+const ALLOWED = new Set(["collect_ai_usage.py", "README.md"]);
 
 export const GET = route<{ name: string }>(async ({ params }) => {
   // 허용 목록으로만 내려준다 — 경로 조작으로 다른 파일을 읽지 못하게.

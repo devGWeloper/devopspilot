@@ -1,13 +1,16 @@
 // Edge 미들웨어·클라이언트·서버가 모두 import 하므로 Node 전용 모듈을 가져오지 않는다.
-import type { OrgCd, Project, Role } from "../types";
+import type { OrgCd, Requirement, Role } from "../types";
 
 export const ROLE_LABEL: Record<Role, string> = {
-  AX_ADMIN: "AX 관리자",
-  HX_REVIEWER: "HX 검토자",
-  PM: "과제 PM",
+  ADMIN: "관리자",
   DEVELOPER: "개발자",
-  TESTER: "테스트 수행자",
   VIEWER: "열람자",
+};
+
+export const ROLE_DESC: Record<Role, string> = {
+  ADMIN: "과제·요구사항 입력, 전체 조회, 시스템 관리",
+  DEVELOPER: "내 담당 단계의 공수 입력·확정",
+  VIEWER: "현황·측정 결과 조회",
 };
 
 export interface Actor {
@@ -17,85 +20,31 @@ export interface Actor {
 
 export type ActorFull = Actor & { userNm: string; orgCd: OrgCd };
 
-export type Action =
-  | "project.create"
-  | "project.edit"
-  | "project.submit"
-  | "project.status"
-  | "project.confirm"
-  | "project.review"
-  | "criteria.manage"
-  | "codes.manage"
-  | "users.manage"
-  | "history.view"
-  | "export"
-  | "ai.use"
-  | "measure.feature"
-  | "measure.effort"
-  | "measure.defect"
-  | "measure.upload.usage"
-  | "measure.upload.commit"
-  | "measure.settings"
-  | "measure.comment";
+export type Action = "project.manage" | "users.manage" | "settings.manage" | "history.view" | "effort.edit" | "effort.upload";
 
-export interface PermissionContext {
-  project?: Pick<Project, "pmUserId" | "status">;
-  feature?: { devUserId: string | null };
-}
-
-const EDITABLE = new Set(["DRAFT", "SUPPLEMENT"]);
-
-export function can(actor: Actor, action: Action, ctx: PermissionContext = {}): boolean {
-  const { role, userId } = actor;
-  const p = ctx.project;
-  const ownProject = !!p && p.pmUserId === userId;
-  const measuring = !!p && p.status === "SELECTED";
-
+export function can(actor: Actor, action: Action, ctx: { req?: Requirement; ownerId?: string | null } = {}): boolean {
   switch (action) {
-    case "project.submit":
-      if (!p || !EDITABLE.has(p.status)) return false;
-      return role === "AX_ADMIN" || (role === "PM" && ownProject);
-    case "project.edit":
-      if (role === "AX_ADMIN") return true;
-      return role === "PM" && ownProject && EDITABLE.has(p!.status);
-    case "project.create":
-      return role === "AX_ADMIN" || role === "PM";
-    case "project.review":
-    case "measure.comment":
-      return role === "AX_ADMIN" || role === "HX_REVIEWER";
-    case "export":
-      return role !== "VIEWER";
-    case "measure.feature":
-    case "measure.upload.commit":
-      if (role === "AX_ADMIN") return true;
-      return role === "PM" && ownProject && measuring;
-    case "measure.effort":
-      if (role === "AX_ADMIN") return true;
-      return role === "DEVELOPER" && measuring && !!ctx.feature && ctx.feature.devUserId === userId;
-    case "measure.defect":
-      if (role === "AX_ADMIN") return true;
-      return role === "TESTER" && measuring;
-    case "measure.upload.usage":
-      if (role === "AX_ADMIN") return true;
-      return role === "DEVELOPER" && measuring;
+    case "effort.edit":
+      // 관리자도 대신 입력하지 않는다 — 확정은 본인 확인이라는 의미가 있어서.
+      if (actor.role !== "DEVELOPER") return false;
+      if (ctx.ownerId !== undefined) return ctx.ownerId === actor.userId;
+      return !!ctx.req && ctx.req.stages.some((s) => s.ownerId === actor.userId);
+    case "effort.upload":
+      return actor.role === "DEVELOPER";
     default:
-      return role === "AX_ADMIN";
+      return actor.role === "ADMIN";
   }
 }
 
-interface PathRule {
-  prefix: string;
-  roles: Role[];
+/** 요구사항을 볼 수 있는지 — 개발자는 내 담당 단계가 있는 요구사항만 */
+export function canSee(actor: Actor, req: Requirement): boolean {
+  if (actor.role !== "DEVELOPER") return true;
+  return req.stages.some((s) => s.ownerId === actor.userId);
 }
 
-const PATH_RULES: PathRule[] = [
-  { prefix: "/admin", roles: ["AX_ADMIN"] },
-  { prefix: "/api/admin", roles: ["AX_ADMIN"] },
-  { prefix: "/entry", roles: ["AX_ADMIN", "PM"] },
-  { prefix: "/today", roles: ["AX_ADMIN", "DEVELOPER"] },
-  { prefix: "/collect", roles: ["AX_ADMIN", "PM", "DEVELOPER"] },
-  { prefix: "/check", roles: ["AX_ADMIN", "PM"] },
-  { prefix: "/defects", roles: ["AX_ADMIN", "TESTER", "HX_REVIEWER", "PM"] },
+const PATH_RULES: { prefix: string; roles: Role[] }[] = [
+  { prefix: "/admin", roles: ["ADMIN"] },
+  { prefix: "/api/admin", roles: ["ADMIN"] },
 ];
 
 function matches(pathname: string, prefix: string) {
@@ -108,14 +57,5 @@ export function canAccessPath(role: Role, pathname: string): boolean {
 }
 
 export function homePathFor(role: Role): string {
-  if (role === "DEVELOPER") return "/today";
-  if (role === "TESTER") return "/defects";
-  if (role === "PM") return "/entry";
-  return "/";
-}
-
-export function reviewSide(actor: Actor & { orgCd: OrgCd }): "AX" | "HX" | null {
-  if (actor.role === "AX_ADMIN") return "AX";
-  if (actor.role === "HX_REVIEWER") return "HX";
-  return null;
+  return role === "DEVELOPER" ? "/effort" : "/";
 }

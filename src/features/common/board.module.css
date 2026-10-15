@@ -1,0 +1,314 @@
+/* 업무 화면 공통 — 무채색, 색은 '확정 필요'·오류 같은 위험 신호에만 */
+
+.head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.note {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.acts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.seg button {
+  border: 0;
+  background: none;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.seg button + button {
+  border-left: 1px solid var(--line);
+}
+
+.seg button[aria-pressed="true"] {
+  background: var(--ink);
+  color: #fff;
+}
+
+.seg b {
+  font-variant-numeric: tabular-nums;
+}
+
+.sel {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+/* SDLC 6칸 막대 */
+.sbar {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+  min-width: 132px;
+}
+
+.sbar i {
+  height: 10px;
+  border-radius: 2px;
+  background: var(--bg-deep);
+}
+
+.sbar i.off {
+  background: none;
+  border: 1px dashed var(--line);
+}
+
+.sbar i.WAIT {
+  background: var(--line-strong);
+}
+
+.sbar i.ING {
+  background: var(--muted);
+}
+
+.sbar i.DONE {
+  background: var(--ink);
+}
+
+.sbar i.oth {
+  opacity: 0.35;
+}
+
+.saxis {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+  font-size: 10px;
+  color: var(--subtle);
+  text-align: center;
+  min-width: 132px;
+}
+
+.sleg {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+
+.sleg i {
+  display: inline-block;
+  width: 10px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 4px;
+}
+
+/* 진척 막대 */
+.hbar {
+  height: 6px;
+  background: var(--bg-deep);
+  border-radius: 3px;
+  overflow: hidden;
+  display: flex;
+  flex: 1;
+  min-width: 60px;
+}
+
+.hbar i {
+  display: block;
+  height: 100%;
+  background: var(--ink-2);
+}
+
+.hbar i.over {
+  background: var(--danger);
+}
+
+.prog {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+/* 상태 표시 */
+.st {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.st::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+.st.ING::before {
+  background: var(--muted);
+}
+
+.st.DONE {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.st.DONE::before {
+  background: var(--ink);
+}
+
+.warn {
+  color: var(--warn);
+  font-weight: 650;
+}
+
+.danger {
+  color: var(--danger);
+  font-weight: 650;
+}
+
+.pill {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.pillWarn {
+  composes: pill;
+  border-color: var(--warn);
+  color: var(--warn);
+  font-weight: 650;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+}
+
+/* 표 */
+.tw {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.tbl th {
+  text-align: left;
+  font-weight: 650;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+
+.tbl td {
+  border-bottom: 1px solid var(--line);
+  padding: 8px 10px;
+  vertical-align: top;
+}
+
+.tbl tr:last-child td {
+  border-bottom: 0;
+}
+
+.tbl .r {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.tbl .c {
+  text-align: center;
+}
+
+.grp td {
+  background: var(--surface-2);
+  font-weight: 650;
+}
+
+.sum td {
+  background: var(--surface-2);
+  font-weight: 650;
+}
+
+.small {
+  font-size: 12px;
+}
+
+.xs {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.lnk {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-size: 12px;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+@media (max-width: 720px) {
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
+}

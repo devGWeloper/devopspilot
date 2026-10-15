@@ -1,25 +1,35 @@
-import type { MeasureSettings } from "./types";
+import type { Settings } from "./types";
 
-export const DEFAULT_WBS_PATTERN = "WBS-[0-9]+(?:\\.[0-9]+)*";
+export const SETTINGS_KEY = "SETTINGS";
 
-export function defaultMeasureSettings(): MeasureSettings {
+export function defaultSettings(): Settings {
   return {
-    laborRatePerHour: 0,
-    tokenPrices: [],
-    postFixDays: 14,
-    phases: { DESIGN: true, DEV: true, UNIT: true, INTEG: false },
-    crossCheckToleranceDays: 1,
-    idleAlertDays: 3,
     mdHours: 8,
-    sizeBands: { S: 16, M: 40, L: 80 },
-    featureTypes: [
-      { code: "SCREEN", label: "화면" },
-      { code: "IF_BATCH", label: "IF·배치" },
-      { code: "MES_LOGIC", label: "MES 도메인 로직" },
-      { code: "LEGACY", label: "레거시 수정" },
-    ],
-    wbsPattern: DEFAULT_WBS_PATTERN,
-    jiraMappings: {},
-    sampleValues: false,
+    gradePrice: { 특급: 750000, 고급: 620000, 중급: 480000, 초급: 360000 },
+    aiRate: { "Claude Code": 10500, Codex: 9000, "사내 소스코딩 에이전트": 1500 },
+    defaultAiRate: 10000,
+    measureStart: "2026-11-02",
+    workTypes: {
+      AN: ["요구사항 분석·정의"],
+      DS: ["UI 설계", "프로그램 설계", "DB 설계", "인터페이스 설계"],
+      DV: ["UI 개발", "백엔드 로직 신규", "백엔드 로직 수정", "인터페이스·연계", "DB·SQL", "배치", "코드·플랫폼 전환", "성능 개선"],
+      TS: ["단위 테스트", "통합·회귀 테스트"],
+      DP: ["배포·이행", "배포 후 검증"],
+      OP: ["장애 분석·조치", "데이터 조치", "운영 요청 처리"],
+    },
+  };
+}
+
+/** 저장된 설정에 빠진 키가 있어도(이전 버전) 화면이 깨지지 않게 기본값으로 채운다. */
+export function normalizeSettings(v: Partial<Settings> | null | undefined): Settings {
+  const d = defaultSettings();
+  if (!v) return d;
+  return {
+    mdHours: v.mdHours && v.mdHours > 0 ? v.mdHours : d.mdHours,
+    gradePrice: { ...d.gradePrice, ...(v.gradePrice ?? {}) },
+    aiRate: v.aiRate ?? d.aiRate,
+    defaultAiRate: v.defaultAiRate ?? d.defaultAiRate,
+    measureStart: v.measureStart || d.measureStart,
+    workTypes: { ...d.workTypes, ...(v.workTypes ?? {}) },
   };
 }

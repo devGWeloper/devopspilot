@@ -53,7 +53,7 @@ AI Tool 없이 이미 완료된 프로젝트를 AI Tool 로 다시 수행(분석
 - **테이블 자동 생성**: Oracle 연결 시 최초 1회 `USER_TABLES` 를 확인해 `POC_` 테이블이 없으면 DDL 을 실행한다(단일 계정이 소유하므로 권한 문제 없음). 같은 DDL 을 `sql/create_tables.sql` 로도 제공(DBA 수동 실행용).
 - 계정 테이블이 비어 있으면 `admin` / `admin123!` (AX_ADMIN) 자동 생성.
 - `config.yml` 은 gitignore (비밀번호·API 키 보호). 별도 배포 스크립트 없음.
-- 포트 기본 3000 (`npm run dev` / `npm run build && npm start` 둘 다 동작).
+- 포트 기본 5176 (`npm run dev` / `npm run build && npm start` 둘 다 동작).
 
 `config.example.yml`:
 ```yaml

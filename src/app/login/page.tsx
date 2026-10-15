@@ -14,10 +14,9 @@ interface Demo {
 }
 
 const STEPS = [
-  ["후보 접수", "과제 PM 이 기본정보·기존 실적·지표를 입력"],
-  ["적합도 평가", "Major/Minor 지표 프로필로 상·중·하 판정"],
-  ["공동 합의", "SK AX·SK hynix 의견과 동의 기록"],
-  ["선정·측정", "균형 잡힌 포트폴리오 확정 후 Replay 측정"],
+  ["과제 현황", "선정된 과제·요구사항과 SDLC 단계별 기준 공수"],
+  ["투입 공수", "AI 사용 시간 자동 수집 + AI 도구 외 시간 입력, 날마다 확정"],
+  ["측정 결과", "확정된 값으로 공수 절감률·순절감률·AI 활용률"],
 ];
 
 function LoginForm() {
@@ -56,15 +55,15 @@ function LoginForm() {
           <span className={s.org}>SK hynix × SK AX</span>
         </div>
         <div className={s.heroBody}>
-          <span className={s.kicker}>과제 선정 · Replay 측정 포털</span>
+          <span className={s.kicker}>과제 현황 · 투입 공수 · 측정 결과</span>
           <h1 className={s.title}>
             AI 활용
             <br />
             생산성 향상 PoC
           </h1>
           <p className={s.lead}>
-            AI 를 활용했을 때 개발 생산성이 얼마나 향상되는지 측정하기 위한 PoC 입니다. 이미 완료된 과제를 AI 로 다시 개발해
-            기존 실적과 비교하며, 과제 선정부터 측정까지 양사가 한 곳에서 함께 관리합니다.
+            AI 를 활용했을 때 개발 생산성이 얼마나 향상되는지 측정하기 위한 PoC 입니다. 선정된 요구사항의 기준 공수와
+            실제 투입 공수를 SDLC 단계별로 비교합니다.
           </p>
           <ol className={s.steps}>
             {STEPS.map(([t, d], i) => (

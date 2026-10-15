@@ -1,304 +1,264 @@
-import { can, reviewSide, type ActorFull } from "../auth/permissions";
-import { getPublishedCriteria } from "../criteria/service";
-import { shallowDiff } from "../diff";
-import { deriveColumns, evaluateFit, FIT_LABEL, reconcileAnswers } from "../fitness";
+import { can, type ActorFull } from "../auth/permissions";
 import { record } from "../history";
-import { STATUS_LABEL } from "../labels";
 import { conflictR, err, forbiddenR, notFoundR, okR, type ServiceResult } from "../result";
-import { DuplicateKeyError, type Store } from "../store/types";
-import { LEVELS, type AgreeCd, type Criteria, type Level, type Project, type ProjectStatus, type ReviewEntry } from "../types";
-import { normalizeBase } from "./base";
-import { canTransition, noteRequired } from "./transitions";
-import { validateDraft, validateForSubmit, type ProjectInput } from "./validate";
+import type { Store } from "../store/types";
+import { PRJ_KINDS, STAGES, type PrjKind, type Project, type Requirement, type Stage, type UserRecord } from "../types";
+import { parseGrid, readWorkbook, type ImportRow, type ParseError } from "./xlsxImport";
 
-export type { ProjectInput } from "./validate";
-
-export function toView(p: Project, actor: ActorFull | { role: string }): Project {
-  if (actor.role === "AX_ADMIN") return p;
-  return { ...p, ai: null, aiFit: null };
+export interface ImportSummary {
+  projectsNew: number;
+  projectsUpdated: number;
+  reqsNew: number;
+  reqsUpdated: number;
+  unknownOwners: string[];
 }
 
-function now() {
-  return new Date().toISOString();
+function ownerFor(name: string, users: UserRecord[]): { ownerId: string | null; ownerNm: string } {
+  const u = users.find((x) => x.useYn && (x.userNm === name || x.userId === name));
+  return { ownerId: u?.userId ?? null, ownerNm: u?.userNm ?? name };
 }
 
-// 같은 밀리초에 두 번 저장되면 낙관적 동시성 비교가 무력화되므로 이전 값보다 반드시 커지게 한다.
-function nextStamp(prev: string): string {
-  const t = now();
-  if (t > prev) return t;
-  return new Date(new Date(prev).getTime() + 1).toISOString();
-}
-
-function summaryOf(p: Project) {
+function emptyProject(prjId: string, prjNm: string, actor: ActorFull, now: string): Project {
   return {
-    prjNm: p.prjNm,
-    sysNm: p.sysNm,
-    pmUserId: p.pmUserId,
-    status: p.status,
-    statusNote: p.statusNote,
-    suggestFit: p.suggestFit,
-    finalFit: p.finalFit,
-    answers: p.eval.answers,
-    base: p.base,
+    prjId,
+    prjNm,
+    sysNm: "",
+    kind: "개발",
+    deptCd: "",
+    teamNm: "",
+    axTeam: "",
+    pmNm: "",
+    sysGrade: "",
+    deployType: "",
+    area: "",
+    wbsYn: "",
+    vcs: "",
+    pms: "",
+    reqs: [],
+    regUserId: actor.userId,
+    regAt: now,
+    updUserId: actor.userId,
+    updAt: now,
   };
 }
 
-function clean(input: ProjectInput, c: Criteria) {
-  const { answers, notes } = reconcileAnswers(c, input.answers ?? {}, input.notes ?? {});
-  return {
-    prjNm: input.prjNm.trim(),
-    sysNm: (input.sysNm ?? "").trim(),
-    base: (() => {
-      const b = normalizeBase(input.base);
-      return { ...b, langCds: Array.from(new Set(b.langCds)), pmFit: LEVELS.includes(b.pmFit as Level) ? b.pmFit : "" };
-    })(),
-    answers,
-    notes: Object.fromEntries(Object.entries(notes).filter(([, v]) => typeof v === "string" && v.trim())),
-  };
-}
-
-async function save(
-  store: Store,
+/**
+ * 같은 과제명은 같은 과제로, 같은 요구사항 ID 는 정보만 갱신한다.
+ * 이미 있는 요구사항의 단계는 건드리지 않는다 — 관리자가 화면에서 나눈 단계·담당을 엑셀 재업로드가 덮으면 안 되기 때문.
+ */
+export function mergeImport(
+  projects: Project[],
+  rows: ImportRow[],
+  users: UserRecord[],
   actor: ActorFull,
-  before: Project,
-  after: Project,
-  expectedUpdAt: string,
-  actionCd: string,
-  summary: string,
-): Promise<ServiceResult<Project>> {
-  const saved = { ...after, updUserId: actor.userId, updAt: nextStamp(before.updAt) };
-  if (!(await store.projects.update(saved, expectedUpdAt))) return conflictR();
+  nextId: () => string,
+): { projects: Project[]; changed: Set<string>; summary: ImportSummary; errors: ParseError[] } {
+  const now = new Date().toISOString();
+  const out = projects.map((p) => structuredClone(p));
+  const changed = new Set<string>();
+  const errors: ParseError[] = [];
+  const s: ImportSummary = { projectsNew: 0, projectsUpdated: 0, reqsNew: 0, reqsUpdated: 0, unknownOwners: [] };
+  const unknown = new Set<string>();
+
+  for (const r of rows) {
+    let p = out.find((x) => x.prjNm.trim() === r.prj.prjNm);
+    const other = out.find((x) => x !== p && x.reqs.some((q) => q.reqId === r.reqId));
+    if (other) {
+      errors.push({ rowNo: r.rowNo, message: `요구사항 ${r.reqId} 는 이미 다른 과제(${other.prjNm})에 있습니다.` });
+      continue;
+    }
+    if (!p) {
+      p = emptyProject(nextId(), r.prj.prjNm, actor, now);
+      out.push(p);
+      s.projectsNew++;
+    } else if (!changed.has(p.prjId)) s.projectsUpdated++;
+    changed.add(p.prjId);
+    for (const [k, v] of Object.entries(r.prj)) if (v) (p as unknown as Record<string, string>)[k] = v;
+
+    const exist = p.reqs.find((q) => q.reqId === r.reqId);
+    const info = { name: r.name, difficulty: r.difficulty, grade: r.grade, baseSrc: r.baseSrc, extra: r.extra };
+    if (exist) {
+      Object.assign(exist, info);
+      s.reqsUpdated++;
+    } else {
+      const o = ownerFor(r.staff[0] ?? "", users);
+      if (!o.ownerId && o.ownerNm) unknown.add(o.ownerNm);
+      p.reqs.push({ reqId: r.reqId, ...info, stages: [{ cd: r.stage, workType: r.workType, baseMd: r.baseMd, ...o }], done: false, doneAt: null });
+      s.reqsNew++;
+    }
+    p.updUserId = actor.userId;
+  }
+  s.unknownOwners = Array.from(unknown);
+  return { projects: out, changed, summary: s, errors };
+}
+
+export async function importXlsx(store: Store, actor: ActorFull, buf: ArrayBuffer): Promise<ServiceResult<ImportSummary>> {
+  if (!can(actor, "project.manage")) return forbiddenR();
+  let grid: string[][] | null;
+  try {
+    grid = await readWorkbook(buf);
+  } catch {
+    return err(400, "BAD_FILE", "엑셀 파일을 읽지 못했습니다. .xlsx 양식인지 확인해 주세요.");
+  }
+  if (!grid) return err(400, "NO_SHEET", "'과제·요구사항' 시트가 없습니다.");
+  const parsed = parseGrid(grid);
+  if (parsed.rows.length === 0 && parsed.errors.length === 0) return err(400, "EMPTY", "올릴 요구사항 행이 없습니다.");
+
+  const before = await store.projects.list();
+  let n = Number((await store.projects.nextId()).slice(4));
+  const merged = mergeImport(before, parsed.rows, await store.users.list(), actor, () => `PRJ-${String(n++).padStart(4, "0")}`);
+  const errors = [...parsed.errors, ...merged.errors].sort((a, b) => a.rowNo - b.rowNo);
+  // 일부만 들어가면 엑셀과 포털이 어긋난 채 남으므로 오류가 하나라도 있으면 아무것도 저장하지 않는다.
+  if (errors.length) return err(400, "INVALID_ROWS", `${errors.length}개 행에 오류가 있어 올리지 않았습니다.`, errors);
+
+  const now = new Date().toISOString();
+  for (const p of merged.projects) {
+    if (!merged.changed.has(p.prjId)) continue;
+    const prev = before.find((x) => x.prjId === p.prjId);
+    const next = { ...p, updAt: now };
+    if (!prev) await store.projects.insert(next);
+    else if (!(await store.projects.update(next, prev.updAt))) return conflictR();
+  }
   await record(store, actor, {
     targetTyp: "PROJECT",
-    targetId: saved.prjId,
-    actionCd,
-    summary,
-    diff: shallowDiff(summaryOf(before), summaryOf(saved)),
+    targetId: "IMPORT",
+    actionCd: "IMPORT",
+    summary: `엑셀 올리기: 과제 신규 ${merged.summary.projectsNew}·갱신 ${merged.summary.projectsUpdated}, 요구사항 신규 ${merged.summary.reqsNew}·갱신 ${merged.summary.reqsUpdated}`,
   });
-  return okR(saved);
+  return okR(merged.summary);
 }
 
-export async function createProject(store: Store, actor: ActorFull, input: ProjectInput): Promise<ServiceResult<Project>> {
-  if (!can(actor, "project.create")) return forbiddenR();
-  const errors = validateDraft(input);
-  if (errors.length) return err(422, "VALIDATION", errors[0].message, errors);
-
-  let pmUserId = actor.userId;
-  let pmUserNm = actor.userNm;
-  if (actor.role === "AX_ADMIN") {
-    if (!input.pmUserId) return err(422, "VALIDATION", "과제 PM 을 지정해 주세요.", [{ field: "pmUserId", message: "과제 PM 을 지정해 주세요." }]);
-    const pm = await store.users.get(input.pmUserId);
-    if (!pm || pm.role !== "PM" || !pm.useYn) {
-      return err(422, "VALIDATION", "PM 역할의 활성 계정만 지정할 수 있습니다.", [{ field: "pmUserId", message: "PM 계정이 아닙니다." }]);
-    }
-    pmUserId = pm.userId;
-    pmUserNm = pm.userNm;
-  }
-
-  const c = await getPublishedCriteria(store);
-  const x = clean(input, c);
-  const t = now();
-  const evalData = { answers: x.answers, notes: x.notes, confirm: null };
-  const reviews: ReviewEntry[] = [];
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const p: Project = {
-      prjId: await store.projects.nextId(),
-      prjNm: x.prjNm,
-      sysNm: x.sysNm,
-      pmUserId,
-      pmUserNm,
-      status: "DRAFT",
-      statusNote: null,
-      aiFit: null,
-      axAgree: "NONE",
-      hxAgree: "NONE",
-      base: x.base,
-      eval: evalData,
-      reviews,
-      ai: null,
-      regUserId: actor.userId,
-      regAt: t,
-      updUserId: actor.userId,
-      updAt: t,
-      ...deriveColumns(c, { base: x.base, eval: evalData }),
-    };
-    try {
-      await store.projects.insert(p);
-    } catch (e) {
-      // 두 사람이 동시에 등록하면 같은 번호를 받을 수 있다 — 번호를 다시 받아 재시도.
-      if (e instanceof DuplicateKeyError) continue;
-      throw e;
-    }
-    await record(store, actor, { targetTyp: "PROJECT", targetId: p.prjId, actionCd: "CREATE", summary: `과제 등록: ${p.prjNm}` });
-    return okR(p);
-  }
-  return err(409, "ID_CONFLICT", "과제 번호 발급이 충돌했습니다. 다시 시도해 주세요.");
+export interface ProjectPatch {
+  prjNm: string;
+  sysNm: string;
+  kind: PrjKind;
+  deptCd: string;
+  teamNm: string;
+  axTeam: string;
+  pmNm: string;
 }
 
-export async function updateProject(
+async function mutateProject(
   store: Store,
   actor: ActorFull,
-  id: string,
-  input: ProjectInput,
+  prjId: string,
   expectedUpdAt: string,
+  fn: (p: Project) => ServiceResult<string>,
 ): Promise<ServiceResult<Project>> {
-  const before = await store.projects.get(id);
-  if (!before) return notFoundR("과제");
-  if (!can(actor, "project.edit", { project: before })) return forbiddenR("이 과제를 수정할 권한이 없습니다.");
-  const errors = validateDraft(input);
-  if (errors.length) return err(422, "VALIDATION", errors[0].message, errors);
+  if (!can(actor, "project.manage")) return forbiddenR();
+  const cur = await store.projects.get(prjId);
+  if (!cur) return notFoundR("과제");
+  if (cur.updAt !== expectedUpdAt) return conflictR();
+  const next = structuredClone(cur);
+  const r = fn(next);
+  if (!r.ok) return r;
+  next.updAt = new Date().toISOString();
+  next.updUserId = actor.userId;
+  if (!(await store.projects.update(next, expectedUpdAt))) return conflictR();
+  await record(store, actor, { targetTyp: "PROJECT", targetId: prjId, actionCd: "UPDATE", summary: r.value });
+  return okR(next);
+}
 
-  let { pmUserId, pmUserNm } = before;
-  if (actor.role === "AX_ADMIN" && input.pmUserId && input.pmUserId !== before.pmUserId) {
-    const pm = await store.users.get(input.pmUserId);
-    if (!pm || pm.role !== "PM" || !pm.useYn) return err(422, "VALIDATION", "PM 역할의 활성 계정만 지정할 수 있습니다.");
-    pmUserId = pm.userId;
-    pmUserNm = pm.userNm;
+export function updateProject(store: Store, actor: ActorFull, prjId: string, expectedUpdAt: string, patch: ProjectPatch) {
+  return mutateProject(store, actor, prjId, expectedUpdAt, (p) => {
+    if (!patch.prjNm?.trim()) return err(400, "REQUIRED", "과제명을 입력해 주세요.");
+    if (!PRJ_KINDS.includes(patch.kind)) return err(400, "BAD_KIND", "구분은 개발·운영 중 하나입니다.");
+    Object.assign(p, {
+      prjNm: patch.prjNm.trim(),
+      sysNm: patch.sysNm ?? "",
+      kind: patch.kind,
+      deptCd: patch.deptCd ?? "",
+      teamNm: patch.teamNm ?? "",
+      axTeam: patch.axTeam ?? "",
+      pmNm: patch.pmNm ?? "",
+    });
+    return okR(`${p.prjNm} 과제 정보 수정`);
+  });
+}
+
+export interface ReqInput {
+  reqId: string;
+  name: string;
+  difficulty: string;
+  grade: string;
+  baseSrc: string;
+  done: boolean;
+  stages: { cd: string; workType: string; ownerId: string | null; baseMd: number }[];
+}
+
+export function validateStages(input: ReqInput["stages"], users: UserRecord[]): ServiceResult<Stage[]> {
+  if (!Array.isArray(input) || input.length === 0) return err(400, "NO_STAGE", "단계를 하나 이상 넣어 주세요.");
+  const seen = new Set<string>();
+  const out: Stage[] = [];
+  for (const s of input) {
+    if (!STAGES.includes(s.cd as Stage["cd"])) return err(400, "BAD_STAGE", `알 수 없는 단계 ${s.cd}`);
+    if (seen.has(s.cd)) return err(400, "DUP_STAGE", "같은 단계를 두 번 넣을 수 없습니다. 담당이 여럿이면 업무를 나눠 다른 단계로 넣어 주세요.");
+    seen.add(s.cd);
+    const md = Number(s.baseMd);
+    if (!Number.isFinite(md) || md < 0) return err(400, "BAD_MD", "기준 M/D 는 0 이상 숫자여야 합니다.");
+    const u = s.ownerId ? users.find((x) => x.userId === s.ownerId) : undefined;
+    if (s.ownerId && !u) return err(400, "BAD_OWNER", `계정 ${s.ownerId} 가 없습니다.`);
+    out.push({ cd: s.cd as Stage["cd"], workType: (s.workType ?? "").trim(), ownerId: u?.userId ?? null, ownerNm: u?.userNm ?? "", baseMd: md });
   }
-
-  const c = await getPublishedCriteria(store);
-  const x = clean(input, c);
-  const evalData = { ...before.eval, answers: x.answers, notes: x.notes };
-  const after: Project = {
-    ...before,
-    prjNm: x.prjNm,
-    sysNm: x.sysNm,
-    pmUserId,
-    pmUserNm,
-    base: x.base,
-    eval: evalData,
-    ...deriveColumns(c, { base: x.base, eval: evalData }),
-  };
-  return save(store, actor, before, after, expectedUpdAt, "UPDATE", "과제 정보 수정");
+  return okR(out.sort((a, b) => STAGES.indexOf(a.cd) - STAGES.indexOf(b.cd)));
 }
 
-export async function submitProject(store: Store, actor: ActorFull, id: string, expectedUpdAt: string): Promise<ServiceResult<Project>> {
-  const before = await store.projects.get(id);
-  if (!before) return notFoundR("과제");
-  if (!can(actor, "project.submit", { project: before })) return forbiddenR("제출할 수 없는 상태이거나 권한이 없습니다.");
-  const c = await getPublishedCriteria(store);
-  const errors = validateForSubmit(
-    { prjNm: before.prjNm, sysNm: before.sysNm, base: before.base, answers: before.eval.answers, notes: before.eval.notes },
-    c,
-  );
-  if (errors.length) return err(422, "VALIDATION", `제출 전에 ${errors.length}개 항목을 채워 주세요.`, errors);
-  return save(store, actor, before, { ...before, status: "SUBMITTED", statusNote: null }, expectedUpdAt, "SUBMIT", "과제 제출");
-}
-
-export async function changeStatus(
-  store: Store,
-  actor: ActorFull,
-  id: string,
-  to: ProjectStatus,
-  note: string | null,
-  expectedUpdAt: string,
-): Promise<ServiceResult<Project>> {
-  const before = await store.projects.get(id);
-  if (!before) return notFoundR("과제");
-  if (!can(actor, "project.status", { project: before })) return forbiddenR();
-  if (!canTransition(before.status, to)) {
-    return err(409, "INVALID_TRANSITION", `'${STATUS_LABEL[before.status]}'에서 '${STATUS_LABEL[to]}'(으)로 바꿀 수 없습니다.`);
-  }
-  const n = note?.trim() || null;
-  if (noteRequired(to) && !n) return err(422, "VALIDATION", `'${STATUS_LABEL[to]}'(으)로 바꿀 때는 사유가 필요합니다.`);
-  return save(
-    store,
-    actor,
-    before,
-    { ...before, status: to, statusNote: n },
-    expectedUpdAt,
-    "STATUS",
-    `상태 변경: ${STATUS_LABEL[before.status]} → ${STATUS_LABEL[to]}${n ? ` (${n})` : ""}`,
-  );
-}
-
-export async function confirmFit(
-  store: Store,
-  actor: ActorFull,
-  id: string,
-  fit: Level,
-  reason: string,
-  expectedUpdAt: string,
-): Promise<ServiceResult<Project>> {
-  const before = await store.projects.get(id);
-  if (!before) return notFoundR("과제");
-  if (!can(actor, "project.confirm", { project: before })) return forbiddenR();
-  if (!["H", "M", "L"].includes(fit)) return err(422, "VALIDATION", "적합도 값이 올바르지 않습니다.");
-  const r = reason?.trim() ?? "";
-  if (fit !== before.suggestFit && !r) return err(422, "VALIDATION", "참고 등급와 다르게 확정할 때는 사유가 필요합니다.");
-  const confirm = { fit, reason: r, by: actor.userId, byNm: actor.userNm, at: now() };
-  const after: Project = { ...before, eval: { ...before.eval, confirm }, finalFit: fit };
-  return save(store, actor, before, after, expectedUpdAt, "CONFIRM", `적합도 확정: ${FIT_LABEL[fit]}${r ? ` (${r})` : ""}`);
-}
-
-export async function clearConfirm(store: Store, actor: ActorFull, id: string, expectedUpdAt: string): Promise<ServiceResult<Project>> {
-  const before = await store.projects.get(id);
-  if (!before) return notFoundR("과제");
-  if (!can(actor, "project.confirm", { project: before })) return forbiddenR();
-  const after: Project = { ...before, eval: { ...before.eval, confirm: null }, finalFit: "NA" };
-  return save(store, actor, before, after, expectedUpdAt, "CONFIRM", "적합도 확정 취소");
-}
-
-export async function addReview(
-  store: Store,
-  actor: ActorFull,
-  id: string,
-  input: { agree: AgreeCd; text: string; context: "SELECTION" | "MEASURE" },
-): Promise<ServiceResult<Project>> {
-  const action = input.context === "MEASURE" ? "measure.comment" : "project.review";
-  if (!can(actor, action)) return forbiddenR("의견을 남길 권한이 없습니다.");
-  const side = reviewSide(actor);
-  if (!side) return forbiddenR();
-  const text = input.text?.trim() ?? "";
-  if (!text) return err(422, "VALIDATION", "의견을 입력해 주세요.");
-  if (text.length > 2000) return err(422, "VALIDATION", "의견은 2000자 이내로 입력해 주세요.");
-  if (!["AGREE", "DISAGREE", "HOLD", "NONE"].includes(input.agree)) return err(422, "VALIDATION", "동의 상태가 올바르지 않습니다.");
-
-  // 의견 스레드는 덧붙이기만 하므로 다른 편집과 충돌로 막지 않는다 — 최신본을 읽어 바로 붙이고, 그 사이 경합이면 다시 읽는다.
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const before = await store.projects.get(id);
-    if (!before) return notFoundR("과제");
-    const entry: ReviewEntry = {
-      id: `${id}-r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-      side,
-      userId: actor.userId,
-      userNm: actor.userNm,
-      agree: input.agree,
-      text,
-      at: now(),
-      context: input.context,
+export async function saveRequirement(store: Store, actor: ActorFull, prjId: string, expectedUpdAt: string, origReqId: string | null, input: ReqInput) {
+  const users = await store.users.list();
+  const all = await store.projects.list();
+  return mutateProject(store, actor, prjId, expectedUpdAt, (p) => {
+    const reqId = (input.reqId ?? "").trim();
+    if (!reqId || !input.name?.trim()) return err(400, "REQUIRED", "요구사항 ID 와 이름을 입력해 주세요.");
+    const clash = all.some((x) => x.reqs.some((q) => q.reqId === reqId && !(x.prjId === prjId && q.reqId === origReqId)));
+    if (clash) return err(409, "DUP_REQ", `요구사항 ID ${reqId} 가 이미 있습니다.`);
+    const st = validateStages(input.stages, users);
+    if (!st.ok) return st;
+    const prev = origReqId ? p.reqs.find((q) => q.reqId === origReqId) : undefined;
+    if (origReqId && !prev) return notFoundR("요구사항");
+    // 측정이 시작된 뒤 ID 를 바꾸면 이미 입력한 공수가 끊기므로 막는다.
+    if (prev && prev.reqId !== reqId) return err(400, "ID_LOCKED", "요구사항 ID 는 바꿀 수 없습니다. 삭제 후 다시 등록해 주세요.");
+    const next: Requirement = {
+      reqId,
+      name: input.name.trim(),
+      difficulty: input.difficulty ?? "",
+      grade: input.grade ?? "",
+      baseSrc: input.baseSrc ?? "",
+      stages: st.value,
+      done: !!input.done,
+      doneAt: input.done ? (prev?.doneAt ?? new Date().toISOString()) : null,
+      extra: prev?.extra ?? {},
     };
-    const after: Project = {
-      ...before,
-      reviews: [...before.reviews, entry],
-      ...(input.context === "SELECTION" && input.agree !== "NONE"
-        ? side === "AX"
-          ? { axAgree: input.agree }
-          : { hxAgree: input.agree }
-        : {}),
-    };
-    const r = await save(store, actor, before, after, before.updAt, "REVIEW", `${side} 의견: ${text.slice(0, 80)}`);
-    if (r.ok || r.code !== "CONFLICT") return r;
-  }
-  return conflictR();
+    if (prev) p.reqs[p.reqs.indexOf(prev)] = next;
+    else p.reqs.push(next);
+    return okR(`${reqId} ${prev ? "수정" : "등록"} (단계 ${next.stages.map((s) => `${s.cd} ${s.baseMd}MD ${s.ownerNm || "미지정"}`).join(", ")})${next.done ? " · 측정 완료" : ""}`);
+  });
 }
 
-export async function reevaluateAll(store: Store, actor: ActorFull): Promise<ServiceResult<{ changed: number }>> {
-  if (!can(actor, "criteria.manage")) return forbiddenR();
-  const c = await getPublishedCriteria(store);
-  let changed = 0;
-  for (const p of await store.projects.list()) {
-    const { answers, notes } = reconcileAnswers(c, p.eval.answers, p.eval.notes);
-    const evalData = { ...p.eval, answers, notes };
-    const derived = deriveColumns(c, { base: p.base, eval: evalData });
-    const after: Project = { ...p, eval: evalData, ...derived };
-    if (JSON.stringify(after) === JSON.stringify(p)) continue;
-    const r = await save(store, actor, p, after, p.updAt, "REEVALUATE", `평가 기준 v${c.version} 로 재판정 (${FIT_LABEL[p.suggestFit]} → ${FIT_LABEL[derived.suggestFit]})`);
-    if (r.ok) changed++;
-  }
-  return okR({ changed });
+export function deleteRequirement(store: Store, actor: ActorFull, prjId: string, expectedUpdAt: string, reqId: string) {
+  return mutateProject(store, actor, prjId, expectedUpdAt, (p) => {
+    const i = p.reqs.findIndex((q) => q.reqId === reqId);
+    if (i < 0) return notFoundR("요구사항");
+    p.reqs.splice(i, 1);
+    return okR(`${reqId} 삭제`);
+  });
 }
 
-export function previewFit(c: Criteria, answers: Record<string, string>) {
-  return evaluateFit(c, answers);
+export async function createProject(store: Store, actor: ActorFull, patch: ProjectPatch): Promise<ServiceResult<Project>> {
+  if (!can(actor, "project.manage")) return forbiddenR();
+  if (!patch.prjNm?.trim()) return err(400, "REQUIRED", "과제명을 입력해 주세요.");
+  const now = new Date().toISOString();
+  const p = { ...emptyProject(await store.projects.nextId(), patch.prjNm.trim(), actor, now), ...patch, prjNm: patch.prjNm.trim() };
+  if (!PRJ_KINDS.includes(p.kind)) p.kind = "개발";
+  await store.projects.insert(p);
+  await record(store, actor, { targetTyp: "PROJECT", targetId: p.prjId, actionCd: "CREATE", summary: `${p.prjNm} 등록` });
+  return okR(p);
+}
+
+export async function deleteProject(store: Store, actor: ActorFull, prjId: string): Promise<ServiceResult<null>> {
+  if (!can(actor, "project.manage")) return forbiddenR();
+  const p = await store.projects.get(prjId);
+  if (!p) return notFoundR("과제");
+  await store.projects.remove(prjId);
+  await record(store, actor, { targetTyp: "PROJECT", targetId: prjId, actionCd: "DELETE", summary: `${p.prjNm} 삭제 (요구사항 ${p.reqs.length}건)`, diff: { before: p } });
+  return okR(null);
 }

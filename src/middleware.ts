@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { canAccessPath } from "@/lib/auth/permissions";
 import { AUTH_COOKIE, getSecret, verifySession } from "@/lib/auth/session";
 
-const PUBLIC = new Set(["/login", "/api/auth/login", "/api/auth/logout", "/api/auth/demo"]);
+const PUBLIC = new Set(["/login", "/api/auth/login", "/api/auth/logout", "/api/auth/demo", "/api/otel/v1/metrics", "/api/otel/v1/logs"]);
 
 // 미들웨어는 화면 이동을 빨리 막는 UX 장치다. 계정 비활성화·역할 변경은 각 API 의 requireUser 가 DB 로 다시 확인한다.
 export async function middleware(req: NextRequest) {

@@ -1,96 +1,7 @@
-export type Role = "AX_ADMIN" | "HX_REVIEWER" | "PM" | "DEVELOPER" | "TESTER" | "VIEWER";
+export type Role = "ADMIN" | "DEVELOPER" | "VIEWER";
 export type OrgCd = "SKAX" | "SKHYNIX";
-export type Level = "H" | "M" | "L";
-export type Fit = Level | "NA";
-export type Tier = "MAJOR" | "MINOR";
-export type ProjectStatus =
-  | "DRAFT"
-  | "SUBMITTED"
-  | "REVIEW"
-  | "SUPPLEMENT"
-  | "SELECTED"
-  | "RESERVE"
-  | "EXCLUDED";
-export type AgreeCd = "AGREE" | "DISAGREE" | "HOLD" | "NONE";
 
-export const ROLES: Role[] = ["AX_ADMIN", "HX_REVIEWER", "PM", "DEVELOPER", "TESTER", "VIEWER"];
-export const LEVELS: Level[] = ["H", "M", "L"];
-export const FITS: Fit[] = ["H", "M", "L", "NA"];
-export const STATUSES: ProjectStatus[] = [
-  "DRAFT",
-  "SUBMITTED",
-  "REVIEW",
-  "SUPPLEMENT",
-  "SELECTED",
-  "RESERVE",
-  "EXCLUDED",
-];
-
-export interface CriteriaOption {
-  id: string;
-  label: string;
-  level: Level;
-  hint?: string;
-}
-
-export interface Indicator {
-  id: string;
-  // 과제 선정 양식(엑셀)의 항목 ID. 엑셀과 화면을 오가며 같은 항목인지 맞춰 보는 데 쓴다.
-  ref?: string;
-  name: string;
-  description: string;
-  tier: Tier;
-  options: CriteriaOption[];
-}
-
-export interface Area {
-  id: string;
-  name: string;
-  question: string;
-  indicators: Indicator[];
-}
-
-export interface FitRule {
-  lowMinMajorLow: number;
-  highMaxMajorLow: number;
-  highMinMajorHigh: number | "half" | "all";
-}
-
-export interface Criteria {
-  version: number;
-  publishedAt: string | null;
-  publishedBy: string | null;
-  rule: FitRule;
-  areas: Area[];
-}
-
-export interface CodeItem {
-  code: string;
-  label: string;
-  desc?: string;
-  example?: string;
-}
-
-export interface BalanceTarget {
-  total: number;
-  byFit: Record<Level, number>;
-  minPerDevType: number;
-  minLangKinds: number;
-}
-
-export interface Codes {
-  langs: CodeItem[];
-  // domains(담당)·sysTypes(배포 형식)는 POC_PROJECT 의 DOMAIN_CD·SYS_TYPE_CD 컬럼을 그대로 쓰려고 예전 이름을 유지한다.
-  domains: CodeItem[];
-  sysTypes: CodeItem[];
-  sysGrades: CodeItem[];
-  workAreas: CodeItem[];
-  llmTypes: CodeItem[];
-  aiTools: CodeItem[];
-  aiPlans: CodeItem[];
-  tokenRanges: CodeItem[];
-  target: BalanceTarget;
-}
+export const ROLES: Role[] = ["ADMIN", "DEVELOPER", "VIEWER"];
 
 export interface UserRecord {
   userId: string;
@@ -108,114 +19,66 @@ export interface UserRecord {
 
 export type PublicUser = Omit<UserRecord, "pwdHash" | "pwdSalt">;
 
-export type ReplayPhase = "ANALYSIS" | "DESIGN" | "DEV" | "TEST";
-export const REPLAY_PHASES: ReplayPhase[] = ["ANALYSIS", "DESIGN", "DEV", "TEST"];
+/** SDLC 단계 — 측정 단위는 요구사항 × 단계 */
+export type StageCd = "AN" | "DS" | "DV" | "TS" | "DP" | "OP";
+export const STAGES: StageCd[] = ["AN", "DS", "DV", "TS", "DP", "OP"];
+export const STAGE_LABEL: Record<StageCd, string> = {
+  AN: "분석",
+  DS: "설계",
+  DV: "개발",
+  TS: "테스트",
+  DP: "배포",
+  OP: "운영",
+};
 
-export interface ProjectBaseline {
-  startDate: string | null;
-  endDate: string | null;
-  totalMm: number | null;
-  phaseMm: Record<ReplayPhase, number | null>;
-  screens: number | null;
-  programs: number | null;
-  loc: number | null;
-  replayPhases: ReplayPhase[];
+export type PrjKind = "개발" | "운영";
+export const PRJ_KINDS: PrjKind[] = ["개발", "운영"];
+
+export interface Stage {
+  cd: StageCd;
+  workType: string;
+  ownerId: string | null;
+  // 엑셀에 적힌 이름이 계정과 맞지 않아도 화면에 보여 줘야 해서 이름을 따로 둔다.
+  ownerNm: string;
+  baseMd: number;
 }
 
-export interface ProjectBase {
-  domainCd: string;
-  orgNm: string;
-  sysGradeCd: string;
-  sysTypeCd: string;
-  workAreaCd: string;
-  langCds: string[];
-  techStack: string;
-  description: string;
-  llmTypeCd: string;
-  aiToolCd: string;
-  aiAccounts: number | null;
-  llmModel: string;
-  aiPlanCd: string;
-  tokenCd: string;
-  fitEvaluator: string;
-  pmFit: Level | "";
-  pmFitReason: string;
-  staffNms: string;
-  remark: string;
-  baseline: ProjectBaseline;
-}
-
-export interface FitConfirm {
-  fit: Level;
-  reason: string;
-  by: string;
-  byNm: string;
-  at: string;
-}
-
-export interface EvalData {
-  answers: Record<string, string>;
-  notes: Record<string, string>;
-  confirm: FitConfirm | null;
-}
-
-export interface ReviewEntry {
-  id: string;
-  side: "AX" | "HX";
-  userId: string;
-  userNm: string;
-  agree: AgreeCd;
-  text: string;
-  at: string;
-  context: "SELECTION" | "MEASURE";
-}
-
-export interface AiResult {
-  grade: Level;
-  summary: string;
-  strengths: string[];
-  risks: string[];
-  indicatorComments: { indicatorId: string; comment: string }[];
-  replayNotes: string;
-  balanceNote: string;
-  model: string;
-  promptVersion: number;
-  criteriaVersion: number;
-  assessedAt: string;
-  assessedBy: string;
+export interface Requirement {
+  reqId: string;
+  name: string;
+  difficulty: string;
+  grade: string;
+  baseSrc: string;
+  stages: Stage[];
+  done: boolean;
+  doneAt: string | null;
+  /** 양식의 나머지 항목(AIS·FIT·REF) — 항목 ID → 값. 조회용 */
+  extra: Record<string, string>;
 }
 
 export interface Project {
   prjId: string;
   prjNm: string;
   sysNm: string;
-  pmUserId: string;
-  pmUserNm: string;
-  status: ProjectStatus;
-  statusNote: string | null;
-  devTypeCd: string | null;
-  mainLangCd: string | null;
-  domainCd: string | null;
-  sysTypeCd: string | null;
-  answerCnt: number;
-  indicatorCnt: number;
-  suggestFit: Fit;
-  finalFit: Fit;
-  aiFit: Fit | null;
-  axAgree: AgreeCd;
-  hxAgree: AgreeCd;
-  critVer: number;
-  base: ProjectBase;
-  eval: EvalData;
-  reviews: ReviewEntry[];
-  ai: AiResult | null;
+  kind: PrjKind;
+  deptCd: string;
+  teamNm: string;
+  axTeam: string;
+  pmNm: string;
+  sysGrade: string;
+  deployType: string;
+  area: string;
+  wbsYn: string;
+  vcs: string;
+  pms: string;
+  reqs: Requirement[];
   regUserId: string;
   regAt: string;
   updUserId: string;
   updAt: string;
 }
 
-export type HistoryTarget = "PROJECT" | "CRITERIA" | "USER" | "CODES" | "AI_PROMPT" | "UPLOAD" | "MEASURE";
+export type HistoryTarget = "PROJECT" | "USER" | "SETTINGS" | "UPLOAD" | "EFFORT";
 
 export interface HistoryEntry {
   histId: number;

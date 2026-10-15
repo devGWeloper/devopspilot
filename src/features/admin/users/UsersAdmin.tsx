@@ -7,22 +7,12 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Field, Select, TextInput } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Modal";
 import { Callout, Panel, Skeleton } from "@/components/ui/Panel";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { useToast } from "@/components/ui/Toast";
 import { api, errMessage } from "@/lib/apiClient";
-import { ROLE_LABEL } from "@/lib/auth/permissions";
+import { ROLE_DESC, ROLE_LABEL } from "@/lib/auth/permissions";
 import { useApi } from "@/lib/hooks";
 import { fmtRelative, ORG_LABEL } from "@/lib/labels";
 import { ROLES, type OrgCd, type PublicUser, type Role } from "@/lib/types";
-
-const ROLE_DESC: Record<Role, string> = {
-  AX_ADMIN: "전체 관리 · 지표 설정 · 적합도 확정 · 선정",
-  HX_REVIEWER: "전체 열람 · 하이닉스 의견/동의",
-  PM: "본인 과제 등록·입력·제출",
-  DEVELOPER: "담당 기능 공수 입력",
-  TESTER: "결함 등록",
-  VIEWER: "열람만",
-};
 
 interface Form {
   userId: string;
@@ -33,7 +23,7 @@ interface Form {
   password: string;
 }
 
-const EMPTY: Form = { userId: "", userNm: "", orgCd: "SKAX", deptNm: "", role: "PM", password: "" };
+const EMPTY: Form = { userId: "", userNm: "", orgCd: "SKAX", deptNm: "", role: "DEVELOPER", password: "" };
 
 export function UsersAdmin() {
   const { toast, toastError } = useToast();
@@ -80,7 +70,7 @@ export function UsersAdmin() {
       key: "role",
       header: "역할",
       width: 120,
-      render: (u) => <Chip tone={u.role === "AX_ADMIN" ? "accent" : u.role === "HX_REVIEWER" ? "danger" : "outline"}>{ROLE_LABEL[u.role]}</Chip>,
+      render: (u) => <Chip tone={u.role === "ADMIN" ? "accent" : "outline"}>{ROLE_LABEL[u.role]}</Chip>,
       sortValue: (u) => ROLES.indexOf(u.role),
     },
     { key: "use", header: "상태", width: 80, render: (u) => (u.useYn ? <Chip tone="ok">사용</Chip> : <Chip>중지</Chip>), sortValue: (u) => (u.useYn ? 0 : 1) },
@@ -108,16 +98,12 @@ export function UsersAdmin() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Accounts"
-        title="계정"
-        description="포털 사용자와 역할을 관리합니다. 역할 변경과 사용 중지는 즉시 반영됩니다."
-        actions={
-          <Button variant="primary" icon="plus" onClick={() => setEdit({ mode: "new", form: EMPTY, useYn: true })}>
-            계정 추가
-          </Button>
-        }
-      />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+        <span className="muted">역할 변경과 사용 중지는 즉시 반영됩니다. 개발자 계정의 이름이 엑셀 REF-01 참여 인력과 같아야 담당이 자동으로 연결됩니다.</span>
+        <Button variant="primary" icon="plus" onClick={() => setEdit({ mode: "new", form: EMPTY, useYn: true })}>
+          계정 추가
+        </Button>
+      </div>
       {error && <Callout tone="danger">{error}</Callout>}
       <Panel flush>{data ? <DataTable columns={columns} rows={data} rowKey={(u) => u.userId} initialSort={{ key: "role", dir: "asc" }} /> : <Skeleton h={300} />}</Panel>
 

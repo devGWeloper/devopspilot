@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { signSession, verifySession, SESSION_TTL_SEC } from "@/lib/auth/session";
 import { checkLock, recordFailure, recordSuccess, LOCK_MAX_FAILS } from "@/lib/auth/loginLimiter";
 
-const P = { sub: "admin", name: "관리자", role: "AX_ADMIN" as const, org: "SKAX" as const };
+const P = { sub: "admin", name: "관리자", role: "ADMIN" as const, org: "SKAX" as const };
 const NOW = 1_800_000_000;
 
 describe("session", () => {
@@ -19,7 +19,7 @@ describe("session", () => {
   it("본문을 바꾸면 null", async () => {
     const t = await signSession(P, "secret", NOW);
     const [body, sig] = t.split(".");
-    const forged = Buffer.from(JSON.stringify({ ...P, role: "AX_ADMIN", sub: "x", exp: NOW + 999 })).toString("base64url");
+    const forged = Buffer.from(JSON.stringify({ ...P, role: "ADMIN", sub: "x", exp: NOW + 999 })).toString("base64url");
     expect(await verifySession(`${forged}.${sig}`, "secret", NOW)).toBeNull();
     expect(body).not.toBe(forged);
   });
