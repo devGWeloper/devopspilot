@@ -340,14 +340,6 @@
   white-space: nowrap;
 }
 
-.long {
-  display: block;
-  max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .prj td {
   background: var(--bg-deep);
   padding: 8px 20px;

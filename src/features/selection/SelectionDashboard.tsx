@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useCallback, useDeferredValue, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Select, TextInput } from "@/components/ui/Field";
 import { Icon } from "@/components/ui/Icon";
@@ -19,7 +19,6 @@ const COL_GROUPS = FORM_GROUPS.filter((g) => g.key !== "PRJ");
 const DEFAULT_ON: FormGroup[] = ["REQ", "FIT"];
 const MAIN_FILTERS = ["PRJ-01", "PRJ-03", "PRJ-06", "REQ-03", "REQ-04", "REQ-05", "FIT-06"];
 const MORE_FILTERS = AXES.map((a) => a.id).filter((id) => !MAIN_FILTERS.includes(id));
-const LONG = new Set<string>();
 
 function filterAxes(vm: SelectionVM): Record<string, Axis> {
   const prj: Axis = { id: "PRJ-01", label: "과제", group: "PRJ", level: "prj", options: vm.projects.map((p) => p.prjNm), get: (r) => val(r, "PRJ-01"), check: false };
@@ -41,9 +40,13 @@ export function SelectionDashboard({ vm }: { vm: SelectionVM }) {
   const [groups, setGroups] = useState<Set<FormGroup>>(new Set(DEFAULT_ON));
   const [open, setOpen] = useState<string | null>(null);
   const fAxes = useMemo(() => filterAxes(vm), [vm]);
+  const dists = useMemo(() => new Map(AXES.map((a) => [a.id, distOf(vm, a)])), [vm]);
+  const options = useMemo(() => new Map(Object.values(fAxes).map((a) => [a.id, optionsOf(a, vm.reqs)])), [fAxes, vm.reqs]);
+  // 입력은 바로 보이고 표 거르기는 뒤따르게 — 행이 많을 때 타이핑이 끊기지 않도록.
+  const dq = useDeferredValue(q);
 
   const rows = useMemo(() => {
-    const kw = q.trim().toLowerCase();
+    const kw = dq.trim().toLowerCase();
     return vm.reqs.filter(
       (r) =>
         Object.entries(filters).every(([id, v]) => {
@@ -52,14 +55,18 @@ export function SelectionDashboard({ vm }: { vm: SelectionVM }) {
         }) &&
         (!kw || ["PRJ-01", "REQ-01", "REQ-02", "REQ-08", "PRJ-05"].some((id) => val(r, id).toLowerCase().includes(kw))),
     );
-  }, [vm.reqs, filters, q, fAxes]);
+  }, [vm.reqs, filters, dq, fAxes]);
 
   // 분포에서 고른 값은 표 위 필터로 이어진다. 같은 값을 다시 누르면 푼다.
-  const pick = (pairs: [string, string][]) => {
-    const toggleOff = pairs.length === 1 && filters[pairs[0][0]] === pairs[0][1];
-    setFilters({ ...filters, ...Object.fromEntries(pairs.map(([id, v]) => [id, toggleOff ? "" : v])) });
-    if (!toggleOff) document.getElementById("sel-table")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  const pick = useCallback(
+    (pairs: [string, string][]) => {
+      const toggleOff = pairs.length === 1 && filters[pairs[0][0]] === pairs[0][1];
+      setFilters({ ...filters, ...Object.fromEntries(pairs.map(([id, v]) => [id, toggleOff ? "" : v])) });
+      if (!toggleOff) document.getElementById("sel-table")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+    [filters],
+  );
+  const pickOne = useCallback((id: string, v: string) => pick([[id, v]]), [pick]);
 
   if (!vm.reqs.length)
     return (
@@ -72,7 +79,7 @@ export function SelectionDashboard({ vm }: { vm: SelectionVM }) {
     );
 
   const missing = vm.reqs.filter((r) => missingRequired(r.values).length).length;
-  const warnN = AXES.reduce((n, a) => n + distOf(vm, a).warns.length, 0);
+  const warnN = Array.from(dists.values()).reduce((n, d) => n + d.warns.length, 0);
   const shownFilters = [...MAIN_FILTERS, ...MORE_FILTERS.filter((id) => more || filters[id])];
   const cols = COL_GROUPS.filter((g) => groups.has(g.key)).map((g) => ({
     ...g,
@@ -106,7 +113,7 @@ export function SelectionDashboard({ vm }: { vm: SelectionVM }) {
         </div>
       </PageHeader>
 
-      <DistPanel vm={vm} filters={filters} onPick={(id, v) => pick([[id, v]])} />
+      <DistPanel dists={dists} filters={filters} onPick={pickOne} />
       <CrossPanel vm={vm} onPick={pick} />
 
       <Panel
@@ -137,7 +144,7 @@ export function SelectionDashboard({ vm }: { vm: SelectionVM }) {
                 onChange={(e) => setFilters({ ...filters, [id]: e.target.value })}
               >
                 <option value="">{a.label} 전체</option>
-                {optionsOf(a, vm.reqs).map((o) => (
+                {(options.get(id) ?? []).map((o) => (
                   <option key={o.v} value={o.v}>
                     {o.v === BLANK ? "미입력" : o.v} ({o.n})
                   </option>
@@ -251,14 +258,6 @@ function Cell({ fd, v }: { fd: FormField; v: string }) {
       </td>
     );
   if (fd.kind === "number") return <td className={s.r}>{fd.id === "REQ-06" ? f1(Number(v)) : v}</td>;
-  if (LONG.has(fd.id))
-    return (
-      <td>
-        <span className={s.long} title={v}>
-          {v}
-        </span>
-      </td>
-    );
   return <td className={s.nowrap}>{v}</td>;
 }
 

@@ -1,21 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Select } from "@/components/ui/Field";
 import { Icon } from "@/components/ui/Icon";
 import { Panel } from "@/components/ui/Panel";
 import { Segmented } from "@/components/ui/Tabs";
 import { FORM_GROUPS, tally, type FormGroup } from "@/lib/projects/form";
 import type { SelectionVM } from "@/lib/views";
-import { AXES, AXIS_BY_ID, BLANK, SKEW, distOf, type Axis } from "./axes";
+import { AXES, AXIS_BY_ID, BLANK, SKEW, type Axis, type AxisDist } from "./axes";
 import s from "./selection.module.css";
 
 type Filters = Record<string, string>;
 
-/** 엑셀 그룹별 분포 — 막대를 누르면 아래 표가 그 값으로 걸러진다. */
-export function DistPanel({ vm, filters, onPick }: { vm: SelectionVM; filters: Filters; onPick: (id: string, v: string) => void }) {
+/** 엑셀 그룹별 분포 — 막대를 누르면 아래 표가 그 값으로 걸러진다. 검색어 입력마다 다시 그리지 않도록 memo. */
+export const DistPanel = memo(function DistPanel({ dists, filters, onPick }: { dists: Map<string, AxisDist>; filters: Filters; onPick: (id: string, v: string) => void }) {
   const [tab, setTab] = useState<FormGroup>("PRJ");
-  const warnN = (g: FormGroup) => AXES.filter((a) => a.group === g).reduce((n, a) => n + distOf(vm, a).warns.length, 0);
+  const warnN = (g: FormGroup) => AXES.filter((a) => a.group === g).reduce((n, a) => n + (dists.get(a.id)?.warns.length ?? 0), 0);
   return (
     <Panel
       flush
@@ -37,15 +37,15 @@ export function DistPanel({ vm, filters, onPick }: { vm: SelectionVM; filters: F
       </p>
       <div className={s.dims}>
         {AXES.filter((a) => a.group === tab).map((a) => (
-          <AxisCard key={a.id} vm={vm} a={a} picked={filters[a.id]} onPick={(v) => onPick(a.id, v)} />
+          <AxisCard key={a.id} a={a} dist={dists.get(a.id)!} picked={filters[a.id]} onPick={(v) => onPick(a.id, v)} />
         ))}
       </div>
     </Panel>
   );
-}
+});
 
-function AxisCard({ vm, a, picked, onPick }: { vm: SelectionVM; a: Axis; picked?: string; onPick: (v: string) => void }) {
-  const { rows, total, blank, warns } = distOf(vm, a);
+function AxisCard({ a, dist, picked, onPick }: { a: Axis; dist: AxisDist; picked?: string; onPick: (v: string) => void }) {
+  const { rows, total, blank, warns } = dist;
   // 선택지가 많은 축은 0건을 접어 둔다 — 업무 유형 15종을 다 그리면 읽히지 않는다.
   const many = rows.length > 8;
   const shown = many ? rows.filter((r) => r.n > 0) : rows;
@@ -92,7 +92,7 @@ function AxisCard({ vm, a, picked, onPick }: { vm: SelectionVM; a: Axis; picked?
 const ROWS = ["PRJ-01", ...AXES.filter((a) => a.level === "req").map((a) => a.id)];
 
 /** 두 항목을 겹쳐 본다 — 비어 있는 칸은 그 조합의 표본이 없어 측정 결과에서 비교할 수 없다는 뜻. */
-export function CrossPanel({ vm, onPick }: { vm: SelectionVM; onPick: (pairs: [string, string][]) => void }) {
+export const CrossPanel = memo(function CrossPanel({ vm, onPick }: { vm: SelectionVM; onPick: (pairs: [string, string][]) => void }) {
   const [rowId, setRowId] = useState("FIT-06");
   const [colId, setColId] = useState("REQ-04");
   const col = AXIS_BY_ID[colId];
@@ -104,8 +104,18 @@ export function CrossPanel({ vm, onPick }: { vm: SelectionVM; onPick: (pairs: [s
   const blankCol = vm.reqs.some((r) => !col.get(r));
   const rows = [...rowCats, ...(blankRow ? [""] : [])];
   const cols = [...colCats, ...(blankCol ? [""] : [])];
-  const n = (rv: string, cv: string) => vm.reqs.filter((r) => rowGet(r) === rv && col.get(r) === cv).length;
-  const colTotal = (cv: string) => vm.reqs.filter((r) => col.get(r) === cv).length;
+  // 칸마다 전체 행을 다시 세지 않도록 한 번에 센다.
+  const cell = new Map<string, number>();
+  const rowN = new Map<string, number>();
+  const colN = new Map<string, number>();
+  const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+  for (const r of vm.reqs) {
+    bump(cell, JSON.stringify([rowGet(r), col.get(r)]));
+    bump(rowN, rowGet(r));
+    bump(colN, col.get(r));
+  }
+  const n = (rv: string, cv: string) => cell.get(JSON.stringify([rv, cv])) ?? 0;
+  const colTotal = (cv: string) => colN.get(cv) ?? 0;
 
   return (
     <Panel
@@ -148,7 +158,7 @@ export function CrossPanel({ vm, onPick }: { vm: SelectionVM; onPick: (pairs: [s
           </thead>
           <tbody>
             {rows.map((rv) => {
-              const sum = vm.reqs.filter((r) => rowGet(r) === rv).length;
+              const sum = rowN.get(rv) ?? 0;
               return (
                 <tr key={rv || "blank"}>
                   <td>
@@ -189,4 +199,4 @@ export function CrossPanel({ vm, onPick }: { vm: SelectionVM; onPick: (pairs: [s
       </div>
     </Panel>
   );
-}
+});

@@ -4,10 +4,12 @@ import { Fragment, useState } from "react";
 import { Field, Select, TextInput } from "@/components/ui/Field";
 import { Callout, EmptyState, Panel, Skeleton } from "@/components/ui/Panel";
 import t from "@/components/ui/table.module.css";
-import type { DiffItem } from "@/lib/diff";
 import { useApi } from "@/lib/hooks";
 import { fmtDateTime } from "@/lib/labels";
 import type { HistoryEntry } from "@/lib/types";
+
+// 예전 과제 수정 이력은 항목별 변경 목록을 diff 로 남겼다 — DB 에 남은 그 이력을 펼쳐 보이기 위해 둔다.
+type DiffItem = { key: string; before: unknown; after: unknown };
 
 const TARGET_LABEL: Record<string, string> = {
   PROJECT: "과제·요구사항",

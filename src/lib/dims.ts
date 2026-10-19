@@ -28,8 +28,6 @@ export const DIMS: Dim[] = [
   { key: "sysGrade", title: "시스템 등급", level: "prj", cats: ["L0", "L1", "L2", "L3", "L4"] },
 ];
 
-export const DIM_BY_KEY = Object.fromEntries(DIMS.map((d) => [d.key, d])) as Record<DimKey, Dim>;
-
 /** 공수 태그의 분류 축 값. 비어 있으면 "" (미입력) */
 export function dimValues(p: Project, s: Stage): Record<DimKey, string> {
   return {

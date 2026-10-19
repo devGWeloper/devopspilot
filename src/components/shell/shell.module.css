@@ -258,9 +258,6 @@
   margin: 0 auto;
   padding: 28px 28px 64px;
 }
-.banner {
-  margin: 16px 28px 0;
-}
 
 .overlay {
   display: none;
@@ -335,9 +332,6 @@
   }
   .content {
     padding: 20px 16px 48px;
-  }
-  .banner {
-    margin: 12px 16px 0;
   }
 }
 

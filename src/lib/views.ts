@@ -1,7 +1,7 @@
 // 화면별로 서버가 내려줄 직렬화 가능한 데이터. 숫자 계산은 measure/metrics.ts 를 부르기만 한다.
 import { canSee, type Actor } from "./auth/permissions";
 import { DIMS, catsOf, dimValues, type DimKey } from "./dims";
-import { aggTrace, aggUnits, cellOf, metricDefs, nextDayConfRate, pendingOf, sessionCost, tagRate, traceUnits, reqStatus, rowsOf, stageStatus, unitsOfReq, type Agg, type Cell, type Index, type MetricDef, type Ratio, type ReqStatus, type RowSt } from "./measure/metrics";
+import { aggTrace, aggUnits, cellOf, confirmedSum, metricDefs, nextDayConfRate, pendingOf, reqsOwnedBy, sessionCost, tagRate, traceUnits, reqStatus, rowsOf, stageStatus, unitsOfReq, type Agg, type Cell, type Index, type MetricDef, type Ratio, type ReqStatus, type RowSt } from "./measure/metrics";
 import { detectAnomalies, type Anomaly } from "./measure/monitor";
 import type { ActType, MonitorNote, TokenPrice } from "./measure/types";
 import { reqBaseMd, reqDone, reqKey, type Unit } from "./measure/units";
@@ -48,15 +48,13 @@ function reqVM(ix: Index, prj: Project, req: Requirement): ReqVM {
     md: a.md,
     inT: a.inT,
     out: a.out,
-    stages: ix.units
-      .filter((u) => u.req === req)
-      .map((u) => ({
-        ...u.s,
-        ownerNm: u.s.ownerNm || u.s.ownerId || "미지정",
-        code: u.code,
-        md: aggUnits(ix, [u], false).md,
-        status: stageStatus(ix, req, u.stage),
-      })),
+    stages: unitsOfReq(ix, req).map((u) => ({
+      ...u.s,
+      ownerNm: u.s.ownerNm || u.s.ownerId || "미지정",
+      code: u.code,
+      md: aggUnits(ix, [u], false).md,
+      status: stageStatus(ix, req, u.stage),
+    })),
   };
 }
 
@@ -197,9 +195,6 @@ export function effortView(ix: Index, users: UserRecord[], userId: string, today
       for (const u of us) cells[u.stage] = { ...cellVM(cellOf(ix, u.code, r.date)), unit: u.code, done: u.s.done };
       return { date: r.date, st: r.st, revCount: r.revCount, cells, tot: Object.values(cells).reduce((a, c) => a + (c?.tot ?? 0), 0) };
     });
-    const confRows = rows.filter((r) => r.st === "conf");
-    const confSum: Partial<Record<StageCd, number>> = {};
-    for (const u of us) confSum[u.stage] = confRows.reduce((a, r) => a + (r.cells[u.stage]?.tot ?? 0), 0);
     const a = aggUnits(ix, us, false);
     return {
       rk: us[0].reqKey,
@@ -219,8 +214,8 @@ export function effortView(ix: Index, users: UserRecord[], userId: string, today
       mine: us.map((u) => u.stage),
       codes: us.filter((u) => !u.s.done).map((u) => u.code),
       rows,
-      confSum,
-      confDays: confRows.length,
+      confSum: confirmedSum(ix, userId, req).byStage,
+      confDays: rows.filter((r) => r.st === "conf").length,
     };
   });
 
@@ -391,8 +386,7 @@ export function confMatrix(ix: Index, users: UserRecord[], days: string[], nowIs
     days,
     nextDay: nextDayConfRate(ix, new Set(devs.map((d) => d.userId)), nowIso),
     rows: devs.map((d) => {
-      const reqs = ix.data.projects.flatMap((p) => p.reqs).filter((r) => r.stages.some((s) => s.ownerId === d.userId));
-      const rowsBy = reqs.map((r) => rowsOf(ix, d.userId, r));
+      const rowsBy = reqsOwnedBy(ix, d.userId).map((r) => rowsOf(ix, d.userId, r));
       let tot = 0;
       let ok = 0;
       const cells = days.map((date) => {
@@ -425,13 +419,14 @@ export interface CollectRowVM {
 }
 
 export function collectLog(ix: Index, users: UserRecord[]): CollectRowVM[] {
+  const names = new Map(users.map((u) => [u.userId, u.userNm]));
   const pend = new Set(ix.alloc.pending.map((p) => p.session.datId));
   const map = new Map<string, CollectRowVM>();
   for (const s of ix.data.sessions) {
     const k = `${s.userId}|${s.workDt}|${s.src}`;
     const r = map.get(k) ?? {
       userId: s.userId,
-      userNm: users.find((u) => u.userId === s.userId)?.userNm ?? s.userId,
+      userNm: names.get(s.userId) ?? s.userId,
       date: s.workDt,
       src: s.src,
       sessions: 0,
@@ -482,9 +477,8 @@ export function selectionView(ix: Index, actor: Actor): SelectionVM {
   return {
     projects: visible.map(({ p, reqs }) => ({ ...info(p), reqN: reqs.length, baseMd: reqs.reduce((a, r) => a + reqBaseMd(r), 0) })),
     reqs: visible.flatMap(({ reqs }) =>
-      ix.units
-        .filter((u) => reqs.includes(u.req))
-        .map((u) => ({
+      reqs.flatMap((r) =>
+        unitsOfReq(ix, r).map((u) => ({
           prjId: u.prjId,
           reqId: u.code,
           name: reqLabel(u.req),
@@ -492,6 +486,7 @@ export function selectionView(ix: Index, actor: Actor): SelectionVM {
           status: stageStatus(ix, u.req, u.stage),
           values: formValues(u.prj, u.req, u.s, u.code),
         })),
+      ),
     ),
   };
 }

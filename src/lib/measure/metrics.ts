@@ -2,7 +2,7 @@
 import type { Project, Requirement, StageCd } from "../types";
 import { allocate, unitDayKey, type AllocSrc, type Allocation, type Pending, type StoredSession } from "./match";
 import { ACT_TYPES, type ActType, type AiSession, type DayConf, type EffortEntry, type Settings } from "./types";
-import { reqBaseMd, reqDone, reqKey, unitCode, unitsOf, type Unit } from "./units";
+import { reqDone, reqKey, unitCode, unitsOf, type Unit } from "./units";
 
 export interface MeasureData {
   projects: Project[];
@@ -23,7 +23,18 @@ export interface Index {
   daysByUnit: Map<string, Set<string>>;
   /** 요구사항 → 과제 ID — 요구사항 ID 가 과제 안에서만 유일해서 키를 만들 때 쓴다 */
   prjOf: Map<Requirement, string>;
+  unitsByReq: Map<Requirement, Unit[]>;
+  /** `${userId}|${reqKey}` → 확정 기록이 있는 날 */
+  confDates: Map<string, string[]>;
+  /** 한 화면이 같은 셀·일자 상태를 여러 집계(단계·과제·성격별)에서 다시 묻는다. Index 는 요청마다 새로 만들어 무효화가 필요 없다. */
+  memo: { cell: Map<string, Cell>; state: Map<string, DayState>; rows: Map<string, Row[]>; trace: Map<string, TraceUnit> };
 }
+
+const memo = <T>(m: Map<string, T>, k: string, f: () => T): T => {
+  let v = m.get(k);
+  if (v === undefined) m.set(k, (v = f()));
+  return v;
+};
 
 /** 확정 키는 reqKey(과제ID-요구사항ID) 기준 */
 export const confKey = (userId: string, rk: string, date: string) => `${userId}|${rk}|${date}`;
@@ -53,6 +64,13 @@ export function buildIndex(data: MeasureData): Index {
   const effort = new Map(data.efforts.map((e) => [unitDayKey(e.unit, e.workDt), e]));
   const conf = new Map(data.confs.map((c) => [confKey(c.userId, reqKey(c.prjId, c.reqId), c.workDt), c]));
   const prjOf = new Map(data.projects.flatMap((p) => p.reqs.map((r) => [r, p.prjId] as const)));
+  const unitsByReq = new Map<Requirement, Unit[]>();
+  for (const u of units) unitsByReq.set(u.req, [...(unitsByReq.get(u.req) ?? []), u]);
+  const confDates = new Map<string, string[]>();
+  for (const c of data.confs) {
+    const k = `${c.userId}|${reqKey(c.prjId, c.reqId)}`;
+    confDates.set(k, [...(confDates.get(k) ?? []), c.workDt]);
+  }
   const daysByUnit = new Map<string, Set<string>>();
   const mark = (k: string) => {
     const [unit, date] = k.split("|");
@@ -63,7 +81,7 @@ export function buildIndex(data: MeasureData): Index {
   effort.forEach((e, k) => {
     if (hasEffort(e)) mark(k);
   });
-  return { data, units, unitByCode, alloc, effort, conf, daysByUnit, prjOf };
+  return { data, units, unitByCode, alloc, effort, conf, daysByUnit, prjOf, unitsByReq, confDates, memo: { cell: new Map(), state: new Map(), rows: new Map(), trace: new Map() } };
 }
 
 const hasEffort = (e: EffortEntry) => e.reduceH > 0 || addSum(e.add) > 0 || !!e.memo;
@@ -87,8 +105,13 @@ export interface Cell {
 }
 
 export function cellOf(ix: Index, unit: string, date: string): Cell {
-  const a = ix.alloc.byUnitDay.get(unitDayKey(unit, date));
-  const e = ix.effort.get(unitDayKey(unit, date));
+  const k = unitDayKey(unit, date);
+  return memo(ix.memo.cell, k, () => calcCell(ix, k));
+}
+
+function calcCell(ix: Index, k: string): Cell {
+  const a = ix.alloc.byUnitDay.get(k);
+  const e = ix.effort.get(k);
   const ai = (a?.min ?? 0) / 60;
   const mn = Math.min(ai, e?.reduceH ?? 0);
   const inT = ai - mn;
@@ -117,8 +140,16 @@ function sameSnap(a: Record<string, number>, b: Record<string, number>): boolean
   return Array.from(keys).every((k) => (a[k] ?? 0) === (b[k] ?? 0));
 }
 
-export function dayState(ix: Index, userId: string, req: Requirement, date: string): { st: RowSt; revCount: number; changed: boolean } {
-  const c = ix.conf.get(confKey(userId, keyOf(ix, req), date));
+type DayState = { st: RowSt; revCount: number; changed: boolean };
+type Row = DayState & { date: string };
+
+export function dayState(ix: Index, userId: string, req: Requirement, date: string): DayState {
+  const k = confKey(userId, keyOf(ix, req), date);
+  return memo(ix.memo.state, k, () => calcState(ix, userId, req, date, k));
+}
+
+function calcState(ix: Index, userId: string, req: Requirement, date: string, k: string): DayState {
+  const c = ix.conf.get(k);
   if (c?.state === "CONF") {
     const changed = !sameSnap(c.snap ?? {}, daySnap(ix, userId, req, date));
     return { st: changed ? "edit" : "conf", revCount: c.revCount, changed };
@@ -127,23 +158,18 @@ export function dayState(ix: Index, userId: string, req: Requirement, date: stri
 }
 
 /** 개발자 × 요구사항 일자 줄 — 데이터가 있거나 '기록 없는 날 추가'로 만든 날 */
-export function rowsOf(
-  ix: Index,
-  userId: string,
-  req: Requirement,
-): { date: string; st: RowSt; revCount: number; changed: boolean }[] {
-  const dates = new Set<string>();
-  for (const s of req.stages) {
-    if (s.ownerId !== userId) continue;
-    ix.daysByUnit.get(codeOf(ix, req, s.cd))?.forEach((d) => dates.add(d));
-  }
-  const prjId = ix.prjOf.get(req);
-  ix.conf.forEach((c) => {
-    if (c.userId === userId && c.prjId === prjId && c.reqId === req.reqId) dates.add(c.workDt);
+export function rowsOf(ix: Index, userId: string, req: Requirement): Row[] {
+  const k = `${userId}|${keyOf(ix, req)}`;
+  return memo(ix.memo.rows, k, () => {
+    const dates = new Set(ix.confDates.get(k));
+    for (const s of req.stages) {
+      if (s.ownerId !== userId) continue;
+      ix.daysByUnit.get(codeOf(ix, req, s.cd))?.forEach((d) => dates.add(d));
+    }
+    return Array.from(dates)
+      .sort((a, b) => b.localeCompare(a))
+      .map((date) => ({ date, ...dayState(ix, userId, req, date) }));
   });
-  return Array.from(dates)
-    .sort((a, b) => b.localeCompare(a))
-    .map((date) => ({ date, ...dayState(ix, userId, req, date) }));
 }
 
 export type ReqStatus = "DONE" | "ING" | "WAIT";
@@ -212,24 +238,26 @@ export interface TraceUnit {
 
 /** 집계 대상 날과 빠진 날을 모두 돌려준다 — 측정 결과 숫자는 이것을 더한 값이다(aggTrace). */
 export function traceUnits(ix: Index, units: Unit[], confirmedOnly: boolean): TraceUnit[] {
+  return units.map((u) => memo(ix.memo.trace, `${u.code}|${confirmedOnly}`, () => traceUnit(ix, u, confirmedOnly)));
+}
+
+function traceUnit(ix: Index, u: Unit, confirmedOnly: boolean): TraceUnit {
   const s = ix.data.settings;
-  return units.map((u) => {
-    const days = Array.from(ix.daysByUnit.get(u.code) ?? [])
-      .sort()
-      .map((date): TraceDay => {
-        const st = u.ownerId ? dayState(ix, u.ownerId, u.req, date).st : "need";
-        const c = u.ownerId ? ix.conf.get(confKey(u.ownerId, u.reqKey, date)) : undefined;
-        return {
-          date,
-          st,
-          confirmedAt: st === "conf" ? (c?.confirmedAt ?? null) : null,
-          counted: !confirmedOnly || st === "conf",
-          cell: cellOf(ix, u.code, date),
-          sessions: ix.alloc.srcByUnitDay.get(unitDayKey(u.code, date)) ?? [],
-        };
-      });
-    return { unit: u, price: s.gradePrice[u.s.grade] ?? 0, days, tot: days.filter((d) => d.counted).reduce((a, d) => a + d.cell.tot, 0) };
-  });
+  const days = Array.from(ix.daysByUnit.get(u.code) ?? [])
+    .sort()
+    .map((date): TraceDay => {
+      const st = u.ownerId ? dayState(ix, u.ownerId, u.req, date).st : "need";
+      const c = u.ownerId ? ix.conf.get(confKey(u.ownerId, u.reqKey, date)) : undefined;
+      return {
+        date,
+        st,
+        confirmedAt: st === "conf" ? (c?.confirmedAt ?? null) : null,
+        counted: !confirmedOnly || st === "conf",
+        cell: cellOf(ix, u.code, date),
+        sessions: ix.alloc.srcByUnitDay.get(unitDayKey(u.code, date)) ?? [],
+      };
+    });
+  return { unit: u, price: s.gradePrice[u.s.grade] ?? 0, days, tot: days.filter((d) => d.counted).reduce((a, d) => a + d.cell.tot, 0) };
 }
 
 export function aggTrace(ix: Index, trace: TraceUnit[]): Agg {
@@ -290,11 +318,7 @@ export function aggUnits(ix: Index, units: Unit[], confirmedOnly: boolean): Agg 
   return aggTrace(ix, traceUnits(ix, units, confirmedOnly));
 }
 
-export const unitsOfReq = (ix: Index, req: Requirement) => ix.units.filter((u) => u.req === req);
-
-export function reqProgress(ix: Index, req: Requirement): { md: number; baseMd: number } {
-  return { md: aggUnits(ix, unitsOfReq(ix, req), false).md, baseMd: reqBaseMd(req) };
-}
+export const unitsOfReq = (ix: Index, req: Requirement) => ix.unitsByReq.get(req) ?? [];
 
 export function pendingOf(ix: Index, userId: string | null): Pending[] {
   return ix.alloc.pending.filter((p) => !userId || p.session.userId === userId);
@@ -317,13 +341,6 @@ export function confirmedSum(ix: Index, userId: string, req: Requirement): { byS
 }
 
 export const reqsOwnedBy = (ix: Index, userId: string) => ix.data.projects.flatMap((p) => p.reqs).filter((r) => r.stages.some((s) => s.ownerId === userId));
-
-/** 개발자에게 입력·확정 기록이 있는 날 */
-export function userDates(ix: Index, userId: string): string[] {
-  const out = new Set<string>();
-  for (const r of reqsOwnedBy(ix, userId)) rowsOf(ix, userId, r).forEach((x) => out.add(x.date));
-  return Array.from(out);
-}
 
 // ---------- 보조 · 관리 지표 ----------
 
@@ -363,13 +380,12 @@ export function nextDayConfRate(ix: Index, userIds: Set<string> | null, nowIso: 
   const late: { userId: string; date: string }[] = [];
   const owners = Array.from(new Set(ix.units.map((u) => u.ownerId).filter((x): x is string => !!x && (!userIds || userIds.has(x)))));
   for (const userId of owners) {
-    const reqs = reqsOwnedBy(ix, userId);
-    for (const date of userDates(ix, userId)) {
+    const reqsByDate = new Map<string, Requirement[]>();
+    for (const r of reqsOwnedBy(ix, userId)) for (const x of rowsOf(ix, userId, r)) reqsByDate.set(x.date, [...(reqsByDate.get(x.date) ?? []), r]);
+    for (const [date, dayReqs] of Array.from(reqsByDate)) {
       if (date < ix.data.settings.measureStart) continue;
       const due = nextDayDeadline(date);
       if (due > nowIso) continue;
-      const dayReqs = reqs.filter((r) => rowsOf(ix, userId, r).some((x) => x.date === date));
-      if (!dayReqs.length) continue;
       den++;
       const onTime = dayReqs.every((r) => {
         const c = ix.conf.get(confKey(userId, keyOf(ix, r), date));

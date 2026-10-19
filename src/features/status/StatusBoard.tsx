@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Chip, type Tone } from "@/components/ui/Chip";
 import { TextInput } from "@/components/ui/Field";
@@ -41,8 +41,9 @@ export function StatusBoard({
 
   const all = vm.projects.flatMap((p) => p.reqs);
   const count = (s: ReqStatus) => all.filter((r) => r.status === s).length;
+  const dq = useDeferredValue(q);
   const shown = useMemo(() => {
-    const ql = q.trim().toLowerCase();
+    const ql = dq.trim().toLowerCase();
     return vm.projects
       .map((p) => ({
         ...p,
@@ -64,7 +65,7 @@ export function StatusBoard({
         ),
       }))
       .filter((p) => p.rows.length > 0);
-  }, [vm, f, q]);
+  }, [vm, f, dq]);
 
   return (
     <>

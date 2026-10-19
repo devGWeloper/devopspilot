@@ -160,26 +160,6 @@
   color: var(--warn);
 }
 
-.facts {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-}
-
-.facts > div,
-.extras > div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 13px;
-}
-
-.extras {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 10px 16px;
-}
-
 @media (max-width: 900px) {
   .kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));

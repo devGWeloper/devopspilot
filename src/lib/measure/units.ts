@@ -41,7 +41,3 @@ export const reqBaseMd = (r: Requirement) => r.stages.reduce((a, s) => a + s.bas
 
 /** 모든 태그가 측정 완료여야 요구사항이 완료 */
 export const reqDone = (r: Requirement) => r.stages.length > 0 && r.stages.every((s) => s.done);
-
-export const isOwner = (r: Requirement, userId: string) => r.stages.some((s) => s.ownerId === userId);
-
-export const ownersOf = (r: Requirement) => Array.from(new Set(r.stages.map((s) => s.ownerNm || s.ownerId || "미지정")));

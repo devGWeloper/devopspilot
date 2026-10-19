@@ -1,5 +1,5 @@
 // 공수 입력 이상 감지 — 숫자를 새로 계산하지 않고 metrics.ts 의 셀·집계 결과를 규칙으로 걸러 낸다.
-import { aggTrace, cellOf, dayState, traceUnits, type Index } from "./metrics";
+import { aggTrace, cellOf, dayState, traceUnits, unitsOfReq, type Index } from "./metrics";
 import { STAGE_LABEL } from "../types";
 import { reqDone, reqKey } from "./units";
 import type { Anomaly, Severity } from "./monitorRules";
@@ -98,7 +98,7 @@ export function detectAnomalies(ix: Index, names: Map<string, string>, today: st
   // 요구사항 단위 — 기준 초과, 절감률 과대, AI 없음
   for (const p of ix.data.projects)
     for (const req of p.reqs) {
-      const units = ix.units.filter((u) => u.req === req);
+      const units = unitsOfReq(ix, req);
       const done = reqDone(req);
       const a = aggTrace(ix, traceUnits(ix, units, done));
       const who = Array.from(new Set(units.map((u) => u.ownerId))).filter(Boolean)[0] ?? null;

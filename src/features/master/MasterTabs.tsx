@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { Select, TextInput } from "@/components/ui/Field";
@@ -165,12 +165,13 @@ function TagTable({ vm, onEdit }: { vm: MasterVM; onEdit: (info: ProjectInfo, re
   const [prj, setPrj] = useState("");
   const [q, setQ] = useState("");
   const [mode, setMode] = useState<"grid" | "list">("grid");
+  const dq = useDeferredValue(q);
   const shown = useMemo(() => {
-    const ql = q.trim().toLowerCase();
+    const ql = dq.trim().toLowerCase();
     return vm.projects
       .filter((p) => !prj || p.info.prjId === prj)
       .map((p) => ({ ...p, reqs: p.reqs.filter((r) => !ql || [r.rk, r.name, ...r.stages.flatMap((s) => [s.code, s.ownerNm, s.ownerId ?? ""])].join(" ").toLowerCase().includes(ql)) }));
-  }, [vm, prj, q]);
+  }, [vm, prj, dq]);
   const unmapped = vm.projects.flatMap((p) => p.reqs.flatMap((r) => r.stages.filter((s) => !s.ownerId))).length;
 
   return (
