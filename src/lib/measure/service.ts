@@ -7,7 +7,7 @@ import { normalizeSettings, SETTINGS_KEY } from "./defaults";
 import { kstDate, kstTime, parseLogUpload, type OtelDelta } from "./ingest";
 import type { StoredSession } from "./match";
 import { buildIndex, cellOf, confKey, dayState, daySnap, rowsOf, type Index, type MeasureData } from "./metrics";
-import { ACT_TYPES, type ActType, type AiSession, type DayConf, type EffortEntry, type Settings } from "./types";
+import { ACT_TYPES, type ActType, type AiSession, type DayConf, type EffortEntry, type MonitorNote, type NoteStatus, type Settings } from "./types";
 
 export async function getSettings(store: Store): Promise<Settings> {
   return normalizeSettings((await store.config.get<Settings>(SETTINGS_KEY))?.value);
@@ -36,7 +36,7 @@ const effortId = (unit: string, date: string) => `E|${unit}|${date}`;
 const confId = (userId: string, reqId: string, date: string) => `C|${userId}|${reqId}|${date}`;
 export const sessionId = (src: string, sid: string, date: string) => `A|${src}|${sid}|${date}`;
 
-function row(kind: MeasRow["kind"], datId: string, base: { prjId: string; reqId: string | null; workDt: string; userId: string }, data: unknown, src: string, by: string): MeasRow {
+function row(kind: MeasRow["kind"], datId: string, base: { prjId: string; reqId: string | null; workDt: string; userId: string | null }, data: unknown, src: string, by: string): MeasRow {
   const now = new Date().toISOString();
   return { datId, kind, prjId: base.prjId, reqId: base.reqId, workDt: base.workDt, userId: base.userId, srcCd: src, data, regUserId: by, regAt: now, updAt: now };
 }
@@ -284,3 +284,40 @@ export async function saveSettings(store: Store, actor: ActorFull, v: Settings):
   return okR(s);
 }
 
+
+export async function listNotes(store: Store): Promise<MonitorNote[]> {
+  return (await store.meas.listAll("NOTE")).map((r) => r.data as MonitorNote).sort((a, b) => b.at.localeCompare(a.at));
+}
+
+export interface NoteInput {
+  key: string;
+  status: NoteStatus;
+  method?: string;
+  contact?: string;
+  text: string;
+  userId?: string | null;
+  reqId?: string | null;
+  date?: string | null;
+}
+
+/** 확인 기록은 고치지 않고 쌓기만 한다 — 증적이므로 */
+export async function addNote(store: Store, actor: ActorFull, input: NoteInput): Promise<ServiceResult<MonitorNote>> {
+  if (actor.role !== "ADMIN") return forbiddenR("관리자만 기록할 수 있습니다.");
+  const text = (input.text ?? "").trim();
+  if (!input.key || !text) return err(400, "EMPTY", "내용을 입력해 주세요.");
+  if (!["OK", "ACTION", "MEMO"].includes(input.status)) return err(400, "BAD_STATUS", "판정을 골라 주세요.");
+  const at = new Date().toISOString();
+  const note: MonitorNote = {
+    noteId: `N|${at}|${Math.random().toString(36).slice(2, 8)}`,
+    key: input.key.slice(0, 150),
+    status: input.status,
+    method: (input.method ?? "").trim().slice(0, 30),
+    contact: (input.contact ?? "").trim().slice(0, 60),
+    text: text.slice(0, 2000),
+    by: actor.userId,
+    byNm: actor.userNm,
+    at,
+  };
+  await store.meas.upsert([row("NOTE", note.noteId, { prjId: "-", reqId: input.reqId ?? null, workDt: isDate(input.date) ? input.date : kstDate(Date.now()), userId: input.userId ?? null }, note, "ADMIN", actor.userId)]);
+  return okR(note);
+}

@@ -52,9 +52,22 @@ export interface Pending {
   why: string;
 }
 
+/** 산출 근거 — 단위·일자에 어떤 세션이 얼마나, 왜 붙었는지 */
+export interface AllocSrc {
+  datId: string;
+  src: AiSession["src"];
+  tool: string;
+  start: string;
+  end: string;
+  min: number;
+  cost: number;
+  how: string;
+}
+
 export interface Allocation {
   /** `${unit}|${date}` → 배정된 AI 시간·비용 */
   byUnitDay: Map<string, Alloc>;
+  srcByUnitDay: Map<string, AllocSrc[]>;
   pending: Pending[];
   offCount: number;
 }
@@ -63,15 +76,18 @@ export const unitDayKey = (unit: string, date: string) => `${unit}|${date}`;
 
 export function allocate(sessions: StoredSession[], units: Unit[], rateOf: (tool: string) => number): Allocation {
   const byUnitDay = new Map<string, Alloc>();
+  const srcByUnitDay = new Map<string, AllocSrc[]>();
   const pending: Pending[] = [];
   let offCount = 0;
-  const add = (unit: string, date: string, min: number, tool: string) => {
+  const add = (s: StoredSession, unit: string, min: number, how: string) => {
     if (min <= 0) return;
-    const k = unitDayKey(unit, date);
+    const k = unitDayKey(unit, s.workDt);
+    const cost = (min / 60) * rateOf(s.tool);
     const cur = byUnitDay.get(k) ?? { min: 0, cost: 0 };
     cur.min += min;
-    cur.cost += (min / 60) * rateOf(tool);
+    cur.cost += cost;
     byUnitDay.set(k, cur);
+    srcByUnitDay.set(k, [...(srcByUnitDay.get(k) ?? []), { datId: s.datId, src: s.src, tool: s.tool, start: s.start, end: s.end, min, cost, how }]);
   };
   for (const s of sessions) {
     const r = s.resolution;
@@ -80,14 +96,14 @@ export function allocate(sessions: StoredSession[], units: Unit[], rateOf: (tool
       continue;
     }
     if (r?.kind === "ASSIGN") {
-      r.parts.forEach((p) => add(p.unit, s.workDt, p.min, s.tool));
+      r.parts.forEach((p) => add(s, p.unit, p.min, `${r.by} 직접 배정`));
       continue;
     }
     const m = matchSession(s, units);
-    if (m.unit) add(m.unit, s.workDt, s.minutes, s.tool);
+    if (m.unit) add(s, m.unit, s.minutes, `자동 — ${m.why}`);
     else pending.push({ session: s, cands: m.cands, why: m.why });
   }
-  return { byUnitDay, pending, offCount };
+  return { byUnitDay, srcByUnitDay, pending, offCount };
 }
 
 /** 대화·브랜치 텍스트에서 코드처럼 생긴 토큰만 뽑는다. 원문은 저장하지 않기 위해 수집 단계에서 쓴다. */

@@ -1,6 +1,6 @@
 import type { HistoryEntry, HistoryTarget, Project, UserRecord } from "../types";
 
-export type MeasKind = "EFFORT" | "CONF" | "AIUSE";
+export type MeasKind = "EFFORT" | "CONF" | "AIUSE" | "NOTE";
 
 export interface MeasRow {
   datId: string;

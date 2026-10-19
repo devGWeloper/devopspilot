@@ -19,10 +19,11 @@
 
 .table th {
   font-size: 12px;
-  font-weight: 650;
-  color: var(--muted);
+  font-weight: 700;
+  color: var(--ink-2);
   padding: 10px 16px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-strong);
+  background: var(--surface-2);
   text-align: left;
   white-space: nowrap;
 }
@@ -77,4 +78,134 @@
   .kpi {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+.click {
+  cursor: pointer;
+}
+
+.click:hover td {
+  background: var(--surface-2);
+}
+
+.caret {
+  display: inline-block;
+  width: 16px;
+  color: var(--muted);
+}
+
+.insight {
+  padding: 4px 20px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.insightHead {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.insList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.insBtn {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.insBtn:hover {
+  border-color: var(--ink-2);
+}
+
+.insTitle {
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.spread {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.few {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--warn);
+}
+
+.dimBar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 20px;
+}
+
+.dim0 td {
+  color: var(--muted);
+}
+
+.sbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 18px;
+}
+
+.sbar i {
+  display: block;
+  height: 10px;
+  background: var(--ink-2);
+  border-radius: 2px;
+  max-width: calc(100% - 56px);
+}
+
+.sbar i.neg {
+  background: var(--danger);
+  width: 4px !important;
+}
+
+.sbar span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--warn);
+  margin-left: -1px;
+  max-width: calc(100% - 56px);
+}
+
+.sbar b {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.low {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.foot {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 12px 20px;
+  font-size: 12px;
+  color: var(--muted);
 }

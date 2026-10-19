@@ -1,7 +1,9 @@
 // 화면별로 서버가 내려줄 직렬화 가능한 데이터. 숫자 계산은 measure/metrics.ts 를 부르기만 한다.
 import { canSee, type Actor } from "./auth/permissions";
-import { aggUnits, cellOf, pendingOf, reqStatus, rowsOf, stageStatus, unitsOfReq, userDates, userDayState, userDayTotal, type Agg, type DaySt, type Index, type ReqStatus } from "./measure/metrics";
-import type { ActType } from "./measure/types";
+import { DIMS, catsOf, dimValues, type DimKey } from "./dims";
+import { aggTrace, aggUnits, cellOf, needCount, pendingOf, traceUnits, reqStatus, rowsOf, stageStatus, unitsOfReq, userDates, userDayState, userDayTotal, type Agg, type DaySt, type Index, type ReqStatus } from "./measure/metrics";
+import { detectAnomalies, type Anomaly } from "./measure/monitor";
+import type { ActType, MonitorNote } from "./measure/types";
 import { reqBaseMd } from "./measure/units";
 import { STAGE_LABEL, STAGES, type PrjKind, type Project, type Requirement, type StageCd, type UserRecord } from "./types";
 
@@ -107,6 +109,7 @@ export interface DayItemVM {
 
 export interface DayLineVM {
   unit: string;
+  prjId: string;
   prjNm: string;
   reqId: string;
   reqName: string;
@@ -140,6 +143,20 @@ export interface EffortDayVM {
   lines: DayLineVM[];
   pending: PendingVM[];
   pendingAll: number;
+  mine: MyReqVM[];
+}
+
+/** 날짜와 무관하게 내가 맡은 요구사항이 어디까지 왔는지 */
+export interface MyReqVM {
+  reqId: string;
+  prjId: string;
+  name: string;
+  prjNm: string;
+  stages: StageCd[];
+  status: ReqStatus;
+  need: number;
+  md: number;
+  baseMd: number;
 }
 
 /** 측정 시작일 ~ 오늘 평일 + 기록 있는 날 (최근 순) */
@@ -181,6 +198,7 @@ export function effortDayView(ix: Index, users: UserRecord[], userId: string, da
     .map(
       ({ u, cell }): DayLineVM => ({
         unit: u.code,
+        prjId: u.prj.prjId,
         prjNm: u.prj.prjNm,
         reqId: u.reqId,
         reqName: u.req.name,
@@ -218,7 +236,24 @@ export function effortDayView(ix: Index, users: UserRecord[], userId: string, da
     lines,
     pending,
     pendingAll: pendingMine.length,
+    mine: myReqs(ix, userId),
   };
+}
+
+function myReqs(ix: Index, userId: string): MyReqVM[] {
+  const by = new Map<Requirement, Index["units"]>();
+  ix.units.filter((u) => u.ownerId === userId).forEach((u) => by.set(u.req, [...(by.get(u.req) ?? []), u]));
+  return Array.from(by, ([req, us]) => ({
+    reqId: req.reqId,
+    prjId: us[0].prj.prjId,
+    name: req.name,
+    prjNm: us[0].prj.prjNm,
+    stages: us.map((u) => u.stage),
+    status: reqStatus(ix, req),
+    need: needCount(ix, userId, req),
+    md: aggUnits(ix, us, false).md,
+    baseMd: us.reduce((a, u) => a + u.s.baseMd, 0),
+  }));
 }
 
 // ---------- 측정 결과 ----------
@@ -234,19 +269,26 @@ export interface DashVM {
   total: Agg;
   stages: { cd: StageCd; agg: Agg; workTypes: { workType: string; agg: Agg }[] }[];
   projects: { prjId: string; prjNm: string; kind: PrjKind; doneN: number; reqN: number; agg: Agg }[];
-  reqs: { reqId: string; name: string; prjNm: string; status: ReqStatus; grade: string; agg: Agg }[];
+  reqs: { reqId: string; name: string; prjId: string; prjNm: string; status: ReqStatus; grade: string; agg: Agg }[];
+  /** 과제 성격(분류 축)별 결과 */
+  byDim: { key: DimKey; title: string; rows: { cat: string; reqN: number; agg: Agg }[] }[];
   settings: { mdHours: number; gradePrice: Record<string, number> };
 }
 
-export function dashView(ix: Index, actor: Actor, filter: DashFilter): DashVM {
+/** 측정 결과·산출 근거가 같은 범위를 쓰도록 */
+function scopeOf(ix: Index, actor: Actor, filter: DashFilter) {
   const visible = ix.data.projects.map((p) => ({ p, reqs: p.reqs.filter((r) => canSee(actor, r)) })).filter((x) => x.reqs.length);
-  const projectOptions = visible
-    .filter((x) => !filter.kind || x.p.kind === filter.kind)
-    .map((x) => ({ prjId: x.p.prjId, prjNm: x.p.prjNm, kind: x.p.kind }));
   const inScope = (p: Project, r: Requirement) =>
     (!filter.kind || p.kind === filter.kind) && (!filter.prjId || p.prjId === filter.prjId) && (r.done || (filter.includeIng && reqStatus(ix, r) === "ING"));
   const reqSet = new Set(visible.flatMap((x) => x.reqs.filter((r) => inScope(x.p, r))));
-  const units = ix.units.filter((u) => reqSet.has(u.req));
+  return { visible, reqSet, units: ix.units.filter((u) => reqSet.has(u.req)) };
+}
+
+export function dashView(ix: Index, actor: Actor, filter: DashFilter): DashVM {
+  const { visible, reqSet, units } = scopeOf(ix, actor, filter);
+  const projectOptions = visible
+    .filter((x) => !filter.kind || x.p.kind === filter.kind)
+    .map((x) => ({ prjId: x.p.prjId, prjNm: x.p.prjNm, kind: x.p.kind }));
   const agg = (us: typeof units) => aggUnits(ix, us, true);
 
   const stages = STAGES.filter((cd) => units.some((u) => u.stage === cd)).map((cd) => {
@@ -267,11 +309,33 @@ export function dashView(ix: Index, actor: Actor, filter: DashFilter): DashVM {
   const reqs = visible.flatMap((x) =>
     x.reqs
       .filter((r) => reqSet.has(r))
-      .map((r) => ({ reqId: r.reqId, name: r.name, prjNm: x.p.prjNm, status: reqStatus(ix, r), grade: r.grade, agg: agg(units.filter((u) => u.req === r)) })),
+      .map((r) => ({ reqId: r.reqId, name: r.name, prjId: x.p.prjId, prjNm: x.p.prjNm, status: reqStatus(ix, r), grade: r.grade, agg: agg(units.filter((u) => u.req === r)) })),
   );
+  const vals = new Map(units.map((u) => [u.req, dimValues(u.prj, u.req)]));
+  const byDim = DIMS.map((d) => {
+    const seen = Array.from(vals.values()).map((v) => v[d.key]);
+    return {
+      key: d.key,
+      title: d.title,
+      rows: catsOf(d, seen)
+        .map((cat) => {
+          const us = units.filter((u) => vals.get(u.req)?.[d.key] === cat);
+          return { cat, reqN: new Set(us.map((u) => u.req)).size, agg: agg(us) };
+        })
+        .concat(
+          seen.some((v) => !v)
+            ? [(() => {
+                const us = units.filter((u) => !vals.get(u.req)?.[d.key]);
+                return { cat: "미입력", reqN: new Set(us.map((u) => u.req)).size, agg: agg(us) };
+              })()]
+            : [],
+        ),
+    };
+  });
   return {
     filter,
     projectOptions,
+    byDim,
     total: agg(units),
     stages,
     projects,
@@ -339,4 +403,157 @@ export function collectLog(ix: Index, users: UserRecord[]): CollectRowVM[] {
     map.set(k, r);
   }
   return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date) || a.userNm.localeCompare(b.userNm));
+}
+
+// ---------- 과제 선정 현황 (Phase 1 결과 분포) ----------
+export interface SelReqVM {
+  prjId: string;
+  reqId: string;
+  name: string;
+  baseMd: number;
+  status: ReqStatus;
+  fitRef: string;
+  dims: Record<DimKey, string>;
+}
+
+export interface SelPrjVM extends ProjectInfo {
+  reqN: number;
+  baseMd: number;
+}
+
+export interface SelectionVM {
+  projects: SelPrjVM[];
+  reqs: SelReqVM[];
+}
+
+export function selectionView(ix: Index, actor: Actor): SelectionVM {
+  const visible = ix.data.projects.map((p) => ({ p, reqs: p.reqs.filter((r) => canSee(actor, r)) })).filter((x) => x.reqs.length);
+  return {
+    projects: visible.map(({ p, reqs }) => ({ ...info(p), reqN: reqs.length, baseMd: reqs.reduce((a, r) => a + reqBaseMd(r), 0) })),
+    reqs: visible.flatMap(({ p, reqs }) =>
+      reqs.map((r) => ({
+        prjId: p.prjId,
+        reqId: r.reqId,
+        name: r.name,
+        baseMd: reqBaseMd(r),
+        status: reqStatus(ix, r),
+        fitRef: r.extra["FIT-05"] ?? "",
+        dims: dimValues(p, r),
+      })),
+    ),
+  };
+}
+
+// ---------- 산출 근거 ----------
+export interface BasisDayVM {
+  date: string;
+  st: string;
+  confirmedAt: string | null;
+  counted: boolean;
+  ai: number;
+  mn: number;
+  inT: number;
+  out: number;
+  tot: number;
+  aiCost: number;
+  add: Partial<Record<ActType, number>>;
+  memo: string;
+  sessions: { src: string; tool: string; start: string; end: string; min: number; cost: number; how: string }[];
+}
+
+export interface BasisUnitVM {
+  code: string;
+  prjId: string;
+  prjNm: string;
+  reqId: string;
+  reqName: string;
+  stage: StageCd;
+  ownerNm: string;
+  grade: string;
+  price: number;
+  baseMd: number;
+  tot: number;
+  days: BasisDayVM[];
+}
+
+export interface BasisVM {
+  filter: DashFilter;
+  total: Agg;
+  settings: { mdHours: number; gradePrice: Record<string, number>; aiRate: Record<string, number>; defaultAiRate: number };
+  units: BasisUnitVM[];
+  excluded: { days: number; hours: number };
+  pending: { n: number; hours: number };
+  offCount: number;
+}
+
+export function basisView(ix: Index, actor: Actor, filter: DashFilter): BasisVM {
+  const { units } = scopeOf(ix, actor, filter);
+  const trace = traceUnits(ix, units, true);
+  const s = ix.data.settings;
+  const vm = trace.map(
+    (t): BasisUnitVM => ({
+      code: t.unit.code,
+      prjId: t.unit.prj.prjId,
+      prjNm: t.unit.prj.prjNm,
+      reqId: t.unit.reqId,
+      reqName: t.unit.req.name,
+      stage: t.unit.stage,
+      ownerNm: t.unit.s.ownerNm || t.unit.ownerId || "미지정",
+      grade: t.unit.req.grade,
+      price: t.price,
+      baseMd: t.unit.s.baseMd,
+      tot: t.tot,
+      days: t.days.map((d) => ({
+        date: d.date,
+        st: d.st,
+        confirmedAt: d.confirmedAt,
+        counted: d.counted,
+        ai: d.cell.ai,
+        mn: d.cell.mn,
+        inT: d.cell.inT,
+        out: d.cell.out,
+        tot: d.cell.tot,
+        aiCost: d.cell.aiCost,
+        add: d.cell.add,
+        memo: d.cell.memo,
+        sessions: d.sessions.map(({ src, tool, start, end, min, cost, how }) => ({ src, tool, start, end, min, cost, how })),
+      })),
+    }),
+  );
+  const skipped = trace.flatMap((t) => t.days.filter((d) => !d.counted && d.cell.tot > 0));
+  // 미배정 세션은 어느 요구사항인지 모르므로 범위 안 담당자의 것을 모두 보여 준다.
+  const owners = new Set(units.map((u) => u.ownerId));
+  const pend = ix.alloc.pending.filter((p) => owners.has(p.session.userId));
+  return {
+    filter,
+    total: aggTrace(ix, trace),
+    settings: { mdHours: s.mdHours, gradePrice: s.gradePrice, aiRate: s.aiRate, defaultAiRate: s.defaultAiRate },
+    units: vm,
+    excluded: { days: skipped.length, hours: skipped.reduce((a, d) => a + d.cell.tot, 0) },
+    pending: { n: pend.length, hours: pend.reduce((a, p) => a + p.session.minutes, 0) / 60 },
+    offCount: ix.alloc.offCount,
+  };
+}
+
+// ---------- 공수 모니터링 ----------
+export interface MonitorVM {
+  today: string;
+  items: (Anomaly & { userNm: string; last: MonitorNote | null; notes: MonitorNote[] })[];
+  free: MonitorNote[];
+  users: { userId: string; userNm: string }[];
+}
+
+export function monitorView(ix: Index, users: UserRecord[], notes: MonitorNote[], today: string): MonitorVM {
+  const names = new Map(users.map((u) => [u.userId, u.userNm]));
+  const byKey = new Map<string, MonitorNote[]>();
+  notes.forEach((n) => byKey.set(n.key, [...(byKey.get(n.key) ?? []), n]));
+  return {
+    today,
+    items: detectAnomalies(ix, names, today).map((a) => {
+      const ns = byKey.get(a.key) ?? [];
+      return { ...a, userNm: a.userId ? (names.get(a.userId) ?? a.userId) : "", last: ns[0] ?? null, notes: ns };
+    }),
+    free: byKey.get("FREE") ?? [],
+    users: users.filter((u) => u.role === "DEVELOPER").map((u) => ({ userId: u.userId, userNm: u.userNm })),
+  };
 }

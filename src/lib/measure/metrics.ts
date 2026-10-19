@@ -1,6 +1,6 @@
 // 측정 지표 계산은 이 파일에만 둔다 — 화면·엑셀·API 가 같은 숫자를 보여야 하기 때문.
 import type { Project, Requirement, StageCd } from "../types";
-import { allocate, unitDayKey, type Allocation, type Pending, type StoredSession } from "./match";
+import { allocate, unitDayKey, type AllocSrc, type Allocation, type Pending, type StoredSession } from "./match";
 import { ACT_TYPES, type ActType, type DayConf, type EffortEntry, type Settings } from "./types";
 import { reqBaseMd, unitsOf, type Unit } from "./units";
 
@@ -165,15 +165,52 @@ export interface Agg {
 
 const emptyTypes = () => Object.fromEntries(ACT_TYPES.map((a) => [a.cd, 0])) as Record<ActType, number>;
 
-/**
- * confirmedOnly 면 확정된 날만 더한다 — 확정 전 값은 개발자가 아직 고칠 수 있어 결과로 보이면 안 된다.
- * 공수 진척(현황·투입 공수 화면)은 입력 중인 값도 보여 줘야 하므로 false 로 부른다.
- */
-export function aggUnits(ix: Index, units: Unit[], confirmedOnly: boolean): Agg {
+/** 산출 근거 — 단위 × 일자 한 칸이 집계에 어떻게 들어갔는지 */
+export interface TraceDay {
+  date: string;
+  /** 확정 상태 — 담당자가 없으면 need */
+  st: RowSt;
+  confirmedAt: string | null;
+  counted: boolean;
+  cell: Cell;
+  sessions: AllocSrc[];
+}
+
+export interface TraceUnit {
+  unit: Unit;
+  price: number;
+  days: TraceDay[];
+  /** 집계에 들어간 투입(h) */
+  tot: number;
+}
+
+/** 집계 대상 날과 빠진 날을 모두 돌려준다 — 측정 결과 숫자는 이것을 더한 값이다(aggTrace). */
+export function traceUnits(ix: Index, units: Unit[], confirmedOnly: boolean): TraceUnit[] {
+  const s = ix.data.settings;
+  return units.map((u) => {
+    const days = Array.from(ix.daysByUnit.get(u.code) ?? [])
+      .sort()
+      .map((date): TraceDay => {
+        const st = u.ownerId ? dayState(ix, u.ownerId, u.req, date).st : "need";
+        const c = u.ownerId ? ix.conf.get(confKey(u.ownerId, u.reqId, date)) : undefined;
+        return {
+          date,
+          st,
+          confirmedAt: st === "conf" ? (c?.confirmedAt ?? null) : null,
+          counted: !confirmedOnly || st === "conf",
+          cell: cellOf(ix, u.code, date),
+          sessions: ix.alloc.srcByUnitDay.get(unitDayKey(u.code, date)) ?? [],
+        };
+      });
+    return { unit: u, price: s.gradePrice[u.req.grade] ?? 0, days, tot: days.filter((d) => d.counted).reduce((a, d) => a + d.cell.tot, 0) };
+  });
+}
+
+export function aggTrace(ix: Index, trace: TraceUnit[]): Agg {
   const s = ix.data.settings;
   const o: Agg = {
-    reqN: new Set(units.map((u) => u.reqId)).size,
-    unitN: units.length,
+    reqN: new Set(trace.map((t) => t.unit.reqId)).size,
+    unitN: trace.length,
     baseMd: 0,
     md: 0,
     inT: 0,
@@ -189,23 +226,19 @@ export function aggUnits(ix: Index, units: Unit[], confirmedOnly: boolean): Agg 
     net: null,
     use: null,
   };
-  for (const u of units) {
-    const price = s.gradePrice[u.req.grade] ?? 0;
-    o.baseMd += u.s.baseMd;
-    o.baseCost += u.s.baseMd * price;
-    let uTot = 0;
-    ix.daysByUnit.get(u.code)?.forEach((date) => {
-      if (confirmedOnly && (!u.ownerId || dayState(ix, u.ownerId, u.req, date).st !== "conf")) return;
-      const c = cellOf(ix, u.code, date);
-      o.inT += c.inT;
-      o.out += c.out;
-      o.ai += c.ai;
-      o.aiCost += c.aiCost;
-      uTot += c.tot;
-      for (const [t, h] of Object.entries(c.add)) o.byType[t as ActType] += h ?? 0;
-    });
-    o.tot += uTot;
-    o.labor += (uTot / s.mdHours) * price;
+  for (const t of trace) {
+    o.baseMd += t.unit.s.baseMd;
+    o.baseCost += t.unit.s.baseMd * t.price;
+    for (const d of t.days) {
+      if (!d.counted) continue;
+      o.inT += d.cell.inT;
+      o.out += d.cell.out;
+      o.ai += d.cell.ai;
+      o.aiCost += d.cell.aiCost;
+      for (const [k, h] of Object.entries(d.cell.add)) o.byType[k as ActType] += h ?? 0;
+    }
+    o.tot += t.tot;
+    o.labor += (t.tot / s.mdHours) * t.price;
   }
   o.md = o.tot / s.mdHours;
   o.totalCost = o.labor + o.aiCost;
@@ -213,6 +246,14 @@ export function aggUnits(ix: Index, units: Unit[], confirmedOnly: boolean): Agg 
   o.net = o.baseCost > 0 ? (o.baseCost - o.labor - o.aiCost) / o.baseCost : null;
   o.use = o.tot > 0 ? o.inT / o.tot : null;
   return o;
+}
+
+/**
+ * confirmedOnly 면 확정된 날만 더한다 — 확정 전 값은 개발자가 아직 고칠 수 있어 결과로 보이면 안 된다.
+ * 공수 진척(현황·투입 공수 화면)은 입력 중인 값도 보여 줘야 하므로 false 로 부른다.
+ */
+export function aggUnits(ix: Index, units: Unit[], confirmedOnly: boolean): Agg {
+  return aggTrace(ix, traceUnits(ix, units, confirmedOnly));
 }
 
 export const unitsOfReq = (ix: Index, req: Requirement) => ix.units.filter((u) => u.req === req);

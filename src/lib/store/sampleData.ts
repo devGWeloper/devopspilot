@@ -3,6 +3,26 @@ import { kstDate } from "../measure/ingest";
 import type { ActType, AiSession, DayConf, EffortEntry } from "../measure/types";
 import type { PrjKind, Project, Requirement, StageCd } from "../types";
 
+const FIT_OPTS = {
+  spec: ["명확", "일부 명확", "모호"],
+  ctx: ["가능", "일부 가능", "어려움"],
+  gen: ["패턴 반복", "패턴 변형", "신규 설계 판단"],
+};
+const LV = ["상", "중", "하"];
+
+/** 난이도를 바탕으로 요구사항마다 조금씩 다른 적합도 평가를 만든다(분포 화면이 비지 않게). */
+function demoFit(reqId: string, diff: string): Record<string, string> {
+  const n = Number(reqId.replace(/\D/g, ""));
+  const base = diff === "하" ? 0 : diff === "중" ? 1 : 2;
+  const pick = (k: number) => Math.min(2, Math.max(0, base + ((n + k) % 3 === 0 ? 1 : (n + k) % 5 === 0 ? -1 : 0)));
+  const [s, c, g] = [pick(0), pick(1), pick(2)];
+  const worst = Math.max(s, c, g);
+  const label = ["명세", "맥락", "생성"][[s, c, g].indexOf(worst)];
+  const ref = worst === 0 ? "상" : `${LV[worst]} (${label})`;
+  const fin = LV[Math.min(2, Math.max(0, worst + (n % 7 === 0 ? -1 : 0)))];
+  return { "FIT-01": FIT_OPTS.spec[s], "FIT-02": FIT_OPTS.ctx[c], "FIT-03": FIT_OPTS.gen[g], "FIT-05": ref, "FIT-06": fin, "REF-02": n % 4 === 0 ? "시범·개인 사용" : "실무 상시 사용" };
+}
+
 export const DEMO_DEVS: [string, string, string][] = [
   ["dev01", "김개발", "AX MES개발1팀"],
   ["dev02", "박개발", "AX MES개발1팀"],
@@ -149,7 +169,7 @@ export function sampleData(now = Date.now()): SampleData {
       stages: stages.map(([cd, workType, owner, baseMd]) => ({ cd, workType, ownerId: ID_BY_NM[owner] ?? null, ownerNm: owner, baseMd })),
       done,
       doneAt: done ? iso : null,
-      extra: { "AIS-02": tool },
+      extra: { "AIS-01": tool.startsWith("사내") ? "사내 LLM" : "Public LLM (외부)", "AIS-02": tool, ...demoFit(reqId, diff) },
     };
     projects[pi].reqs.push(req);
     toolOf.set(reqId, tool);

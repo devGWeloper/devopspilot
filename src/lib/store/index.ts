@@ -17,7 +17,8 @@ const g = globalThis as unknown as { __pocStore?: Promise<Store> };
 async function create(): Promise<Store> {
   const cfg = loadConfig();
   if (!cfg.db) {
-    const store = createJsonStore(path.join(process.cwd(), "data"));
+    // 같은 PC 에서 다른 데이터로 하나 더 띄울 때(시연·검증) 폴더를 바꾼다.
+    const store = createJsonStore(process.env.POC_DATA_DIR || path.join(process.cwd(), "data"));
     await ensureSeed(store, { samples: true });
     return store;
   }

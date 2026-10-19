@@ -76,3 +76,19 @@ export interface Settings {
   measureStart: string;
   workTypes: Record<StageCd, string[]>;
 }
+
+/** 이상 감지 확인 기록 — 누가 누구에게 어떻게 확인했는지 남기는 증적 */
+export type NoteStatus = "OK" | "ACTION" | "MEMO";
+
+export interface MonitorNote {
+  noteId: string;
+  /** 이상 키(monitor.ts) 또는 "FREE" */
+  key: string;
+  status: NoteStatus;
+  method: string;
+  contact: string;
+  text: string;
+  by: string;
+  byNm: string;
+  at: string;
+}

@@ -62,6 +62,7 @@ export function StatusBoard({ vm, canManage, devs, workTypes }: { vm: StatusVM; 
   const { toast, toastError } = useToast();
   const [f, setF] = useState<Filter>("ALL");
   const [q, setQ] = useState("");
+  const [kind, setKind] = useState<"ALL" | "개발" | "운영">("ALL");
   const [edit, setEdit] = useState<Edit | null>(null);
 
   const all = vm.projects.flatMap((p) => p.reqs);
@@ -69,6 +70,7 @@ export function StatusBoard({ vm, canManage, devs, workTypes }: { vm: StatusVM; 
   const shown = useMemo(() => {
     const ql = q.trim().toLowerCase();
     return vm.projects
+      .filter((p) => kind === "ALL" || p.info.kind === kind)
       .map((p) => ({
         ...p,
         rows: p.reqs.filter(
@@ -76,7 +78,7 @@ export function StatusBoard({ vm, canManage, devs, workTypes }: { vm: StatusVM; 
         ),
       }))
       .filter((p) => p.rows.length > 0 || (canManage && f === "ALL" && !ql));
-  }, [vm, f, q, canManage]);
+  }, [vm, f, q, kind, canManage]);
 
   async function removeProject(info: ProjectInfo) {
     if (!window.confirm(`'${info.prjNm}' 과제와 요구사항을 삭제합니다.`)) return;
@@ -132,6 +134,16 @@ export function StatusBoard({ vm, canManage, devs, workTypes }: { vm: StatusVM; 
             { key: "WAIT", label: "측정 대기" },
           ]}
         />
+        <Segmented
+          ariaLabel="구분"
+          value={kind}
+          onChange={setKind}
+          options={[
+            { key: "ALL", label: "개발·운영" },
+            { key: "개발", label: "개발" },
+            { key: "운영", label: "운영" },
+          ]}
+        />
         <TextInput placeholder="과제·요구사항·담당자 검색" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 280 }} />
       </div>
 
@@ -183,6 +195,7 @@ export function StatusBoard({ vm, canManage, devs, workTypes }: { vm: StatusVM; 
                 <thead>
                   <tr>
                     <th>요구사항</th>
+                    <th style={{ width: 110 }}>난이도 · 등급</th>
                     <th>단계 · 담당</th>
                     <th style={{ width: 260 }}>투입 / 기준</th>
                     <th style={{ width: 100 }}>상태</th>
@@ -194,6 +207,9 @@ export function StatusBoard({ vm, canManage, devs, workTypes }: { vm: StatusVM; 
                       <td>
                         <b>{r.name}</b>
                         <div className={st.sub}>{r.reqId}</div>
+                      </td>
+                      <td className={st.sub}>
+                        {r.difficulty || "—"} · {r.grade || "—"}
                       </td>
                       <td>
                         <div className={st.stages}>

@@ -67,6 +67,15 @@ export async function createOracleStore(cfg: DbConfig): Promise<Store> {
       for (const stmt of t.ddl) await exec(stmt);
       console.info(`[store] created table ${t.name}`);
     }
+    // 10/15 이전에 만든 테이블은 확인 기록(NOTE) 종류를 막는 제약이 남아 있어 새 정의로 바꾼다. 매번 해도 결과가 같다.
+    if (existing.has("POC_MEAS_DAT")) {
+      try {
+        await exec("ALTER TABLE POC_MEAS_DAT DROP CONSTRAINT CK_POC_MEAS_KIND");
+      } catch {
+        // 제약이 없으면 그대로 진행
+      }
+      await exec("ALTER TABLE POC_MEAS_DAT ADD CONSTRAINT CK_POC_MEAS_KIND CHECK (KIND_CD IN ('EFFORT','CONF','AIUSE','NOTE'))");
+    }
   }
 
   await ensureSchema();

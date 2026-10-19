@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field, TextInput } from "@/components/ui/Field";
@@ -20,7 +20,6 @@ const STEPS = [
 ];
 
 function LoginForm() {
-  const router = useRouter();
   const params = useSearchParams();
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
@@ -40,7 +39,8 @@ function LoginForm() {
       const r = await api<{ home: string }>("/api/auth/login", { body: { userId, password } });
       resetSessionExpired();
       const next = params.get("next");
-      router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : r.home);
+      // 클라이언트 라우팅(RSC fetch)은 사내 보안 에이전트·느린 dev 컴파일에서 멈춘 듯 보여, 전체 페이지 이동으로 쿠키를 확실히 싣는다.
+      window.location.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : r.home);
     } catch (err) {
       setError(err instanceof Error ? err.message : "로그인에 실패했습니다.");
       setBusy(false);

@@ -1,14 +1,14 @@
 :root {
-  --bg: #f5f4f0;
-  --bg-deep: #ecebe5;
+  --bg: #eef0f3;
+  --bg-deep: #e3e6eb;
   --surface: #ffffff;
-  --surface-2: #faf9f6;
-  --ink: #14213d;
-  --ink-2: #2c3854;
-  --muted: #5b6475;
-  --subtle: #8a8f98;
-  --line: #e4e1d8;
-  --line-strong: #d3cfc2;
+  --surface-2: #f4f6f8;
+  --ink: #0f172a;
+  --ink-2: #1e293b;
+  --muted: #3f4a5c;
+  --subtle: #64708a;
+  --line: #d9dde4;
+  --line-strong: #b8c0cc;
 
   --accent: #2b3a8c;
   --accent-hover: #233077;
@@ -38,7 +38,7 @@
   --r-sm: 6px;
   --r-md: 10px;
   --r-lg: 14px;
-  --shadow: 0 1px 2px rgba(20, 33, 61, 0.06);
+  --shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
   --shadow-pop: 0 12px 32px rgba(20, 33, 61, 0.14), 0 2px 6px rgba(20, 33, 61, 0.08);
 
   --s1: 4px;

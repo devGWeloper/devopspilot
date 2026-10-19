@@ -87,7 +87,7 @@
 }
 .tone-neutral {
   background: var(--bg-deep);
-  color: var(--muted);
+  color: var(--ink-2);
 }
 .tone-accent {
   background: var(--accent-soft);
@@ -268,6 +268,7 @@
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
 }
 .panelHead {
   display: flex;
@@ -420,8 +421,8 @@
   white-space: nowrap;
 }
 .segBtnActive {
-  background: var(--surface);
-  color: var(--ink);
+  background: var(--ink);
+  color: #fff;
   box-shadow: var(--shadow);
 }
 
