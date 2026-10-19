@@ -1,6 +1,7 @@
 // 공수 입력 이상 감지 — 숫자를 새로 계산하지 않고 metrics.ts 의 셀·집계 결과를 규칙으로 걸러 낸다.
 import { aggTrace, cellOf, dayState, traceUnits, type Index } from "./metrics";
 import { STAGE_LABEL } from "../types";
+import { reqDone, reqKey } from "./units";
 import type { Anomaly, Severity } from "./monitorRules";
 
 export type { Anomaly, RuleCd, Severity } from "./monitorRules";
@@ -78,7 +79,7 @@ export function detectAnomalies(ix: Index, names: Map<string, string>, today: st
     const late = new Map<string, string[]>();
     for (const u of mine)
       ix.daysByUnit.get(u.code)?.forEach((date) => {
-        if (daysBetween(date, today) > LATE_DAYS && dayState(ix, userId, u.req, date).st !== "conf" && cellOf(ix, u.code, date).tot > 0) late.set(date, [...(late.get(date) ?? []), u.reqId]);
+        if (daysBetween(date, today) > LATE_DAYS && dayState(ix, userId, u.req, date).st !== "conf" && cellOf(ix, u.code, date).tot > 0) late.set(date, [...(late.get(date) ?? []), u.reqKey]);
       });
     if (late.size) {
       const ds = Array.from(late.keys()).sort();
@@ -91,22 +92,26 @@ export function detectAnomalies(ix: Index, names: Map<string, string>, today: st
     ix.daysByUnit.get(u.code)?.forEach((date) => {
       const c = cellOf(ix, u.code, date);
       if (c.ai >= 0.5 && c.mn / c.ai > REDUCE_SHARE)
-        out.push({ key: `BIG_REDUCE|${u.code}|${date}`, rule: "BIG_REDUCE", severity: "mid", userId: u.ownerId, reqId: u.reqId, date, title: `${nm(u.ownerId)} — ${u.req.name} ${STAGE_LABEL[u.stage]} ${date}`, detail: `수집 ${r1(c.ai)}h 중 ${r1(c.mn)}h 줄임 (${Math.round((c.mn / c.ai) * 100)}%)${c.memo ? ` · 메모: ${c.memo}` : ""}` });
+        out.push({ key: `BIG_REDUCE|${u.code}|${date}`, rule: "BIG_REDUCE", severity: "mid", userId: u.ownerId, reqId: u.reqKey, date, title: `${nm(u.ownerId)} — ${u.code} ${STAGE_LABEL[u.stage]} ${date}`, detail: `수집 ${r1(c.ai)}h 중 ${r1(c.mn)}h 줄임 (${Math.round((c.mn / c.ai) * 100)}%)${c.memo ? ` · 메모: ${c.memo}` : ""}` });
     });
 
   // 요구사항 단위 — 기준 초과, 절감률 과대, AI 없음
   for (const p of ix.data.projects)
     for (const req of p.reqs) {
       const units = ix.units.filter((u) => u.req === req);
-      const a = aggTrace(ix, traceUnits(ix, units, req.done));
+      const done = reqDone(req);
+      const a = aggTrace(ix, traceUnits(ix, units, done));
       const who = Array.from(new Set(units.map((u) => u.ownerId))).filter(Boolean)[0] ?? null;
+      const rk = reqKey(p.prjId, req.reqId);
+      const nmOf = `${rk}${req.name && req.name !== req.reqId ? ` ${req.name}` : ""}`;
       if (a.baseMd > 0 && a.md > a.baseMd * OVER_BASE)
-        out.push({ key: `OVER_BASE|${req.reqId}`, rule: "OVER_BASE", severity: "mid", userId: who, reqId: req.reqId, date: null, title: `${req.reqId} ${req.name}`, detail: `투입 ${r1(a.md)} M/D / 기준 ${r1(a.baseMd)} M/D (${Math.round((a.md / a.baseMd) * 100)}%)` });
-      if (!req.done) continue;
+        out.push({ key: `OVER_BASE|${rk}`, rule: "OVER_BASE", severity: "mid", userId: who, reqId: rk, date: null, title: nmOf, detail: `투입 ${r1(a.md)} M/D / 기준 ${r1(a.baseMd)} M/D (${Math.round((a.md / a.baseMd) * 100)}%)` });
+      if (!done) continue;
       if (a.save !== null && a.save > TOO_GOOD && a.tot > 0)
-        out.push({ key: `TOO_GOOD|${req.reqId}`, rule: "TOO_GOOD", severity: "mid", userId: who, reqId: req.reqId, date: null, title: `${req.reqId} ${req.name} — 절감률 ${Math.round(a.save * 100)}%`, detail: `기준 ${r1(a.baseMd)} M/D 인데 확정 투입 ${r1(a.md)} M/D` });
+        out.push({ key: `TOO_GOOD|${rk}`, rule: "TOO_GOOD", severity: "mid", userId: who, reqId: rk, date: null, title: `${nmOf} — 절감률 ${Math.round(a.save * 100)}%`, detail: `기준 ${r1(a.baseMd)} M/D 인데 확정 투입 ${r1(a.md)} M/D` });
       if (a.tot > 0 && a.inT === 0)
-        out.push({ key: `NO_AI|${req.reqId}`, rule: "NO_AI", severity: "low", userId: who, reqId: req.reqId, date: null, title: `${req.reqId} ${req.name} — AI 사용 0h`, detail: `확정 투입 ${r1(a.tot)}h 가 모두 AI 없이 한 일` });
+        out.push({ key: `NO_AI|${rk}`, rule: "NO_AI", severity: "low", userId: who, reqId: rk, date: null, title: `${nmOf} — AI 사용 0h`, detail: `확정 투입 ${r1(a.tot)}h 가 모두 AI 없이 한 일` });
+
     }
 
   // 미배정 세션 방치

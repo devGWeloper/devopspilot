@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { fail, handle } from "./api";
 import { loadConfig } from "./config";
-import { type OtelDelta } from "./measure/ingest";
+import { type OtelEvent } from "./measure/ingest";
 import { ingestOtel } from "./measure/service";
 import { getStore } from "./store";
 
@@ -9,7 +9,7 @@ import { getStore } from "./store";
  * OTLP/HTTP JSON 수신. 개발자 PC 의 AI 도구가 직접 보내므로 로그인 세션이 없고, 설정 토큰으로만 확인한다.
  * 응답은 OTLP 규격대로 빈 JSON — 실패를 길게 설명해도 보내는 쪽이 읽지 않는다.
  */
-export function otelHandler(parse: (body: unknown) => OtelDelta[]) {
+export function otelHandler(parse: (body: unknown) => OtelEvent[]) {
   return handle(async (req: Request) => {
     const token = loadConfig().collectToken;
     if (!token) return fail(404, "DISABLED", "텔레메트리 수신이 꺼져 있습니다(config.yml collect.token).");

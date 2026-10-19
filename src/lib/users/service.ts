@@ -15,8 +15,10 @@ export interface UserInput {
   userId: string;
   userNm: string;
   orgCd: OrgCd;
+  hqNm?: string;
   deptNm: string;
   role: Role;
+  aiAcct?: string;
   password: string;
 }
 
@@ -29,6 +31,14 @@ function validate(p: Partial<UserInput>): string | null {
   return null;
 }
 
+/** 같은 AI 도구 계정을 두 사람이 쓰면 수집한 시간을 누구 것으로 볼지 정할 수 없다 */
+async function acctTaken(store: Store, aiAcct: string | undefined, self: string): Promise<string | null> {
+  const a = (aiAcct ?? "").trim().toLowerCase();
+  if (!a) return null;
+  const u = (await store.users.list()).find((x) => x.userId !== self && x.aiAcct.trim().toLowerCase() === a);
+  return u ? `AI 도구 계정 ${aiAcct} 은(는) 이미 ${u.userNm}(${u.userId}) 계정에 있습니다.` : null;
+}
+
 export async function createUser(store: Store, actor: ActorFull, input: UserInput): Promise<ServiceResult<PublicUser>> {
   if (!can(actor, "users.manage")) return forbiddenR();
   const id = input.userId?.trim() ?? "";
@@ -38,14 +48,18 @@ export async function createUser(store: Store, actor: ActorFull, input: UserInpu
   const pw = validatePasswordPolicy(input.password);
   if (pw) return err(422, "VALIDATION", pw);
   if (await store.users.get(id)) return err(409, "DUPLICATE", "이미 사용 중인 ID 입니다.");
+  const taken = await acctTaken(store, input.aiAcct, id);
+  if (taken) return err(409, "DUP_ACCT", taken);
   const { hash, salt } = hashPassword(input.password);
   const now = new Date().toISOString();
   const u: UserRecord = {
     userId: id,
     userNm: input.userNm.trim(),
     orgCd: input.orgCd,
+    hqNm: input.hqNm?.trim() ?? "",
     deptNm: input.deptNm?.trim() ?? "",
     role: input.role,
+    aiAcct: input.aiAcct?.trim() ?? "",
     useYn: true,
     pwdHash: hash,
     pwdSalt: salt,
@@ -66,13 +80,15 @@ export async function updateUser(
   store: Store,
   actor: ActorFull,
   id: string,
-  patch: Partial<Pick<UserRecord, "userNm" | "orgCd" | "deptNm" | "role" | "useYn">>,
+  patch: Partial<Pick<UserRecord, "userNm" | "orgCd" | "hqNm" | "deptNm" | "role" | "useYn" | "aiAcct">>,
 ): Promise<ServiceResult<PublicUser>> {
   if (!can(actor, "users.manage")) return forbiddenR();
   const before = await store.users.get(id);
   if (!before) return notFoundR("계정");
   const v = validate(patch);
   if (v) return err(422, "VALIDATION", v);
+  const taken = await acctTaken(store, patch.aiAcct, id);
+  if (taken) return err(409, "DUP_ACCT", taken);
   const losesAdmin = before.role === "ADMIN" && before.useYn && ((patch.role && patch.role !== "ADMIN") || patch.useYn === false);
   // 관리자가 한 명도 남지 않으면 계정을 되살릴 사람이 없다.
   if (losesAdmin && (await activeAdmins(store)).length <= 1) {
@@ -81,7 +97,9 @@ export async function updateUser(
   const clean = {
     ...(patch.userNm !== undefined ? { userNm: patch.userNm.trim() } : {}),
     ...(patch.orgCd !== undefined ? { orgCd: patch.orgCd } : {}),
+    ...(patch.hqNm !== undefined ? { hqNm: patch.hqNm.trim() } : {}),
     ...(patch.deptNm !== undefined ? { deptNm: patch.deptNm.trim() } : {}),
+    ...(patch.aiAcct !== undefined ? { aiAcct: patch.aiAcct.trim() } : {}),
     ...(patch.role !== undefined ? { role: patch.role } : {}),
     ...(patch.useYn !== undefined ? { useYn: !!patch.useYn } : {}),
     updAt: new Date().toISOString(),
@@ -92,6 +110,8 @@ export async function updateUser(
     before.role !== after.role ? `역할 ${ROLE_LABEL[before.role]}→${ROLE_LABEL[after.role]}` : null,
     before.useYn !== after.useYn ? (after.useYn ? "활성화" : "비활성화") : null,
     before.userNm !== after.userNm ? "이름 변경" : null,
+    before.aiAcct !== after.aiAcct ? "AI 도구 계정 변경" : null,
+
   ].filter(Boolean);
   await record(store, actor, { targetTyp: "USER", targetId: id, actionCd: "UPDATE", summary: `계정 수정: ${after.userNm}${changes.length ? ` (${changes.join(", ")})` : ""}` });
   return okR(toPublic(after));

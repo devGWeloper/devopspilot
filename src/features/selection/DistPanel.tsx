@@ -1,77 +1,174 @@
 "use client";
 
 import { useState } from "react";
-import { Panel } from "@/components/ui/Panel";
 import { Select } from "@/components/ui/Field";
-import { f1 } from "@/lib/format";
-import { DIMS, catsOf, type DimKey } from "@/lib/dims";
+import { Icon } from "@/components/ui/Icon";
+import { Panel } from "@/components/ui/Panel";
+import { Segmented } from "@/components/ui/Tabs";
+import { FORM_GROUPS, tally, type FormGroup } from "@/lib/projects/form";
 import type { SelectionVM } from "@/lib/views";
-import { SHADES } from "./shades";
+import { AXES, AXIS_BY_ID, BLANK, SKEW, distOf, type Axis } from "./axes";
 import s from "./selection.module.css";
 
-const REQ_DIMS = DIMS.filter((d) => d.level === "req");
+type Filters = Record<string, string>;
 
-/** 과제마다 요구사항 성격이 고르게 섞였는지 — 한쪽으로 몰리면 그 과제의 절감률이 그 성격의 결과가 된다. */
-export function DistPanel({ vm }: { vm: SelectionVM }) {
-  const [axis, setAxis] = useState<DimKey>("fit");
-  const dim = REQ_DIMS.find((d) => d.key === axis) ?? REQ_DIMS[0];
-  const of = (v: string) => v || "미입력";
-  const cols = catsOf(dim, vm.reqs.map((r) => r.dims[axis])).concat(vm.reqs.some((r) => !r.dims[axis]) ? ["미입력"] : []);
-  const total = (c: string) => vm.reqs.filter((r) => of(r.dims[axis]) === c).length;
+/** 엑셀 그룹별 분포 — 막대를 누르면 아래 표가 그 값으로 걸러진다. */
+export function DistPanel({ vm, filters, onPick }: { vm: SelectionVM; filters: Filters; onPick: (id: string, v: string) => void }) {
+  const [tab, setTab] = useState<FormGroup>("PRJ");
+  const warnN = (g: FormGroup) => AXES.filter((a) => a.group === g).reduce((n, a) => n + distOf(vm, a).warns.length, 0);
+  return (
+    <Panel
+      flush
+      title="성격별 분포"
+      actions={
+        <Segmented<FormGroup>
+          ariaLabel="양식 그룹"
+          value={tab}
+          onChange={setTab}
+          options={FORM_GROUPS.map((g) => {
+            const n = warnN(g.key);
+            return { key: g.key, label: n ? <>{g.title} <span className={s.warnN}>{n}</span></> : g.title };
+          })}
+        />
+      }
+    >
+      <p className={s.note}>
+        과제 항목은 과제 수, 나머지는 요구사항(단계) 수로 셉니다. 막대를 누르면 아래 표가 그 값으로 걸러집니다. 점검 표시: 한 값에 {Math.round(SKEW * 100)}% 초과 쏠림 · 선택값 공백 · 미입력.
+      </p>
+      <div className={s.dims}>
+        {AXES.filter((a) => a.group === tab).map((a) => (
+          <AxisCard key={a.id} vm={vm} a={a} picked={filters[a.id]} onPick={(v) => onPick(a.id, v)} />
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function AxisCard({ vm, a, picked, onPick }: { vm: SelectionVM; a: Axis; picked?: string; onPick: (v: string) => void }) {
+  const { rows, total, blank, warns } = distOf(vm, a);
+  // 선택지가 많은 축은 0건을 접어 둔다 — 업무 유형 15종을 다 그리면 읽히지 않는다.
+  const many = rows.length > 8;
+  const shown = many ? rows.filter((r) => r.n > 0) : rows;
+  const max = Math.max(1, ...rows.map((r) => r.n));
+  return (
+    <div className={s.dim}>
+      <div className={s.dimHead}>
+        <b>{a.label}</b>
+        <span className="subtle">
+          {a.level === "prj" ? "과제" : "요구사항"} {total}
+          {blank ? ` · 미입력 ${blank}` : ""}
+        </span>
+      </div>
+      <ul className={s.bars}>
+        {shown.map((r) => (
+          <li key={r.v}>
+            <button type="button" className={`${s.barBtn} ${picked === r.v ? s.picked : ""}`} onClick={() => onPick(r.v)} disabled={!r.n} title={r.n ? `${r.v} — 표에서 보기` : undefined}>
+              <span className={s.barLabel}>{r.v}</span>
+              <span className={s.track}>
+                <i style={{ width: `${(r.n / max) * 100}%` }} />
+              </span>
+              <span className={`${s.barNum} ${r.n ? "" : s.zeroTxt}`}>
+                {r.n}
+                <small>{total ? Math.round((r.n / total) * 100) : 0}%</small>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {many && rows.length > shown.length && <p className={s.folded}>0건 {rows.length - shown.length}종 생략</p>}
+      {warns.length > 0 && (
+        <ul className={s.warns}>
+          {warns.map((w) => (
+            <li key={w}>
+              <Icon name="alert" size={12} /> {w}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+const ROWS = ["PRJ-01", ...AXES.filter((a) => a.level === "req").map((a) => a.id)];
+
+/** 두 항목을 겹쳐 본다 — 비어 있는 칸은 그 조합의 표본이 없어 측정 결과에서 비교할 수 없다는 뜻. */
+export function CrossPanel({ vm, onPick }: { vm: SelectionVM; onPick: (pairs: [string, string][]) => void }) {
+  const [rowId, setRowId] = useState("FIT-06");
+  const [colId, setColId] = useState("REQ-04");
+  const col = AXIS_BY_ID[colId];
+  const isPrj = rowId === "PRJ-01";
+  const rowGet = isPrj ? (r: SelectionVM["reqs"][number]) => r.values["PRJ-01"] ?? "" : AXIS_BY_ID[rowId].get;
+  const rowCats = isPrj ? vm.projects.map((p) => p.prjNm) : tally(AXIS_BY_ID[rowId].options, vm.reqs.map(rowGet)).map((x) => x.v);
+  const colCats = tally(col.options, vm.reqs.map(col.get)).filter((x) => x.n > 0 || col.options.length <= 6).map((x) => x.v);
+  const blankRow = !isPrj && vm.reqs.some((r) => !rowGet(r));
+  const blankCol = vm.reqs.some((r) => !col.get(r));
+  const rows = [...rowCats, ...(blankRow ? [""] : [])];
+  const cols = [...colCats, ...(blankCol ? [""] : [])];
+  const n = (rv: string, cv: string) => vm.reqs.filter((r) => rowGet(r) === rv && col.get(r) === cv).length;
+  const colTotal = (cv: string) => vm.reqs.filter((r) => col.get(r) === cv).length;
 
   return (
     <Panel
       flush
-      title="과제별 분포"
+      title="교차 분포"
+      style={{ marginTop: 20 }}
       actions={
-        <Select value={axis} onChange={(e) => setAxis(e.target.value as DimKey)} aria-label="분류 기준" style={{ minWidth: 160 }}>
-          {REQ_DIMS.map((d) => (
-            <option key={d.key} value={d.key}>
-              {d.title}
-            </option>
-          ))}
-        </Select>
+        <div className={s.crossPick}>
+          <Select value={rowId} onChange={(e) => setRowId(e.target.value)} aria-label="행 항목" className={s.filter}>
+            {ROWS.map((id) => (
+              <option key={id} value={id}>
+                행: {id === "PRJ-01" ? "과제" : AXIS_BY_ID[id].label}
+              </option>
+            ))}
+          </Select>
+          <span className="subtle">×</span>
+          <Select value={colId} onChange={(e) => setColId(e.target.value)} aria-label="열 항목" className={s.filter}>
+            {AXES.filter((a) => a.id !== rowId).map((a) => (
+              <option key={a.id} value={a.id}>
+                열: {a.label}
+              </option>
+            ))}
+          </Select>
+        </div>
       }
     >
-      <p className={s.note}>요구사항 수 기준입니다. 칸에 마우스를 올리면 요구사항 이름이 보이고, 전체에서 0 인 수준은 빨간색으로 표시합니다.</p>
+      <p className={s.note}>요구사항(단계) 수입니다. 칸을 누르면 아래 표가 그 조합으로 걸러지고, 전체에서 0건인 선택값은 빨간색으로 표시합니다.</p>
       <div className={s.scroll}>
-        <table className={s.table}>
+        <table className={`${s.table} ${s.cross}`}>
           <thead>
             <tr>
-              <th>과제</th>
+              <th>{isPrj ? "과제" : AXIS_BY_ID[rowId].label}</th>
               {cols.map((c) => (
-                <th key={c} className={s.c}>
-                  {c}
+                <th key={c || "blank"} className={s.c}>
+                  {c || "미입력"}
                 </th>
               ))}
               <th className={s.c}>합계</th>
-              <th style={{ width: "24%" }}>구성</th>
-              <th className={s.r}>기준 M/D</th>
             </tr>
           </thead>
           <tbody>
-            {vm.projects.map((p) => {
-              const rs = vm.reqs.filter((r) => r.prjId === p.prjId);
+            {rows.map((rv) => {
+              const sum = vm.reqs.filter((r) => rowGet(r) === rv).length;
               return (
-                <tr key={p.prjId}>
+                <tr key={rv || "blank"}>
                   <td>
-                    <b>{p.prjNm}</b> <span className="subtle">{p.kind}</span>
+                    <b>{rv || "미입력"}</b>
                   </td>
-                  {cols.map((c) => {
-                    const hit = rs.filter((r) => of(r.dims[axis]) === c);
+                  {cols.map((cv) => {
+                    const k = n(rv, cv);
                     return (
-                      <td key={c} className={`${s.c} ${hit.length ? s.cnt : s.zero}`} title={hit.map((r) => `${r.reqId} ${r.name}`).join("\n")}>
-                        {hit.length || "·"}
+                      <td key={cv || "blank"} className={`${s.c} ${k ? s.cnt : s.zero}`}>
+                        {k ? (
+                          <button type="button" className={s.cellBtn} onClick={() => onPick([[rowId, rv || BLANK], [colId, cv || BLANK]])}>
+                            {k}
+                          </button>
+                        ) : (
+                          "·"
+                        )}
                       </td>
                     );
                   })}
-                  <td className={s.c}>
-                    <b>{rs.length}</b>
-                  </td>
-                  <td>
-                    <Bar parts={cols.map((c) => rs.filter((r) => of(r.dims[axis]) === c).length)} />
-                  </td>
-                  <td className={s.r}>{f1(p.baseMd)}</td>
+                  <td className={s.c}>{sum}</td>
                 </tr>
               );
             })}
@@ -79,30 +176,17 @@ export function DistPanel({ vm }: { vm: SelectionVM }) {
           <tfoot>
             <tr>
               <td>전체</td>
-              {cols.map((c) => (
-                <td key={c} className={`${s.c} ${total(c) || c === "미입력" ? "" : s.gap}`}>
-                  {total(c)}
-                  <span className={s.share}>{vm.reqs.length ? Math.round((total(c) / vm.reqs.length) * 100) : 0}%</span>
+              {cols.map((cv) => (
+                <td key={cv || "blank"} className={`${s.c} ${colTotal(cv) || !cv ? "" : s.gap}`}>
+                  {colTotal(cv)}
+                  <span className={s.share}>{vm.reqs.length ? Math.round((colTotal(cv) / vm.reqs.length) * 100) : 0}%</span>
                 </td>
               ))}
               <td className={s.c}>{vm.reqs.length}</td>
-              <td>
-                <Bar parts={cols.map(total)} />
-              </td>
-              <td className={s.r}>{f1(vm.projects.reduce((a, p) => a + p.baseMd, 0))}</td>
             </tr>
           </tfoot>
         </table>
       </div>
     </Panel>
-  );
-}
-
-export function Bar({ parts }: { parts: number[] }) {
-  const sum = parts.reduce((a, b) => a + b, 0);
-  return (
-    <div className={s.bar}>
-      {parts.map((v, i) => (v ? <i key={i} style={{ width: `${(v / sum) * 100}%`, background: SHADES[i] ?? SHADES[SHADES.length - 1] }} /> : null))}
-    </div>
   );
 }

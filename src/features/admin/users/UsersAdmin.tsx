@@ -18,12 +18,14 @@ interface Form {
   userId: string;
   userNm: string;
   orgCd: OrgCd;
+  hqNm: string;
   deptNm: string;
   role: Role;
+  aiAcct: string;
   password: string;
 }
 
-const EMPTY: Form = { userId: "", userNm: "", orgCd: "SKAX", deptNm: "", role: "DEVELOPER", password: "" };
+const EMPTY: Form = { userId: "", userNm: "", orgCd: "SKAX", hqNm: "", deptNm: "", role: "DEVELOPER", aiAcct: "", password: "" };
 
 export function UsersAdmin() {
   const { toast, toastError } = useToast();
@@ -40,8 +42,8 @@ export function UsersAdmin() {
         await api("/api/admin/users", { body: edit.form });
         toast(`계정 ${edit.form.userId} 을(를) 만들었습니다.`);
       } else {
-        const { userNm, orgCd, deptNm, role } = edit.form;
-        await api(`/api/admin/users/${edit.form.userId}`, { method: "PUT", body: { userNm, orgCd, deptNm, role, useYn: edit.useYn } });
+        const { userNm, orgCd, hqNm, deptNm, role, aiAcct } = edit.form;
+        await api(`/api/admin/users/${edit.form.userId}`, { method: "PUT", body: { userNm, orgCd, hqNm, deptNm, role, aiAcct, useYn: edit.useYn } });
         toast("계정을 수정했습니다.");
       }
       setEdit(null);
@@ -63,9 +65,16 @@ export function UsersAdmin() {
   }
 
   const columns: Column<PublicUser>[] = [
-    { key: "id", header: "ID", width: 110, render: (u) => <b>{u.userId}</b>, sortValue: (u) => u.userId },
-    { key: "nm", header: "이름", render: (u) => u.userNm, sortValue: (u) => u.userNm },
-    { key: "org", header: "소속", width: 150, render: (u) => `${ORG_LABEL[u.orgCd]}${u.deptNm ? ` · ${u.deptNm}` : ""}`, sortValue: (u) => u.orgCd },
+    { key: "id", header: "사번", width: 110, render: (u) => <b>{u.userId}</b>, sortValue: (u) => u.userId },
+    { key: "nm", header: "성명", render: (u) => u.userNm, sortValue: (u) => u.userNm },
+    { key: "org", header: "소속 · 본부 · 팀", width: 200, render: (u) => [ORG_LABEL[u.orgCd], u.hqNm, u.deptNm].filter(Boolean).join(" · "), sortValue: (u) => `${u.orgCd}${u.hqNm}${u.deptNm}` },
+    {
+      key: "acct",
+      header: "AI 도구 계정",
+      width: 190,
+      render: (u) => (u.aiAcct ? <span className="num">{u.aiAcct}</span> : u.role === "DEVELOPER" ? <Chip tone="warn">미등록</Chip> : <span className="subtle">—</span>),
+      sortValue: (u) => u.aiAcct,
+    },
     {
       key: "role",
       header: "역할",
@@ -99,7 +108,9 @@ export function UsersAdmin() {
   return (
     <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
-        <span className="muted">역할 변경과 사용 중지는 즉시 반영됩니다. 개발자 계정의 이름이 엑셀 REF-01 참여 인력과 같아야 담당이 자동으로 연결됩니다.</span>
+        <span className="muted">
+          엑셀 &apos;03. 공수 태그 매핑 &gt; 개발자 권한 관리&apos; 표와 같습니다. 사번이 로그인 ID 이고, <b>AI 도구 계정</b>(Codex 로그인 이메일 또는 account id)이 있어야 텔레메트리가 그 사람 시간으로 들어옵니다.
+        </span>
         <Button variant="primary" icon="plus" onClick={() => setEdit({ mode: "new", form: EMPTY, useYn: true })}>
           계정 추가
         </Button>
@@ -122,10 +133,10 @@ export function UsersAdmin() {
       >
         {f && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <Field label="ID" required hint={edit?.mode === "new" ? "사번 권장 · 영문·숫자" : undefined}>
+            <Field label="사번" required hint={edit?.mode === "new" ? "로그인 ID · 영문·숫자" : undefined}>
               <TextInput value={f.userId} disabled={edit?.mode === "edit"} onChange={(e) => setF({ userId: e.target.value.trim() })} />
             </Field>
-            <Field label="이름" required>
+            <Field label="성명" required>
               <TextInput value={f.userNm} onChange={(e) => setF({ userNm: e.target.value })} />
             </Field>
             <Field label="소속" required>
@@ -134,9 +145,16 @@ export function UsersAdmin() {
                 <option value="SKHYNIX">SK hynix</option>
               </Select>
             </Field>
-            <Field label="부서">
+            <Field label="SK AX 본부">
+              <TextInput value={f.hqNm} onChange={(e) => setF({ hqNm: e.target.value })} />
+            </Field>
+            <Field label="SK AX 팀 (부서)">
               <TextInput value={f.deptNm} onChange={(e) => setF({ deptNm: e.target.value })} />
             </Field>
+            <Field label="AI 도구 계정" hint="oTel 계정 Key — Codex 로그인 이메일 또는 account id">
+              <TextInput value={f.aiAcct} onChange={(e) => setF({ aiAcct: e.target.value.trim() })} />
+            </Field>
+
             <div style={{ gridColumn: "1 / -1" }}>
               <Field label="역할" required hint={ROLE_DESC[f.role]}>
                 <Select value={f.role} onChange={(e) => setF({ role: e.target.value as Role })}>

@@ -10,7 +10,7 @@ import type { Agg } from "@/lib/measure/metrics";
 import type { DashVM } from "@/lib/views";
 import d from "./dashboard.module.css";
 
-// 요구사항 1건짜리 분류는 우연일 수 있어 비교 문장에 '표본 적음'을 붙인다.
+// 태그 1건짜리 분류는 우연일 수 있어 비교 문장에 '표본 적음'을 붙인다.
 const FEW = 2;
 // 이 차이(%p) 미만이면 성격에 따른 차이로 보지 않는다.
 const MIN_SPREAD = 0.1;
@@ -92,7 +92,7 @@ export function ByDimPanel({ vm }: { vm: DashVM }) {
           <thead>
             <tr>
               <th>{dm.title}</th>
-              <th className={d.r}>요구사항</th>
+              <th className={d.r}>요구사항·단계</th>
               <th className={d.r}>기준 M/D</th>
               <th className={d.r}>투입 M/D</th>
               <th style={{ width: "26%" }}>공수 절감률</th>
@@ -117,7 +117,7 @@ export function ByDimPanel({ vm }: { vm: DashVM }) {
         </table>
       </div>
       <p className={d.foot}>
-        <Icon name="info" size={13} /> 요구사항의 성격(선정 양식 값)으로 묶어 같은 산식으로 계산한 값입니다. 요구사항 수가 적은 분류는 한두 건의 결과가 그대로 드러나므로 함께 보세요.
+        <Icon name="info" size={13} /> 요구사항의 성격(기준정보 엑셀 값)으로 묶어 같은 산식으로 계산한 값입니다. 요구사항 수가 적은 분류는 한두 건의 결과가 그대로 드러나므로 함께 보세요.
       </p>
     </Panel>
   );

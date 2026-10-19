@@ -16,9 +16,8 @@ export default async function Page() {
   const days = [...recentWeekdays(9), todayKst()].filter((d) => d >= ix.data.settings.measureStart);
   return (
     <AdminTabs
-      conf={confMatrix(ix, users, days)}
+      conf={confMatrix(ix, users, days, new Date().toISOString())}
       collect={collectLog(ix, users)}
-      settings={ix.data.settings}
       otelOn={!!loadConfig().collectToken}
     />
   );

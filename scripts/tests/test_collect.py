@@ -17,75 +17,80 @@ def write(path, lines):
             f.write("\n")
 
 
-def claude(typ, ts, sid="s1", branch="feature/REQ-0047", text=None):
-    d = {"type": typ, "timestamp": ts, "sessionId": sid, "gitBranch": branch}
-    if typ == "user":
-        d["message"] = {"role": "user", "content": text or ""}
-    return d
+def ev(ts, payload, typ="event_msg"):
+    return {"type": typ, "timestamp": ts, "payload": payload}
 
 
-class ClaudeTest(unittest.TestCase):
-    def test_active_minutes_skip_idle_and_collect_hints_without_text(self):
+def tokens(ts, inp, cached, out):
+    return ev(ts, {"type": "token_count", "info": {"total_token_usage": {"input_tokens": inp, "cached_input_tokens": cached, "output_tokens": out}}})
+
+
+class HintTest(unittest.TestCase):
+    def test_same_rule_as_portal(self):
+        out = []
+        c.hints_of("feature/dae01-req0047-dv 작업", out)
+        self.assertEqual(out, ["DAE01-REQ0047-DV", "DAE01-REQ0047", "REQ0047-DV", "DAE01", "REQ0047"])
+        out = []
+        c.hints_of("please fix the bug", out)
+        self.assertEqual(out, [])
+
+    def test_poc_off(self):
+        out = []
+        c.hints_of("POC off 개인 공부", out)
+        self.assertEqual(out, ["POC-OFF"])
+
+
+class CodexTest(unittest.TestCase):
+    def test_active_minutes_tokens_branch_and_no_text(self):
         with tempfile.TemporaryDirectory() as d:
             write(
-                os.path.join(d, "claude", "proj", "s1.jsonl"),
+                os.path.join(d, "2026", "11", "10", "rollout-abc.jsonl"),
                 [
-                    claude("user", "2026-11-10T01:00:00Z", text="REQ-0047-DV 수신 로직 고쳐줘 비밀"),
-                    claude("assistant", "2026-11-10T01:04:00Z"),
-                    claude("user", "2026-11-10T01:06:00Z", text=[{"type": "text", "text": "계속"}]),
+                    ev("2026-11-10T00:00:00Z", {"id": "cx-1", "git": {"branch": "feature/DAE01-REQ0047-DV"}}, "session_meta"),
+                    ev("2026-11-10T00:00:30Z", {"model": "gpt-5-codex"}, "turn_context"),
+                    ev("2026-11-10T00:01:00Z", {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "OAR03-REQ0001 비밀 작업"}]}, "response_item"),
+                    tokens("2026-11-10T00:02:00Z", 1000, 200, 100),
+                    # 같은 누적값 반복 — 두 번 더하지 않는다
+                    tokens("2026-11-10T00:02:30Z", 1000, 200, 100),
+                    tokens("2026-11-10T00:03:00Z", 1500, 300, 150),
                     # 1시간 공백 — 자리 비움이라 5분만 센다
-                    claude("assistant", "2026-11-10T02:06:00Z"),
+                    ev("2026-11-10T01:03:00Z", {"type": "user_message", "message": "계속"}),
                     "{broken",
                 ],
             )
-            data, warnings = c.build(os.path.join(d, "claude"), os.path.join(d, "none"), None)
+            data, warnings = c.build(d, None)
             self.assertEqual(len(warnings), 1)
             self.assertEqual(data["format"], "poc-ai-sessions")
             [r] = data["sessions"]
-            self.assertEqual(r["activeMin"], 4 + 2 + 5)
-            self.assertEqual((r["date"], r["start"], r["end"]), ("2026-11-10", "10:00", "11:06"))
-            self.assertEqual(r["hints"], ["REQ-0047", "REQ-0047-DV"])
+            self.assertEqual((r["tool"], r["sessionId"], r["activeMin"]), ("Codex", "cx-1", 3 + 5))
+            self.assertEqual((r["date"], r["start"], r["end"]), ("2026-11-10", "09:00", "10:03"))
+            self.assertEqual(r["tokens"], {"gpt-5-codex": {"input": 1500, "cached": 300, "output": 150}})
+            self.assertIn("DAE01-REQ0047-DV", r["hints"])
+            self.assertIn("OAR03-REQ0001", r["hints"])
             self.assertNotIn("비밀", json.dumps(data, ensure_ascii=False))
 
     def test_splits_by_kst_day_and_since(self):
         with tempfile.TemporaryDirectory() as d:
             write(
-                os.path.join(d, "claude", "p", "s.jsonl"),
+                os.path.join(d, "rollout-s.jsonl"),
                 [
-                    claude("user", "2026-11-09T14:50:00Z"),  # 23:50 KST
-                    claude("assistant", "2026-11-09T14:55:00Z"),
-                    claude("user", "2026-11-09T15:00:00Z"),  # 00:00 KST 다음날
-                    claude("assistant", "2026-11-09T15:03:00Z"),
+                    ev("2026-11-09T14:50:00Z", {"type": "user_message", "message": ""}),  # 23:50 KST
+                    ev("2026-11-09T14:55:00Z", {"type": "agent_message"}),
+                    ev("2026-11-09T15:00:00Z", {"type": "user_message", "message": ""}),  # 00:00 KST 다음날
+                    ev("2026-11-09T15:03:00Z", {"type": "agent_message"}),
                 ],
             )
-            data, _ = c.build(os.path.join(d, "claude"), "", None)
+            data, _ = c.build(d, None)
             self.assertEqual([(r["date"], r["activeMin"]) for r in data["sessions"]], [("2026-11-09", 5), ("2026-11-10", 3)])
-            data, _ = c.build(os.path.join(d, "claude"), "", "2026-11-10")
+            data, _ = c.build(d, "2026-11-10")
             self.assertEqual([r["date"] for r in data["sessions"]], ["2026-11-10"])
-
-
-class CodexTest(unittest.TestCase):
-    def test_session_meta_branch_and_user_message(self):
-        with tempfile.TemporaryDirectory() as d:
-            write(
-                os.path.join(d, "codex", "2026", "11", "10", "rollout-abc.jsonl"),
-                [
-                    {"type": "session_meta", "timestamp": "2026-11-10T00:00:00Z", "payload": {"id": "cx-1", "git": {"branch": "main"}}},
-                    {"type": "response_item", "timestamp": "2026-11-10T00:01:00Z", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "MES-12 작업"}]}},
-                    {"type": "event_msg", "timestamp": "2026-11-10T00:03:00Z", "payload": {"type": "user_message", "message": "REQ-0051-DS 도"}},
-                ],
-            )
-            data, _ = c.build("", os.path.join(d, "codex"), None)
-            [r] = data["sessions"]
-            self.assertEqual((r["tool"], r["sessionId"], r["branch"], r["activeMin"]), ("Codex", "cx-1", "main", 3))
-            self.assertEqual(r["hints"], ["MES-12", "REQ-0051-DS", "REQ-0051"])
 
 
 class MainTest(unittest.TestCase):
     def test_writes_file(self):
         with tempfile.TemporaryDirectory() as d:
             out = os.path.join(d, "o.json")
-            self.assertEqual(c.main(["--claude-dir", d, "--codex-dir", d, "--out", out]), 0)
+            self.assertEqual(c.main(["--codex-dir", d, "--out", out]), 0)
             with open(out, encoding="utf-8") as f:
                 self.assertEqual(json.load(f)["sessions"], [])
 

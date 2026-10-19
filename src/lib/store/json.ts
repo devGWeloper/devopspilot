@@ -1,11 +1,11 @@
 import fs from "fs";
 import path from "path";
+import { normalizeProject } from "../projects/normalize";
 import type { HistoryEntry, Project, UserRecord } from "../types";
 import {
   DuplicateKeyError,
   filterHistory,
-  formatPrjId,
-  prjNumber,
+  normalizeUser,
   type ConfigValue,
   type MeasRow,
   type Store,
@@ -62,9 +62,10 @@ export function createJsonStore(dir: string): Store {
   return {
     kind: "json",
     users: {
-      list: async () => clone(await snapshot<UserRecord>("users")),
+      list: async () => (await snapshot<UserRecord>("users")).map((u) => normalizeUser(clone(u))),
       async get(id) {
-        return clone((await snapshot<UserRecord>("users")).find((u) => u.userId === id) ?? null);
+        const u = (await snapshot<UserRecord>("users")).find((x) => x.userId === id);
+        return u ? normalizeUser(clone(u)) : null;
       },
       insert: (u) =>
         mutate<UserRecord, void>("users", (rows) => {
@@ -78,9 +79,10 @@ export function createJsonStore(dir: string): Store {
         }),
     },
     projects: {
-      list: async () => clone(await snapshot<Project>("projects")),
+      list: async () => (await snapshot<Project>("projects")).map((p) => normalizeProject(clone(p) as never)),
       async get(id) {
-        return clone((await snapshot<Project>("projects")).find((x) => x.prjId === id) ?? null);
+        const p = (await snapshot<Project>("projects")).find((x) => x.prjId === id);
+        return p ? normalizeProject(clone(p) as never) : null;
       },
       insert: (p) =>
         mutate<Project, void>("projects", (rows) => {
@@ -99,10 +101,6 @@ export function createJsonStore(dir: string): Store {
           const i = rows.findIndex((r) => r.prjId === id);
           if (i >= 0) rows.splice(i, 1);
         }),
-      async nextId() {
-        const rows = await snapshot<Project>("projects");
-        return formatPrjId(rows.reduce((m, p) => Math.max(m, prjNumber(p.prjId)), 0) + 1);
-      },
     },
     config: {
       async get<T>(key: string) {

@@ -11,6 +11,18 @@
   gap: var(--s3);
 }
 
+.kpiHead {
+  margin: var(--s4) 0 var(--s2);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.kpiHead:first-child {
+  margin-top: 0;
+}
+
+
 .table {
   width: 100%;
   border-collapse: collapse;
@@ -208,4 +220,20 @@
   padding: 12px 20px;
   font-size: 12px;
   color: var(--muted);
+}
+
+.mxTotal td {
+  background: var(--bg-deep);
+}
+
+.mxPrj td {
+  background: var(--bg);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+/* 기준보다 많이 든 칸만 — 위험 신호 */
+.mxOver {
+  color: var(--danger);
 }

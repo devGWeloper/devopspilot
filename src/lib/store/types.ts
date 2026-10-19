@@ -46,7 +46,6 @@ export interface Store {
     insert(p: Project): Promise<void>;
     update(p: Project, expectedUpdAt: string): Promise<boolean>;
     remove(id: string): Promise<void>;
-    nextId(): Promise<string>;
   };
   config: {
     get<T>(key: string): Promise<ConfigValue<T> | null>;
@@ -71,13 +70,9 @@ export class DuplicateKeyError extends Error {
   }
 }
 
-export function formatPrjId(n: number): string {
-  return `PRJ-${String(n).padStart(4, "0")}`;
-}
-
-export function prjNumber(id: string): number {
-  const m = /^PRJ-(\d+)$/.exec(id);
-  return m ? Number(m[1]) : 0;
+/** 계정 항목이 늘기 전에 저장된 행도 같은 모양으로 */
+export function normalizeUser(u: UserRecord): UserRecord {
+  return { ...u, hqNm: u.hqNm ?? "", aiAcct: u.aiAcct ?? "", deptNm: u.deptNm ?? "" };
 }
 
 export function filterHistory(rows: HistoryEntry[], f: HistoryFilter): HistoryEntry[] {

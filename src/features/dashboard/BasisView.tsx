@@ -50,20 +50,23 @@ export function BasisView({ vm, scope }: { vm: BasisVM; scope: string }) {
             <div className={b.formulas}>
               <Formula name="투입 공수 절감률" value={pct(A.save, 1)}>
                 (기준 <b>{f1(A.baseMd)}</b> − 투입 <b>{f1(A.md)}</b>) ÷ 기준 <b>{f1(A.baseMd)}</b> M/D
-                <Sub>기준 M/D = 집계 대상 {A.unitN}개 단계의 선정 양식 기준 공수 합</Sub>
+                <Sub>기준 M/D = 집계 대상 요구사항·단계 {A.unitN}개의 기준 공수 합 · 절감 공수 = {f1(A.saveMd)} M/D</Sub>
                 <Sub>
                   투입 M/D = 확정 공수 <b>{h2(A.tot)}h</b> ÷ 1 M/D {S.mdHours}h = {f1(A.md)} · 확정 공수 = AI 사용 {h2(A.inT)}h + AI 없이 {h2(A.out)}h
                 </Sub>
               </Formula>
               <Formula name="순절감률 (비용)" value={pct(A.net, 1)}>
                 (기준 인건비 <b>{man(A.baseCost)}</b> − 측정 인건비 <b>{man(A.labor)}</b> − AI 비용 <b>{man(A.aiCost)}</b>) ÷ 기준 인건비 <b>{man(A.baseCost)}</b> 만원
-                <Sub>기준 인건비 = Σ 단계 기준 M/D × 요구사항 필요 등급 단가</Sub>
-                <Sub>측정 인건비 = Σ (단계 확정 공수 ÷ {S.mdHours}h) × 등급 단가</Sub>
-                <Sub>AI 비용 = Σ 배정된 AI 세션 시간 × 도구별 시간당 단가 (수집 시간 기준 — 줄인 시간도 비용에 포함)</Sub>
+                <Sub>기준 인건비 = Σ 태그 기준 M/D × 태그의 필요 개발자 등급 단가 · 순절감액 = {man(A.netAmt)} 만원</Sub>
+                <Sub>측정 인건비 = Σ (태그 확정 공수 ÷ {S.mdHours}h) × 등급 단가</Sub>
+                <Sub>
+                  AI 비용 = Σ 배정된 Codex 세션 토큰 × 모델 토큰 단가 (나눠 배정하면 분 비율로 나눔)
+                  {A.aiNa > 0 && <b> · 비용 빈칸 {A.aiNa}건(토큰 미수집·단가 없음)은 0 으로 더함</b>}
+                </Sub>
               </Formula>
               <Formula name="AI 활용률" value={pct(A.use)}>
                 AI 사용 <b>{h2(A.inT)}h</b> ÷ 확정 공수 <b>{h2(A.tot)}h</b>
-                <Sub>AI 사용 = 자동 수집 {h2(A.ai)}h − 개발자가 줄인 {h2(A.ai - A.inT)}h</Sub>
+                <Sub>AI 사용 = 자동 수집 {h2(A.ai)}h − 개발자가 줄인 {h2(A.ai - A.inT)}h · AI 밖 비중 {pct(A.outShare)}</Sub>
               </Formula>
             </div>
           </Panel>
@@ -82,19 +85,23 @@ export function BasisView({ vm, scope }: { vm: BasisVM; scope: string }) {
                       <td>{won(p)} / M/D</td>
                     </tr>
                   ))}
-                  {Object.entries(S.aiRate).map(([t, r]) => (
-                    <tr key={t}>
-                      <th>{t}</th>
-                      <td>{won(r)} / 시간</td>
+                  {Object.entries(S.tokenPrice).map(([m, p]) => (
+                    <tr key={m}>
+                      <th>{m}</th>
+                      <td>
+                        입력 {won(p.input)} · 캐시 {won(p.cached)} · 출력 {won(p.output)} / 100만 토큰
+                      </td>
                     </tr>
                   ))}
-                  <tr>
-                    <th>그 외 AI 도구</th>
-                    <td>{won(S.defaultAiRate)} / 시간</td>
-                  </tr>
+                  {Object.keys(S.tokenPrice).length === 0 && (
+                    <tr>
+                      <th>토큰 단가</th>
+                      <td>미입력 — AI 비용 빈칸</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
-              <p className={b.note}>시스템 관리 &gt; 코드·단가에서 바꾸면 과거 값까지 다시 계산됩니다.</p>
+              <p className={b.note}>기준 데이터 &gt; 04 기준정보에서 바꾸면 과거 값까지 다시 계산됩니다.</p>
             </Panel>
             <Panel title="집계에서 빠진 값">
               <table className={b.kv}>
@@ -263,7 +270,8 @@ function Days({ days }: { days: BasisDayVM[] }) {
                 : x.sessions.map((s, i) => (
                     <div key={i} className={b.tiny}>
                       {SRC[s.src] ?? s.src} · {s.tool} · {s.start}
-                      {s.end ? `~${s.end}` : ""} · {s.min}분 · {s.how}
+                      {s.end ? `~${s.end}` : ""} · {s.min}분 · {s.tokens ? `${s.tokens.toLocaleString()} 토큰 · ` : ""}
+                      {s.cost === null ? "비용 빈칸" : won(s.cost)} · {s.how}
                     </div>
                   ))}
             </td>
@@ -276,11 +284,12 @@ function Days({ days }: { days: BasisDayVM[] }) {
 
 // 원장 전체를 일자 단위 한 줄씩 — 엑셀에서 피벗으로 다시 계산해 볼 수 있게.
 function downloadCsv(vm: BasisVM) {
-  const head = ["과제", "요구사항ID", "요구사항", "단계", "단위코드", "담당", "등급", "등급단가", "기준MD", "일자", "상태", "집계포함", "AI수집h", "줄임h", "AI사용h", "AI없이h", "합계h", "AI비용", "세션수"];
+  const head = ["과제", "요구사항ID", "요구사항", "단계", "공수태그", "담당", "등급", "등급단가", "기준MD", "일자", "상태", "집계포함", "AI수집h", "줄임h", "AI사용h", "AI없이h", "합계h", "AI비용", "AI비용빈칸", "세션수"];
   const lines = [head];
   for (const u of vm.units)
     for (const x of u.days)
-      lines.push([u.prjNm, u.reqId, u.reqName, STAGE_LABEL[u.stage], u.code, u.ownerNm, u.grade, String(u.price), String(u.baseMd), x.date, ST[x.st] ?? x.st, x.counted ? "Y" : "N", h2(x.ai), h2(x.mn), h2(x.inT), h2(x.out), h2(x.tot), String(Math.round(x.aiCost)), String(x.sessions.length)]);
+      lines.push([u.prjNm, u.reqId, u.reqName, STAGE_LABEL[u.stage], u.code, u.ownerNm, u.grade, String(u.price), String(u.baseMd), x.date, ST[x.st] ?? x.st, x.counted ? "Y" : "N", h2(x.ai), h2(x.mn), h2(x.inT), h2(x.out), h2(x.tot), String(Math.round(x.aiCost)), String(x.aiNa), String(x.sessions.length)]);
+
   const csv = "﻿" + lines.map((l) => l.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\r\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));

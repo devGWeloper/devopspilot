@@ -1,9 +1,9 @@
 import type { DbConfig } from "../config";
-import type { HistoryEntry, OrgCd, PrjKind, Project, Role, UserRecord } from "../types";
+import { normalizeProject } from "../projects/normalize";
+import type { HistoryEntry, OrgCd, Project, Role, UserRecord } from "../types";
 import { TABLES } from "./schema";
 import {
   DuplicateKeyError,
-  formatPrjId,
   type ConfigValue,
   type HistoryFilter,
   type MeasKind,
@@ -76,6 +76,17 @@ export async function createOracleStore(cfg: DbConfig): Promise<Store> {
       }
       await exec("ALTER TABLE POC_MEAS_DAT ADD CONSTRAINT CK_POC_MEAS_KIND CHECK (KIND_CD IN ('EFFORT','CONF','AIUSE','NOTE'))");
     }
+    // 10/19 기준정보 엑셀로 계정에 본부·AI 도구 계정이 생겼다. 이전에 만든 테이블에만 컬럼을 더한다.
+    if (existing.has("POC_USER_MAS")) {
+      const cols = new Set((await q("SELECT COLUMN_NAME FROM USER_TAB_COLUMNS WHERE TABLE_NAME = 'POC_USER_MAS'")).map((r) => String(r.COLUMN_NAME)));
+      if (!cols.has("HQ_NM")) await exec("ALTER TABLE POC_USER_MAS ADD (HQ_NM VARCHAR2(100))");
+      if (!cols.has("AI_ACCT")) await exec("ALTER TABLE POC_USER_MAS ADD (AI_ACCT VARCHAR2(200))");
+    }
+    // 10/19 과제 구분(개발/운영)을 없앴다. NOT NULL 이라 남겨 두면 INSERT 가 실패한다.
+    if (existing.has("POC_PRJ_MAS")) {
+      const cols = new Set((await q("SELECT COLUMN_NAME FROM USER_TAB_COLUMNS WHERE TABLE_NAME = 'POC_PRJ_MAS'")).map((r) => String(r.COLUMN_NAME)));
+      if (cols.has("KIND_CD")) await exec("ALTER TABLE POC_PRJ_MAS DROP COLUMN KIND_CD");
+    }
   }
 
   await ensureSchema();
@@ -84,8 +95,10 @@ export async function createOracleStore(cfg: DbConfig): Promise<Store> {
     userId: String(r.USER_ID),
     userNm: String(r.USER_NM),
     orgCd: String(r.ORG_CD) as OrgCd,
+    hqNm: s(r.HQ_NM) ?? "",
     deptNm: s(r.DEPT_NM) ?? "",
     role: String(r.ROLE_CD) as Role,
+    aiAcct: s(r.AI_ACCT) ?? "",
     useYn: r.USE_YN === "Y",
     pwdHash: String(r.PWD_HASH),
     pwdSalt: String(r.PWD_SALT),
@@ -98,8 +111,10 @@ export async function createOracleStore(cfg: DbConfig): Promise<Store> {
     id: u.userId,
     nm: u.userNm,
     org: u.orgCd,
+    hq: u.hqNm,
     dept: u.deptNm,
     role: u.role,
+    aiAcct: u.aiAcct,
     hash: u.pwdHash,
     salt: u.pwdSalt,
     useYn: u.useYn ? "Y" : "N",
@@ -109,37 +124,26 @@ export async function createOracleStore(cfg: DbConfig): Promise<Store> {
   });
 
   // 목록 컬럼은 DB 에서 바로 보이게 두고, 나머지(요구사항·단계 포함)는 DATA_JSON 에 통째로 둔다 — 조인 없이 과제 1건 = 1행.
-  const toProject = (r: Row): Project => ({
-    ...json<Omit<Project, "prjId" | "prjNm" | "sysNm" | "kind" | "deptCd" | "pmNm" | "regUserId" | "regAt" | "updUserId" | "updAt">>(r.DATA_JSON, {
-      teamNm: "",
-      axTeam: "",
-      sysGrade: "",
-      deployType: "",
-      area: "",
-      wbsYn: "",
-      vcs: "",
-      pms: "",
-      reqs: [],
-    }),
-    prjId: String(r.PRJ_ID),
-    prjNm: String(r.PRJ_NM),
-    sysNm: s(r.SYS_NM) ?? "",
-    kind: String(r.KIND_CD) as PrjKind,
-    deptCd: s(r.DEPT_CD) ?? "",
-    pmNm: s(r.PM_NM) ?? "",
-    regUserId: s(r.REG_USER_ID) ?? "",
-    regAt: String(r.REG_DT),
-    updUserId: s(r.UPD_USER_ID) ?? "",
-    updAt: String(r.UPD_DT),
-  });
+  const toProject = (r: Row): Project =>
+    normalizeProject({
+      ...json<Record<string, unknown>>(r.DATA_JSON, {}),
+      prjId: String(r.PRJ_ID),
+      prjNm: String(r.PRJ_NM),
+      sysNm: s(r.SYS_NM) ?? "",
+      deptCd: s(r.DEPT_CD) ?? "",
+      pmNm: s(r.PM_NM) ?? "",
+      regUserId: s(r.REG_USER_ID) ?? "",
+      regAt: String(r.REG_DT),
+      updUserId: s(r.UPD_USER_ID) ?? "",
+      updAt: String(r.UPD_DT),
+    });
 
   const projectBinds = (p: Project) => {
-    const { prjId, prjNm, sysNm, kind, deptCd, pmNm, regUserId, regAt, updUserId, updAt, ...rest } = p;
+    const { prjId, prjNm, sysNm, deptCd, pmNm, regUserId, regAt, updUserId, updAt, ...rest } = p;
     return {
       id: prjId,
       nm: prjNm,
       sys: sysNm,
-      kind,
       dept: deptCd,
       pm: pmNm,
       data: clob(rest),
@@ -176,8 +180,8 @@ export async function createOracleStore(cfg: DbConfig): Promise<Store> {
       },
       async insert(u) {
         await exec(
-          `INSERT INTO POC_USER_MAS (USER_ID, USER_NM, ORG_CD, DEPT_NM, ROLE_CD, PWD_HASH, PWD_SALT, USE_YN, LAST_LOGIN_DT, REG_DT, UPD_DT)
-           VALUES (:id, :nm, :org, :dept, :role, :hash, :salt, :useYn, :lastLogin, :regAt, :updAt)`,
+          `INSERT INTO POC_USER_MAS (USER_ID, USER_NM, ORG_CD, HQ_NM, DEPT_NM, ROLE_CD, AI_ACCT, PWD_HASH, PWD_SALT, USE_YN, LAST_LOGIN_DT, REG_DT, UPD_DT)
+           VALUES (:id, :nm, :org, :hq, :dept, :role, :aiAcct, :hash, :salt, :useYn, :lastLogin, :regAt, :updAt)`,
           userBinds(u),
         );
       },
@@ -186,7 +190,7 @@ export async function createOracleStore(cfg: DbConfig): Promise<Store> {
         if (!cur) return;
         const u = { ...cur, ...patch, userId: id };
         await exec(
-          `UPDATE POC_USER_MAS SET USER_NM = :nm, ORG_CD = :org, DEPT_NM = :dept, ROLE_CD = :role, PWD_HASH = :hash,
+          `UPDATE POC_USER_MAS SET USER_NM = :nm, ORG_CD = :org, HQ_NM = :hq, DEPT_NM = :dept, ROLE_CD = :role, AI_ACCT = :aiAcct, PWD_HASH = :hash,
              PWD_SALT = :salt, USE_YN = :useYn, LAST_LOGIN_DT = :lastLogin, REG_DT = :regAt, UPD_DT = :updAt
            WHERE USER_ID = :id`,
           userBinds(u),
@@ -203,14 +207,14 @@ export async function createOracleStore(cfg: DbConfig): Promise<Store> {
       },
       async insert(p) {
         await exec(
-          `INSERT INTO POC_PRJ_MAS (PRJ_ID, PRJ_NM, SYS_NM, KIND_CD, DEPT_CD, PM_NM, DATA_JSON, REG_USER_ID, REG_DT, UPD_USER_ID, UPD_DT)
-           VALUES (:id, :nm, :sys, :kind, :dept, :pm, :data, :regUser, :regAt, :updUser, :updAt)`,
+          `INSERT INTO POC_PRJ_MAS (PRJ_ID, PRJ_NM, SYS_NM, DEPT_CD, PM_NM, DATA_JSON, REG_USER_ID, REG_DT, UPD_USER_ID, UPD_DT)
+           VALUES (:id, :nm, :sys, :dept, :pm, :data, :regUser, :regAt, :updUser, :updAt)`,
           projectBinds(p),
         );
       },
       async update(p, expectedUpdAt) {
         const n = await exec(
-          `UPDATE POC_PRJ_MAS SET PRJ_NM = :nm, SYS_NM = :sys, KIND_CD = :kind, DEPT_CD = :dept, PM_NM = :pm, DATA_JSON = :data,
+          `UPDATE POC_PRJ_MAS SET PRJ_NM = :nm, SYS_NM = :sys, DEPT_CD = :dept, PM_NM = :pm, DATA_JSON = :data,
              REG_USER_ID = :regUser, REG_DT = :regAt, UPD_USER_ID = :updUser, UPD_DT = :updAt
            WHERE PRJ_ID = :id AND UPD_DT = :expected`,
           { ...projectBinds(p), expected: expectedUpdAt },
@@ -219,12 +223,6 @@ export async function createOracleStore(cfg: DbConfig): Promise<Store> {
       },
       async remove(id) {
         await exec("DELETE FROM POC_PRJ_MAS WHERE PRJ_ID = :id", { id });
-      },
-      async nextId() {
-        const rows = await q(
-          "SELECT NVL(MAX(TO_NUMBER(REGEXP_SUBSTR(PRJ_ID, '[0-9]+$'))), 0) AS N FROM POC_PRJ_MAS WHERE REGEXP_LIKE(PRJ_ID, '^PRJ-[0-9]+$')",
-        );
-        return formatPrjId(Number(rows[0]?.N ?? 0) + 1);
       },
     },
     config: {

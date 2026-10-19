@@ -22,14 +22,14 @@ describe("seed", () => {
     expect((await s.config.get("SETTINGS"))?.value).toBeTruthy();
   });
 
-  it("샘플: 과제 6개·데모 계정, 확정 스냅샷이 실제 값과 같다", async () => {
+  it("샘플: 과제 4개(개발만)·데모 계정, 확정 스냅샷이 실제 값과 같다", async () => {
     const s = fresh();
     await ensureSeed(s, { samples: true });
-    expect(await s.projects.list()).toHaveLength(6);
+    expect(await s.projects.list()).toHaveLength(4);
     const ids = (await s.users.list()).map((u) => u.userId).sort();
     expect(ids).toEqual(["admin", "dev01", "dev02", "dev03", "dev04", "dev05", "dev06", "view01"]);
     const ix = await loadIndex(s);
-    const req = ix.data.projects.flatMap((p) => p.reqs).find((r) => r.reqId === "REQ-0033")!;
+    const req = ix.data.projects.flatMap((p) => p.reqs).find((r) => r.reqId === "REQ0033")!;
     // 샘플 확정일이 '값 변경 · 재확정 필요'로 보이면 시연이 깨진다.
     expect(rowsOf(ix, "dev02", req).every((r) => r.st === "conf")).toBe(true);
   });
@@ -55,7 +55,7 @@ describe("projects", () => {
     await s.projects.insert(mkProject({ prjNm: "원본" }));
     const ok = await s.projects.update(mkProject({ prjNm: "변경", updAt: "2026-10-02T00:00:00.000Z" }), "다른값");
     expect(ok).toBe(false);
-    expect((await s.projects.get("PRJ-0001"))?.prjNm).toBe("원본");
+    expect((await s.projects.get("DAE01"))?.prjNm).toBe("원본");
   });
 
   it("updAt 이 같으면 저장", async () => {
@@ -64,14 +64,15 @@ describe("projects", () => {
     await s.projects.insert(p);
     const ok = await s.projects.update({ ...p, prjNm: "변경", updAt: "2026-10-02T00:00:00.000Z" }, p.updAt);
     expect(ok).toBe(true);
-    expect((await s.projects.get("PRJ-0001"))?.prjNm).toBe("변경");
+    expect((await s.projects.get("DAE01"))?.prjNm).toBe("변경");
   });
 
-  it("nextId 순번", async () => {
+  it("이전 형식 과제(요구사항 단위 등급·완료)는 태그로 내려 채워 읽는다", async () => {
     const s = fresh();
-    expect(await s.projects.nextId()).toBe("PRJ-0001");
-    await s.projects.insert(mkProject({ prjId: "PRJ-0007" }));
-    expect(await s.projects.nextId()).toBe("PRJ-0008");
+    const old = { ...mkProject(), reqs: [{ reqId: "R1", name: "", grade: "고급", difficulty: "상", baseSrc: "", done: true, doneAt: "2026-11-01", extra: {}, stages: [{ cd: "DV", workType: "", ownerId: null, ownerNm: "", baseMd: 1 }] }] };
+    await s.projects.insert(old as never);
+    const st = (await s.projects.get(old.prjId))!.reqs[0].stages[0];
+    expect(st).toMatchObject({ grade: "고급", difficulty: "상", done: true, doneAt: "2026-11-01", fit: "" });
   });
 
   it("동시 insert 10건이 유실되지 않는다", async () => {
@@ -94,7 +95,7 @@ describe("projects", () => {
     const s = fresh();
     await s.projects.insert(mkProject({ prjNm: "원본" }));
     (await s.projects.list())[0].prjNm = "x";
-    expect((await s.projects.get("PRJ-0001"))?.prjNm).toBe("원본");
+    expect((await s.projects.get("DAE01"))?.prjNm).toBe("원본");
   });
 });
 
@@ -167,5 +168,15 @@ describe("meas", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "poc-"));
     await createJsonStore(dir).meas.upsert([row("E|1", { a: 1 })]);
     expect((await createJsonStore(dir).meas.get("E|1"))?.data).toEqual({ a: 1 });
+  });
+});
+
+describe("seed 샘플 — 다음 날 확정률·AI 비용 시연", () => {
+  it("데모 계정에 AI 도구 계정이 있고, 확정 시각이 미래가 아니다", async () => {
+    const s = fresh();
+    await ensureSeed(s, { samples: true });
+    expect((await s.users.get("dev01"))?.aiAcct).toBe("dev01@skax.demo");
+    const now = new Date().toISOString();
+    expect((await loadIndex(s)).data.confs.every((c) => !c.confirmedAt || c.confirmedAt <= now)).toBe(true);
   });
 });

@@ -1,312 +1,290 @@
 "use client";
 
-import { Fragment, useState } from "react";
-import { Select } from "@/components/ui/Field";
+import { Fragment, useMemo, useState } from "react";
+import { Button } from "@/components/ui/Button";
+import { Select, TextInput } from "@/components/ui/Field";
 import { Icon } from "@/components/ui/Icon";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState, KpiTile, Panel } from "@/components/ui/Panel";
 import { f1 } from "@/lib/format";
-import { DIMS, DIM_BY_KEY, catsOf, type Dim, type DimKey } from "@/lib/dims";
+import { FORM_FIELDS, FORM_GROUPS, missingRequired, tally, type FormField, type FormGroup } from "@/lib/projects/form";
 import type { SelReqVM, SelectionVM } from "@/lib/views";
-import { STATUS_LABEL } from "../common/bits";
-import { Bar, DistPanel } from "./DistPanel";
-import { SHADES } from "./shades";
+import { AXES, BLANK, distOf, getter, val, type Axis } from "./axes";
+import { CrossPanel, DistPanel } from "./DistPanel";
 import s from "./selection.module.css";
 
-// 한 분류에 절반 넘게 몰리면 그 분류의 효과가 전체 결론을 끌고 가므로 쏠림으로 본다.
-const SKEW = 0.5;
-// 균형 점검을 하는 축 — 나머지는 참고용 분포
-const CHECK: DimKey[] = ["fit", "difficulty", "grade", "stage", "kind", "area", "deployType"];
-const LEVELS = ["상", "중", "하"];
+// 과제 속성은 과제 줄에 한 번만 보여 주고, 열로는 요구사항 이하 항목만 편다 — 엑셀처럼 행마다 반복하면 읽을 게 너무 많다.
+const PRJ_INFO = FORM_FIELDS.filter((x) => x.group === "PRJ" && x.id !== "PRJ-01");
+const COL_GROUPS = FORM_GROUPS.filter((g) => g.key !== "PRJ");
+const DEFAULT_ON: FormGroup[] = ["REQ", "FIT"];
+const MAIN_FILTERS = ["PRJ-01", "PRJ-03", "PRJ-06", "REQ-03", "REQ-04", "REQ-05", "FIT-06"];
+const MORE_FILTERS = AXES.map((a) => a.id).filter((id) => !MAIN_FILTERS.includes(id));
+const LONG = new Set<string>();
 
-interface Count {
-  cat: string;
-  n: number;
-  ids: string[];
+function filterAxes(vm: SelectionVM): Record<string, Axis> {
+  const prj: Axis = { id: "PRJ-01", label: "과제", group: "PRJ", level: "prj", options: vm.projects.map((p) => p.prjNm), get: (r) => val(r, "PRJ-01"), check: false };
+  return Object.fromEntries([prj, ...AXES].map((a) => [a.id, a]));
 }
 
-function countDim(vm: SelectionVM, d: Dim): { rows: Count[]; total: number; blank: number } {
-  if (d.level === "prj") {
-    const val = (p: SelectionVM["projects"][number]) =>
-      d.key === "kind" ? p.kind : d.key === "area" ? p.area : d.key === "deployType" ? p.deployType : d.key === "dept" ? p.deptCd : p.sysGrade;
-    const cats = catsOf(d, vm.projects.map(val));
-    return {
-      rows: cats.map((cat) => {
-        const ps = vm.projects.filter((p) => val(p) === cat);
-        return { cat, n: ps.length, ids: ps.map((p) => p.prjNm) };
-      }),
-      total: vm.projects.length,
-      blank: vm.projects.filter((p) => !val(p)).length,
-    };
-  }
-  const cats = catsOf(d, vm.reqs.map((r) => r.dims[d.key]));
-  return {
-    rows: cats.map((cat) => {
-      const rs = vm.reqs.filter((r) => r.dims[d.key] === cat);
-      return { cat, n: rs.length, ids: rs.map((r) => `${r.reqId} ${r.name}`) };
-    }),
-    total: vm.reqs.length,
-    blank: vm.reqs.filter((r) => !r.dims[d.key]).length,
-  };
-}
-
-function warningsOf(vm: SelectionVM): string[] {
-  const out: string[] = [];
-  for (const k of CHECK) {
-    const d = DIM_BY_KEY[k];
-    const { rows, total, blank } = countDim(vm, d);
-    const filled = rows.filter((r) => r.n > 0);
-    if (!filled.length) {
-      out.push(`${d.title}: 입력된 값이 없습니다.`);
-      continue;
-    }
-    // 양식의 기본 선택값 중 비어 있는 것 — 도구·배포 형식처럼 선택지가 많은 축은 2개 이상 비었을 때만
-    const gaps = rows.filter((r) => d.cats.includes(r.cat) && r.n === 0).map((r) => r.cat);
-    if (gaps.length && (d.cats.length <= 4 || gaps.length >= d.cats.length - 1)) out.push(`${d.title}: ${gaps.join(", ")} 없음`);
-    const top = filled.reduce((a, r) => (r.n > a.n ? r : a));
-    const share = top.n / (total - blank || 1);
-    if (filled.length > 1 && share > SKEW) out.push(`${d.title}: '${top.cat}' 에 ${Math.round(share * 100)}% 쏠림`);
-    if (filled.length === 1 && d.cats.length > 1) out.push(`${d.title}: 모두 '${top.cat}'`);
-    if (blank) out.push(`${d.title}: 미입력 ${blank}건`);
-  }
-  return out;
+/** 양식 선택값 순서대로, 양식 밖에서 직접 적은 값은 뒤에 */
+function optionsOf(a: Axis, reqs: SelReqVM[]): { v: string; n: number }[] {
+  const seen = reqs.map(a.get);
+  const blank = seen.filter((x) => !x).length;
+  const out = tally(a.options, seen);
+  return blank ? [...out, { v: BLANK, n: blank }] : out;
 }
 
 export function SelectionDashboard({ vm }: { vm: SelectionVM }) {
+  const [q, setQ] = useState("");
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [more, setMore] = useState(false);
+  const [groups, setGroups] = useState<Set<FormGroup>>(new Set(DEFAULT_ON));
+  const [open, setOpen] = useState<string | null>(null);
+  const fAxes = useMemo(() => filterAxes(vm), [vm]);
+
+  const rows = useMemo(() => {
+    const kw = q.trim().toLowerCase();
+    return vm.reqs.filter(
+      (r) =>
+        Object.entries(filters).every(([id, v]) => {
+          const get = fAxes[id]?.get ?? getter(id);
+          return !v || (v === BLANK ? !get(r) : get(r) === v);
+        }) &&
+        (!kw || ["PRJ-01", "REQ-01", "REQ-02", "REQ-08", "PRJ-05"].some((id) => val(r, id).toLowerCase().includes(kw))),
+    );
+  }, [vm.reqs, filters, q, fAxes]);
+
+  // 분포에서 고른 값은 표 위 필터로 이어진다. 같은 값을 다시 누르면 푼다.
+  const pick = (pairs: [string, string][]) => {
+    const toggleOff = pairs.length === 1 && filters[pairs[0][0]] === pairs[0][1];
+    setFilters({ ...filters, ...Object.fromEntries(pairs.map(([id, v]) => [id, toggleOff ? "" : v])) });
+    if (!toggleOff) document.getElementById("sel-table")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   if (!vm.reqs.length)
     return (
       <>
         <PageHeader eyebrow="Phase 1 결과" title="과제 선정 현황" />
         <Panel>
-          <EmptyState title="아직 선정된 과제가 없습니다">관리자가 과제 현황에서 선정 양식을 올리면 분포가 나타납니다.</EmptyState>
+          <EmptyState title="아직 선정된 과제가 없습니다">관리자가 기준 데이터에서 엑셀을 올리면 여기에 과제·요구사항이 나타납니다.</EmptyState>
         </Panel>
       </>
     );
 
-  const fitN = (lv: string) => vm.reqs.filter((r) => r.dims.fit === lv).length;
-  const warns = warningsOf(vm);
-  const dev = vm.projects.filter((p) => p.kind === "개발").length;
+  const missing = vm.reqs.filter((r) => missingRequired(r.values).length).length;
+  const warnN = AXES.reduce((n, a) => n + distOf(vm, a).warns.length, 0);
+  const shownFilters = [...MAIN_FILTERS, ...MORE_FILTERS.filter((id) => more || filters[id])];
+  const cols = COL_GROUPS.filter((g) => groups.has(g.key)).map((g) => ({
+    ...g,
+    fields: FORM_FIELDS.filter((x) => x.group === g.key && !(g.key === "REQ" && (x.id === "REQ-01" || x.id === "REQ-02"))),
+  }));
+  const colN = 1 + cols.reduce((a, g) => a + g.fields.length, 0);
+  const active = Object.values(filters).filter(Boolean).length + (q.trim() ? 1 : 0);
+  const shownPrj = vm.projects.filter((p) => rows.some((r) => r.prjId === p.prjId));
+
+  const toggle = (g: FormGroup) =>
+    setGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(g)) next.delete(g);
+      else next.add(g);
+      return next;
+    });
 
   return (
     <>
       <PageHeader
         eyebrow="Phase 1 결과"
         title="과제 선정 현황"
-        description="선정된 과제와 요구사항이 성격별로 어떻게 퍼져 있는지 봅니다. 생산성 효과가 한쪽 성격에 치우쳐 과대·과소평가되지 않도록 고르게 선정되었는지 확인합니다."
+        description="기준정보 엑셀 '01. 과제'·'02. 요구사항-SDLC' 에 입력된 내용을 요구사항 × 단계 단위로 봅니다. 선택값으로 걸러 보고, 행을 누르면 전체 항목이 펼쳐집니다."
       >
         <div className={s.kpis}>
-          <KpiTile label="선정 과제" value={vm.projects.length} unit="건" sub={`개발 ${dev} · 운영 ${vm.projects.length - dev}`} />
-          <KpiTile label="요구사항" value={vm.reqs.length} unit="건" sub={`측정 완료 ${vm.reqs.filter((r) => r.status === "DONE").length} · 측정 중 ${vm.reqs.filter((r) => r.status === "ING").length}`} />
-          <KpiTile label="예상 기대효과" value={`${fitN("상")} · ${fitN("중")} · ${fitN("하")}`}>
-            <Bar parts={LEVELS.map(fitN)} />
-            <span className={s.kpiSub}>상 · 중 · 하 (PM 판단, 없으면 참고 등급)</span>
-          </KpiTile>
-          <KpiTile label="기준 공수" value={f1(vm.reqs.reduce((a, r) => a + r.baseMd, 0))} unit="M/D" sub="AI 미적용 기준 (선정 양식)" />
-          <KpiTile label="균형 점검" value={warns.length} unit="건" sub={warns.length ? "아래 목록 확인" : "쏠림·공백 없음"} />
+          <KpiTile label="선정 과제" value={vm.projects.length} unit="건" />
+          <KpiTile label="요구사항 (단계)" value={vm.reqs.length} unit="건" />
+          <KpiTile label="기준 공수" value={f1(vm.reqs.reduce((a, r) => a + r.baseMd, 0))} unit="M/D" sub="AI 미적용 기준" />
+          <KpiTile label="균형 점검" value={<span className={warnN ? s.warnTxt : ""}>{warnN}</span>} unit="건" sub={warnN ? "쏠림·공백·미입력 — 분포 참고" : "쏠림·공백 없음"} />
+          <KpiTile label="필수 미입력" value={<span className={missing ? s.miss : ""}>{missing}</span>} unit="건" sub="필수 항목이 빈 요구사항" />
         </div>
       </PageHeader>
 
-      <div className={s.top}>
-        <Panel title="분류 축별 분포" flush>
-          <div className={s.dims}>
-            {DIMS.map((d) => (
-              <DimCard key={d.key} d={d} vm={vm} />
+      <DistPanel vm={vm} filters={filters} onPick={(id, v) => pick([[id, v]])} />
+      <CrossPanel vm={vm} onPick={pick} />
+
+      <Panel
+        id="sel-table"
+        flush
+        style={{ marginTop: 20 }}
+        title="과제·요구사항"
+        actions={
+          <div className={s.groups} role="group" aria-label="표시할 항목 그룹">
+            {COL_GROUPS.map((g) => (
+              <button key={g.key} type="button" className={`${s.groupBtn} ${groups.has(g.key) ? s.on : ""}`} aria-pressed={groups.has(g.key)} onClick={() => toggle(g.key)}>
+                {g.title}
+              </button>
             ))}
           </div>
-        </Panel>
-        <Panel title="균형 점검">
-          {warns.length ? (
-            <ul className={s.warns}>
-              {warns.map((w) => (
-                <li key={w}>
-                  <Icon name="alert" size={14} /> {w}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className={s.good}>
-              <Icon name="check" size={14} /> 주요 분류 축에서 쏠림·공백이 없습니다.
-            </p>
+        }
+      >
+        <div className={s.toolbar}>
+          <TextInput className={s.search} placeholder="과제명 · 태그 · 요구사항 · 담당 검색" value={q} onChange={(e) => setQ(e.target.value)} aria-label="검색" />
+          {shownFilters.map((id) => {
+            const a = fAxes[id];
+            return (
+              <Select
+                key={id}
+                aria-label={a.label}
+                className={`${s.filter} ${filters[id] ? s.filterOn : ""}`}
+                value={filters[id] ?? ""}
+                onChange={(e) => setFilters({ ...filters, [id]: e.target.value })}
+              >
+                <option value="">{a.label} 전체</option>
+                {optionsOf(a, vm.reqs).map((o) => (
+                  <option key={o.v} value={o.v}>
+                    {o.v === BLANK ? "미입력" : o.v} ({o.n})
+                  </option>
+                ))}
+              </Select>
+            );
+          })}
+          <Button variant="ghost" size="sm" onClick={() => setMore(!more)}>
+            {more ? "필터 접기" : `필터 더보기 ${MORE_FILTERS.length}`}
+          </Button>
+          {active > 0 && (
+            <Button variant="ghost" size="sm" onClick={() => (setFilters({}), setQ(""))}>
+              초기화
+            </Button>
           )}
-          <p className={s.note} style={{ padding: "12px 0 0" }}>
-            쏠림 = 한 분류가 {Math.round(SKEW * 100)}% 초과 · 공백 = 양식 선택값 중 0건 · 점검 축: {CHECK.map((k) => DIM_BY_KEY[k].title).join(", ")}
-          </p>
-        </Panel>
-      </div>
+          <span className={s.count}>
+            {active ? `${rows.length} / ${vm.reqs.length}건` : `${vm.reqs.length}건`}
+          </span>
+        </div>
 
-      <FitMatrix vm={vm} />
-
-      <div style={{ marginTop: 20 }}>
-        <DistPanel vm={vm} />
-      </div>
-
-      <ReqTable vm={vm} />
+        <div className={s.scroll}>
+          <table className={s.table}>
+            <thead>
+              <tr className={s.groupRow}>
+                <th className={s.first}>{groups.has("REQ") ? "" : "② 요구사항"}</th>
+                {cols.map((g) => (
+                  <th key={g.key} colSpan={g.fields.length}>
+                    {g.title}
+                  </th>
+                ))}
+              </tr>
+              <tr>
+                <th className={s.first}>요구사항 · 공수 태그</th>
+                {cols.flatMap((g) =>
+                  g.fields.map((fd) => (
+                    <th key={fd.id} className={fd.kind === "number" ? s.r : ""}>
+                      {fd.label}
+                      <small>{fd.id}</small>
+                    </th>
+                  )),
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {shownPrj.map((p) => {
+                const rs = rows.filter((r) => r.prjId === p.prjId);
+                return (
+                  <Fragment key={p.prjId}>
+                    <tr className={s.prj}>
+                      <td colSpan={colN}>
+                        <div className={s.prjHead}>
+                          <b>{p.prjNm}</b>
+                          <span className="subtle">
+                            요구사항 {rs.length}건 · {f1(rs.reduce((a, r) => a + r.baseMd, 0))} M/D
+                          </span>
+                        </div>
+                        <div className={s.prjInfo}>
+                          {PRJ_INFO.map((fd) => {
+                            const v = val(rs[0], fd.id);
+                            return (
+                              <span key={fd.id}>
+                                <i>{fd.label}</i> {v || <Missing required={fd.required} />}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </td>
+                    </tr>
+                    {rs.map((r) => (
+                      <Fragment key={r.reqId}>
+                        <tr className={`${s.req} ${open === r.reqId ? s.opened : ""}`} onClick={() => setOpen(open === r.reqId ? null : r.reqId)}>
+                          <td className={s.first}>
+                            <div className={s.reqName}>
+                              <Icon name={open === r.reqId ? "chevronDown" : "chevronRight"} size={12} />
+                              <b>{val(r, "REQ-01") || <Missing required />}</b>
+                            </div>
+                            <span className={s.reqId}>{r.name}</span>
+                          </td>
+                          {cols.flatMap((g) => g.fields.map((fd) => <Cell key={fd.id} fd={fd} v={val(r, fd.id)} />))}
+                        </tr>
+                        {open === r.reqId && (
+                          <tr className={s.detailRow}>
+                            <td colSpan={colN}>
+                              <Detail r={r} />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    ))}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+          {!rows.length && <EmptyState title="조건에 맞는 요구사항이 없습니다">필터를 줄이거나 초기화해 보세요.</EmptyState>}
+        </div>
+      </Panel>
     </>
   );
 }
 
-function DimCard({ d, vm }: { d: Dim; vm: SelectionVM }) {
-  const { rows, total, blank } = countDim(vm, d);
-  const shown = rows.filter((r) => r.n > 0 || d.cats.length <= 5);
-  const max = Math.max(1, ...rows.map((r) => r.n));
-  return (
-    <div className={s.dim}>
-      <div className={s.dimHead}>
-        <b>{d.title}</b>
-        <span className="subtle">
-          {d.level === "prj" ? "과제" : "요구사항"} {total}
-          {blank ? ` · 미입력 ${blank}` : ""}
+function Missing({ required }: { required?: boolean }) {
+  return required ? <span className={s.miss}>미입력</span> : <span className="subtle">—</span>;
+}
+
+function Cell({ fd, v }: { fd: FormField; v: string }) {
+  if (!v)
+    return (
+      <td>
+        <Missing required={fd.required} />
+      </td>
+    );
+  if (fd.kind === "number") return <td className={s.r}>{fd.id === "REQ-06" ? f1(Number(v)) : v}</td>;
+  if (LONG.has(fd.id))
+    return (
+      <td>
+        <span className={s.long} title={v}>
+          {v}
         </span>
-      </div>
-      <ul className={s.bars}>
-        {shown.map((r) => (
-          <li key={r.cat} title={r.ids.join("\n") || "없음"}>
-            <span className={s.barLabel}>{r.cat}</span>
-            <span className={s.track}>
-              <i style={{ width: `${(r.n / max) * 100}%` }} />
-            </span>
-            <span className={`${s.barNum} ${r.n ? "" : s.gapTxt}`}>
-              {r.n}
-              <small>{total ? Math.round((r.n / total) * 100) : 0}%</small>
-            </span>
-          </li>
-        ))}
-      </ul>
+      </td>
+    );
+  return <td className={s.nowrap}>{v}</td>;
+}
+
+/** 펼친 행 — 양식의 전체 항목을 그룹·순서 그대로 */
+function Detail({ r }: { r: SelReqVM }) {
+  return (
+    <div className={s.detail}>
+      {FORM_GROUPS.map((g) => (
+        <section key={g.key}>
+          <h4>{g.title}</h4>
+          <dl>
+            {FORM_FIELDS.filter((x) => x.group === g.key).map((fd) => {
+              const v = val(r, fd.id);
+              return (
+                <Fragment key={fd.id}>
+                  <dt>
+                    {fd.label}
+                    <small>{fd.id}</small>
+                  </dt>
+                  <dd>{v ? (fd.id === "REQ-06" ? `${f1(Number(v))} M/D` : v) : <Missing required={fd.required} />}</dd>
+                </Fragment>
+              );
+            })}
+          </dl>
+        </section>
+      ))}
     </div>
-  );
-}
-
-const MATRIX_AXES: DimKey[] = ["difficulty", "grade", "stage", "kind", "area", "deployType", "dept", "sysGrade", "tool"];
-
-/** 기대효과 상·중·하 × 과제 성격 — 칸마다 어떤 요구사항이 들어갔는지 */
-function FitMatrix({ vm }: { vm: SelectionVM }) {
-  const [axis, setAxis] = useState<DimKey>("difficulty");
-  const d = DIM_BY_KEY[axis];
-  const cols = catsOf(d, vm.reqs.map((r) => r.dims[axis])).filter((c) => vm.reqs.some((r) => r.dims[axis] === c) || d.cats.length <= 5);
-  const rows = [...LEVELS, ...(vm.reqs.some((r) => !r.dims.fit) ? [""] : [])];
-  const prjNm = new Map(vm.projects.map((p) => [p.prjId, p.prjNm]));
-  return (
-    <Panel
-      title="예상 기대효과 × 과제 성격"
-      style={{ marginTop: 20 }}
-      flush
-      actions={
-        <Select value={axis} onChange={(e) => setAxis(e.target.value as DimKey)} aria-label="열 기준" style={{ minWidth: 160 }}>
-          {MATRIX_AXES.map((k) => (
-            <option key={k} value={k}>
-              열: {DIM_BY_KEY[k].title}
-            </option>
-          ))}
-        </Select>
-      }
-    >
-      <p className={s.note}>칸 안은 요구사항입니다. 비어 있는 칸은 그 조합의 표본이 없다는 뜻입니다 — 측정 결과에서 그 성격은 비교할 수 없습니다.</p>
-      <div className={s.scroll}>
-        <table className={`${s.table} ${s.matrix}`}>
-          <thead>
-            <tr>
-              <th style={{ width: 90 }}>기대효과</th>
-              {cols.map((c) => (
-                <th key={c}>{c}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((lv, i) => (
-              <tr key={lv || "none"}>
-                <th className={s.rowHead}>
-                  <span className={s.lv} style={{ background: SHADES[i] ?? SHADES[4], color: i < 2 ? "#fff" : "var(--ink)" }}>
-                    {lv || "미입력"}
-                  </span>
-                </th>
-                {cols.map((c) => {
-                  const rs = vm.reqs.filter((r) => r.dims.fit === lv && r.dims[axis] === c);
-                  return (
-                    <td key={c} className={rs.length ? "" : s.empty}>
-                      {rs.map((r) => (
-                        <span key={r.reqId} className={s.chip} title={`${prjNm.get(r.prjId)} · ${r.reqId} · ${STATUS_LABEL[r.status]}`}>
-                          {r.name}
-                        </span>
-                      ))}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Panel>
-  );
-}
-
-const IND: [DimKey, string][] = [
-  ["difficulty", "난이도"],
-  ["grade", "등급"],
-  ["spec", "명세"],
-  ["ctx", "맥락"],
-  ["gen", "생성"],
-  ["fit", "기대효과"],
-  ["tool", "AI 도구"],
-];
-
-/** 선택값 순서(유리 → 불리)로 진하기를 정한다 */
-function Val({ k, v }: { k: DimKey; v: string }) {
-  if (!v) return <span className="subtle">—</span>;
-  const i = DIM_BY_KEY[k].cats.indexOf(v);
-  const tone = k === "tool" || k === "grade" || i < 0 ? s.v0 : [s.v1, s.v2, s.v3][i] ?? s.v0;
-  return <span className={`${s.val} ${tone}`}>{v}</span>;
-}
-
-function ReqTable({ vm }: { vm: SelectionVM }) {
-  return (
-    <Panel title="요구사항 × 지표 한눈에 보기" flush style={{ marginTop: 20 }}>
-      <div className={s.scroll}>
-        <table className={s.table}>
-          <thead>
-            <tr>
-              <th>요구사항</th>
-              {IND.map(([k, l]) => (
-                <th key={k}>{l}</th>
-              ))}
-              <th>참고 등급</th>
-              <th className={s.r}>기준 M/D</th>
-              <th>상태</th>
-            </tr>
-          </thead>
-          <tbody>
-            {vm.projects.map((p) => (
-              <Fragment key={p.prjId}>
-                <tr className={s.prj}>
-                  <td colSpan={IND.length + 4}>
-                    {p.prjNm} <span className="subtle">· {[p.kind, p.area, p.deployType, p.sysGrade].filter(Boolean).join(" · ")}</span>
-                  </td>
-                </tr>
-                {vm.reqs
-                  .filter((r) => r.prjId === p.prjId)
-                  .map((r: SelReqVM) => (
-                    <tr key={r.reqId}>
-                      <td>
-                        <b>{r.name}</b>
-                        <div className="subtle" style={{ fontSize: 12 }}>
-                          {r.reqId} · {r.dims.stage}
-                        </div>
-                      </td>
-                      {IND.map(([k]) => (
-                        <td key={k}>
-                          <Val k={k} v={r.dims[k]} />
-                        </td>
-                      ))}
-                      <td className="subtle">{r.fitRef || "—"}</td>
-                      <td className={s.r}>{f1(r.baseMd)}</td>
-                      <td>{STATUS_LABEL[r.status]}</td>
-                    </tr>
-                  ))}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Panel>
   );
 }

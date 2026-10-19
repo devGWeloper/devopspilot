@@ -7,7 +7,12 @@ export interface MatchResult {
   unit: string | null;
   cands: string[];
   why: string;
+  /** 개발자가 세션 첫 줄에 `poc off` 를 적은 업무 외 사용 */
+  off?: boolean;
 }
+
+/** `poc off` — 숫자가 없어 코드 후보 규칙에 안 걸리므로 따로 남기는 힌트 */
+export const OFF_HINT = "POC-OFF";
 
 /**
  * 세션을 어느 단계에 붙일지 정한다. 하나로 정해질 때만 자동 배정하고,
@@ -15,8 +20,14 @@ export interface MatchResult {
  */
 export function matchSession(s: AiSession, units: Unit[]): MatchResult {
   const hints = new Set(s.hints.map((h) => h.toUpperCase()));
+  const off = hints.delete(OFF_HINT);
   // 측정 완료 요구사항도 매칭한다 — 완료 전에 쓴 시간이 나중에 올라와도 그 단계에 붙어야 하므로.
   const mine = units.filter((u) => u.ownerId === s.userId);
+
+  if (off) {
+    if (hints.size === 0) return { unit: null, cands: [], why: "poc off — 업무 외 사용", off: true };
+    return { unit: null, cands: [], why: "세션에 업무 외(poc off)와 코드가 함께 있음" };
+  }
 
   const exact = units.filter((u) => hints.has(u.code.toUpperCase()));
   const exactMine = exact.filter((u) => mine.includes(u));
@@ -24,19 +35,30 @@ export function matchSession(s: AiSession, units: Unit[]): MatchResult {
   if (exactMine.length > 1)
     return { unit: null, cands: exactMine.map((u) => u.code), why: `세션에 단계 코드가 여러 개 (${exactMine.map((u) => u.code).join(", ")})` };
 
+  // 세션마다 단계를 구분하라고 안내하므로, 과제 ID 를 뺀 `REQ0047-DV` 도 받는다. 내 담당 중 하나로 정해질 때만.
+  const shortAll = exact.length ? [] : units.filter((u) => hints.has(`${u.reqId}-${u.stage}`.toUpperCase()));
+  const short = shortAll.filter((u) => mine.includes(u));
+  if (short.length === 1) return { unit: short[0].code, cands: [], why: `단계 코드 ${short[0].reqId}-${short[0].stage}` };
+  if (short.length > 1)
+    return { unit: null, cands: short.map((u) => u.code), why: `요구사항 ID ${short[0].reqId}가 여러 과제에 있음 — 과제 ID 를 붙여 주세요` };
+
   // 단계 코드를 직접 적었는데 내 것이 아니면 같은 요구사항의 내 다른 단계로 넘겨짚지 않는다.
-  const reqHit = exact.length ? [] : mine.filter((u) => hints.has(u.reqId.toUpperCase()));
-  if (reqHit.length === 1) return { unit: reqHit[0].code, cands: [], why: `요구사항 ${reqHit[0].reqId}의 내 담당 단계` };
+  // 과제 ID 없이 요구사항 ID 만 적은 경우도 받되, 내 담당 중 한 요구사항으로 정해질 때만 쓴다.
+  const named = exact.length > 0 || shortAll.length > 0;
+  const byKey = named ? [] : mine.filter((u) => hints.has(u.reqKey.toUpperCase()));
+  const reqHit = byKey.length ? byKey : named ? [] : mine.filter((u) => hints.has(u.reqId.toUpperCase()));
+  const reqKeys = Array.from(new Set(reqHit.map((u) => u.reqKey)));
+  if (reqHit.length === 1) return { unit: reqHit[0].code, cands: [], why: `요구사항 ${reqHit[0].reqKey}의 내 담당 단계` };
   if (reqHit.length > 1)
     return {
       unit: null,
       cands: reqHit.map((u) => u.code),
-      why: `요구사항 ${reqHit[0].reqId}에 내 담당 단계가 ${reqHit.length}개`,
+      why: reqKeys.length > 1 ? `요구사항 ID ${reqHit[0].reqId}가 여러 과제에 있음 — 과제 ID 를 붙여 주세요` : `요구사항 ${reqKeys[0]}에 내 담당 단계가 ${reqHit.length}개`,
     };
 
-  const other = exact[0] ?? units.find((u) => hints.has(u.reqId.toUpperCase()));
+  const other = exact[0] ?? shortAll[0] ?? units.find((u) => hints.has(u.reqKey.toUpperCase()));
   if (other) {
-    return { unit: null, cands: [], why: `${other.reqId}: 다른 담당자(${other.s.ownerNm || "미지정"})의 단계` };
+    return { unit: null, cands: [], why: `${other.reqKey}: 다른 담당자(${other.s.ownerNm || "미지정"})의 단계` };
   }
   return { unit: null, cands: [], why: "브랜치·대화에 요구사항 정보 없음" };
 }
@@ -44,6 +66,8 @@ export function matchSession(s: AiSession, units: Unit[]): MatchResult {
 export interface Alloc {
   min: number;
   cost: number;
+  /** 비용을 알 수 없는(토큰 미수집·단가 없음) 세션 조각 수 — 비용 합계는 0 으로 더하고 빈칸 표시용으로 센다 */
+  na: number;
 }
 
 export interface Pending {
@@ -60,7 +84,9 @@ export interface AllocSrc {
   start: string;
   end: string;
   min: number;
-  cost: number;
+  cost: number | null;
+  /** 이 조각에 들어간 토큰 (세션 토큰을 분 비율로 나눈 값) */
+  tokens: number;
   how: string;
 }
 
@@ -70,24 +96,36 @@ export interface Allocation {
   srcByUnitDay: Map<string, AllocSrc[]>;
   pending: Pending[];
   offCount: number;
+  /** 태그로 자동 배정된 세션 — 태그 입력률의 분자 */
+  auto: Set<string>;
 }
 
 export const unitDayKey = (unit: string, date: string) => `${unit}|${date}`;
 
-export function allocate(sessions: StoredSession[], units: Unit[], rateOf: (tool: string) => number): Allocation {
+const tokenSum = (s: AiSession) => Object.values(s.tokens ?? {}).reduce((a, t) => a + t.input + t.output, 0);
+
+/** costOf: 세션 전체 AI 비용, 알 수 없으면 null. 나눠 배정하면 분 비율로 나눈다. */
+export function allocate(sessions: StoredSession[], units: Unit[], costOf: (s: StoredSession) => number | null): Allocation {
   const byUnitDay = new Map<string, Alloc>();
   const srcByUnitDay = new Map<string, AllocSrc[]>();
   const pending: Pending[] = [];
+  const auto = new Set<string>();
   let offCount = 0;
   const add = (s: StoredSession, unit: string, min: number, how: string) => {
     if (min <= 0) return;
     const k = unitDayKey(unit, s.workDt);
-    const cost = (min / 60) * rateOf(s.tool);
-    const cur = byUnitDay.get(k) ?? { min: 0, cost: 0 };
+    const share = s.minutes > 0 ? min / s.minutes : 0;
+    const total = costOf(s);
+    const cost = total === null ? null : total * share;
+    const cur = byUnitDay.get(k) ?? { min: 0, cost: 0, na: 0 };
     cur.min += min;
-    cur.cost += cost;
+    cur.cost += cost ?? 0;
+    if (cost === null) cur.na++;
     byUnitDay.set(k, cur);
-    srcByUnitDay.set(k, [...(srcByUnitDay.get(k) ?? []), { datId: s.datId, src: s.src, tool: s.tool, start: s.start, end: s.end, min, cost, how }]);
+    srcByUnitDay.set(k, [
+      ...(srcByUnitDay.get(k) ?? []),
+      { datId: s.datId, src: s.src, tool: s.tool, start: s.start, end: s.end, min, cost, tokens: Math.round(tokenSum(s) * share), how },
+    ]);
   };
   for (const s of sessions) {
     const r = s.resolution;
@@ -100,19 +138,43 @@ export function allocate(sessions: StoredSession[], units: Unit[], rateOf: (tool
       continue;
     }
     const m = matchSession(s, units);
-    if (m.unit) add(s, m.unit, s.minutes, `자동 — ${m.why}`);
-    else pending.push({ session: s, cands: m.cands, why: m.why });
+    if (m.off) {
+      offCount++;
+      continue;
+    }
+    if (m.unit) {
+      add(s, m.unit, s.minutes, `자동 — ${m.why}`);
+      auto.add(s.datId);
+    } else pending.push({ session: s, cands: m.cands, why: m.why });
   }
-  return { byUnitDay, srcByUnitDay, pending, offCount };
+  return { byUnitDay, srcByUnitDay, pending, offCount, auto };
 }
 
-/** 대화·브랜치 텍스트에서 코드처럼 생긴 토큰만 뽑는다. 원문은 저장하지 않기 위해 수집 단계에서 쓴다. */
+const MAX_HINTS = 20;
+const MAX_SEGS = 6;
+const hasDigit = (v: string) => /\d/.test(v);
+
+/**
+ * 대화·브랜치 텍스트에서 코드처럼 생긴 토큰만 뽑는다. 원문은 저장하지 않기 위해 수집 단계에서 쓴다.
+ * 과제·요구사항 ID 형식을 가정하지 않고, 하이픈으로 이어진 토큰의 연속 부분(숫자 포함)을 모두 후보로 낸다 —
+ * `feature/dae01-req0047-dv` 에서 태그·reqKey·요구사항 ID 가 다 나와야 포털이 현재 태그와 맞춰 볼 수 있다.
+ * collect_ai_usage.py 의 hints_of 와 같은 규칙이다.
+ */
 export function extractHints(text: string): string[] {
   const out = new Set<string>();
-  for (const m of text.matchAll(/([A-Za-z][A-Za-z0-9_]*-\d+)(-(?:AN|DS|DV|TS|DP|OP)\b)?/gi)) {
-    out.add(m[0].toUpperCase());
-    out.add(m[1].toUpperCase());
-    if (out.size >= 20) break;
+  if (/\bpoc[\s:_-]*off\b/i.test(text)) out.add(OFF_HINT);
+  const words = Array.from(text.toUpperCase().matchAll(/[A-Z0-9_]+(?:-[A-Z0-9_]+)*/g), (m) => m[0]);
+  const joined = words.filter((w) => w.includes("-")).concat(words.filter((w) => !w.includes("-") && /[A-Z]/.test(w) && hasDigit(w) && w.length >= 4));
+  for (const w of joined) {
+    const segs = w.split("-").slice(0, MAX_SEGS);
+    for (let len = segs.length; len >= 1; len--) {
+      for (let i = 0; i + len <= segs.length; i++) {
+        const h = segs.slice(i, i + len).join("-");
+        if (!hasDigit(h)) continue;
+        out.add(h);
+        if (out.size >= MAX_HINTS) return Array.from(out);
+      }
+    }
   }
   return Array.from(out);
 }

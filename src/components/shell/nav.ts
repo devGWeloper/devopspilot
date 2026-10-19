@@ -26,7 +26,9 @@ export const NAV: NavGroup[] = [
   {
     label: "관리",
     items: [
+      { href: "/master", label: "기준 데이터", icon: "tags" },
       { href: "/monitor", label: "공수 모니터링", icon: "shield" },
+
       { href: "/admin", label: "시스템 관리", icon: "sliders" },
     ],
   },

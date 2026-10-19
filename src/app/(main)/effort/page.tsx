@@ -1,8 +1,8 @@
-import { EffortDay } from "@/features/effort/EffortDay";
+import { EffortBoard } from "@/features/effort/EffortBoard";
 import { pageActor } from "@/lib/auth/server";
 import { loadIndex, todayKst } from "@/lib/measure/service";
 import { getStore } from "@/lib/store";
-import { effortDayView } from "@/lib/views";
+import { effortView } from "@/lib/views";
 
 export const metadata = { title: "공수 입력" };
 
@@ -13,5 +13,6 @@ export default async function Page({ searchParams }: { searchParams: Record<stri
   const dev = actor.role === "DEVELOPER";
   // 관리자·열람자는 개발자를 골라 조회만 한다.
   const userId = dev ? actor.userId : (searchParams.u ?? users.find((u) => u.role === "DEVELOPER" && u.useYn)?.userId ?? "");
-  return <EffortDay vm={effortDayView(ix, users, userId, searchParams.d ?? null, todayKst())} editable={dev} />;
+  // 개발자를 바꾸면 선택한 요구사항 상태도 새로 시작하도록 key 를 준다.
+  return <EffortBoard key={userId} vm={effortView(ix, users, userId, todayKst())} editable={dev} />;
 }

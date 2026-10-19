@@ -8,7 +8,7 @@ export const ACT_TYPES: { cd: ActType; label: string; desc: string }[] = [
   { cd: "A3", label: "분석·검토", desc: "요구사항·산출물·코드 검토, 장애 원인 분석, 현황 조사" },
   { cd: "A4", label: "문서 작성", desc: "설계서·산출물·보고 자료 작성" },
   { cd: "A5", label: "협의·소통", desc: "회의, 현업·고객 문의 대응, 리뷰 의견 협의" },
-  { cd: "A6", label: "환경·배포·운영 조치", desc: "환경 구성, 배포, 데이터 조치, 권한·설정 변경" },
+  { cd: "A6", label: "환경·배포 조치", desc: "환경 구성, 배포, 데이터 조치, 권한·설정 변경" },
   { cd: "A7", label: "AI 사용 미수집", desc: "AI 도구를 썼지만 시간이 잡히지 않은 경우 (오프라인·미설치 PC 등)" },
   { cd: "A8", label: "기타", desc: "위 유형에 없는 업무 — 메모 필수" },
 ];
@@ -38,6 +38,8 @@ export interface DayConf {
   workDt: string;
   state: ConfState;
   confirmedAt: string | null;
+  /** 처음 확정한 시각 — 다음 날 확정률은 재확정과 무관하게 이것으로 판정한다 */
+  firstConfirmedAt?: string | null;
   revCount: number;
   /** 확정 당시 단계별 투입(h). 이후 수집값이 늦게 들어와 달라지면 다시 확정해야 한다. */
   snap: Record<string, number>;
@@ -63,15 +65,34 @@ export interface AiSession {
   /** 브랜치·대화에서 찾은 코드 후보 (예: REQ-0047, REQ-0047-DV). 대화 원문은 저장하지 않는다. */
   hints: string[];
   resolution: SessionResolution | null;
+  /** 모델 → 토큰 사용량. 수집되지 않은 세션은 비어 있고 AI 비용은 빈칸이 된다 */
+  tokens?: Record<string, TokenUse>;
+  /** 텔레메트리 마지막 이벤트 시각(ms) — 다음 묶음과 활동 시간을 이어 계산하려고 */
+  lastMs?: number;
+}
+
+/** Codex 토큰 사용량. input 은 cached 를 포함한다(OpenAI usage 규격) */
+export interface TokenUse {
+  input: number;
+  cached: number;
+  output: number;
+}
+
+/** 모델별 토큰 단가 (원 / 100만 토큰) */
+export interface TokenPrice {
+  input: number;
+  cached: number;
+  output: number;
 }
 
 export interface Settings {
   mdHours: number;
-  /** 필요 개발자 등급 → M/D 단가(원) */
+  /** 필요 개발자 등급 → M/D 단가(원) — 계산에 쓰는 값 */
   gradePrice: Record<string, number>;
-  /** AI 도구 → 시간당 비용(원). 없는 도구는 defaultAiRate */
-  aiRate: Record<string, number>;
-  defaultAiRate: number;
+  /** 등급 → M/M 단가(원) — 기준정보 표에 함께 적는 참고값 */
+  gradePriceMm: Record<string, number>;
+  /** 모델 → 토큰 단가. 없는 모델의 AI 비용은 빈칸 */
+  tokenPrice: Record<string, TokenPrice>;
   /** 확정 대상 기간 시작일 */
   measureStart: string;
   workTypes: Record<StageCd, string[]>;

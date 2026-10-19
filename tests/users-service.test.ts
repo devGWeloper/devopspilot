@@ -53,3 +53,15 @@ describe("users", () => {
     expect(r.ok && r.value.password.length).toBeGreaterThanOrEqual(10);
   });
 });
+
+describe("AI 도구 계정", () => {
+  it("본부·AI 도구 계정을 저장하고, 같은 AI 도구 계정은 두 사람에게 못 준다", async () => {
+    const store = createJsonStore(mkdtempSync(path.join(tmpdir(), "poc-acct-")));
+    await ensureSeed(store, { samples: false });
+    const base = { orgCd: "SKAX" as const, deptNm: "MES팀", role: "DEVELOPER" as const, password: "init1234!" };
+    const r = await createUser(store, admin, { ...base, userId: "s1001", userNm: "가", hqNm: "제조본부", aiAcct: "ga@corp.com" });
+    expect(r).toMatchObject({ ok: true, value: { hqNm: "제조본부", aiAcct: "ga@corp.com" } });
+    expect(await createUser(store, admin, { ...base, userId: "s1002", userNm: "나", aiAcct: "GA@corp.com" })).toMatchObject({ ok: false, code: "DUP_ACCT" });
+    expect((await updateUser(store, admin, "s1001", { aiAcct: "ga2@corp.com" })).ok).toBe(true);
+  });
+});

@@ -7,13 +7,14 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState, KpiTile, Panel } from "@/components/ui/Panel";
 import { Segmented, Tabs } from "@/components/ui/Tabs";
 import { f1, man, pct } from "@/lib/format";
-import type { Agg } from "@/lib/measure/metrics";
+import type { Agg, Ratio } from "@/lib/measure/metrics";
 import { ACT_TYPES } from "@/lib/measure/types";
 import { STAGE_LABEL } from "@/lib/types";
 import type { DashFilter, DashVM } from "@/lib/views";
 import { Button } from "@/components/ui/Button";
 import { STATUS_LABEL } from "../common/bits";
 import { ByDimPanel } from "./ByDimPanel";
+import { StageMatrix } from "./StageMatrix";
 import d from "./dashboard.module.css";
 
 type View = "stage" | "project" | "req";
@@ -33,13 +34,17 @@ function AggTable({ rows, total }: { rows: Row[]; total: Agg }) {
       <td className={d.r}>{f1(a.inT)}</td>
       <td className={d.r}>{f1(a.out)}</td>
       <td className={d.r}>{f1(a.md)}</td>
+      <td className={d.r}>{f1(a.saveMd)}</td>
       <td className={d.r}>
         <b>{pct(a.save, 1)}</b>
       </td>
       <td className={d.r}>{pct(a.use)}</td>
       <td className={d.r}>{man(a.baseCost)}</td>
       <td className={d.r}>{man(a.labor)}</td>
-      <td className={d.r}>{man(a.aiCost)}</td>
+      <td className={d.r}>
+        {man(a.aiCost)}
+        {a.aiNa > 0 && <span className={d.sub}> 빈칸 {a.aiNa}</span>}
+      </td>
       <td className={d.r}>
         <b>{pct(a.net, 1)}</b>
       </td>
@@ -55,6 +60,7 @@ function AggTable({ rows, total }: { rows: Row[]; total: Agg }) {
             <th className={d.r}>AI 사용 h</th>
             <th className={d.r}>AI 없이 h</th>
             <th className={d.r}>투입 M/D</th>
+            <th className={d.r}>절감 M/D</th>
             <th className={d.r}>공수 절감률</th>
             <th className={d.r}>AI 활용률</th>
             <th className={d.r}>기준 인건비</th>
@@ -92,12 +98,17 @@ function AggTable({ rows, total }: { rows: Row[]; total: Agg }) {
   );
 }
 
+const ratioSub = (r: Ratio) => (r.den ? `확정 ${r.num} / 대상 ${r.den} (사번·일자)` : "마감이 지난 기록 없음");
+
 export function ResultDashboard({
   vm,
   scopeNote,
+  canCompare,
 }: {
   vm: DashVM;
   scopeNote: string;
+  /** 요구사항 × 단계 기준 대비 표 — 관리자·열람자만 */
+  canCompare: boolean;
 }) {
   const router = useRouter();
   const path = usePathname();
@@ -114,7 +125,6 @@ export function ResultDashboard({
 
   const query = (f: DashFilter) => {
     const q = new URLSearchParams();
-    if (f.kind) q.set("kind", f.kind);
     if (f.prjId) q.set("prj", f.prjId);
     if (f.includeIng) q.set("ing", "1");
     return q.size ? `?${q}` : "";
@@ -122,9 +132,7 @@ export function ResultDashboard({
 
   function go(patch: Partial<DashFilter>) {
     const n = { ...vm.filter, ...patch };
-    if (patch.kind !== undefined) n.prjId = "";
     const q = new URLSearchParams();
-    if (n.kind) q.set("kind", n.kind);
     if (n.prjId) q.set("prj", n.prjId);
     if (n.includeIng) q.set("ing", "1");
     start(() =>
@@ -162,7 +170,7 @@ export function ResultDashboard({
                   {p.prjNm}
                 </b>
               ),
-              sub: `${p.kind} · 측정 완료 ${p.doneN}/${p.reqN} · 눌러서 요구사항 보기`,
+              sub: `측정 완료 ${p.doneN}/${p.reqN} · 눌러서 요구사항 보기`,
               a: p.agg,
               onClick: () => toggle(p.prjId),
             },
@@ -170,18 +178,18 @@ export function ResultDashboard({
               ? vm.reqs
                   .filter((r) => r.prjId === p.prjId)
                   .map((r) => ({
-                    key: r.reqId,
-                    label: r.name,
-                    sub: `${r.reqId} · ${r.grade} · ${STATUS_LABEL[r.status]}`,
+                    key: r.rk,
+                    label: r.rk,
+                    sub: `${r.name && r.name !== r.reqId ? `${r.name} · ` : ""}${STATUS_LABEL[r.status]}`,
                     a: r.agg,
                     indent: true,
                   }))
               : []),
           ])
         : vm.reqs.map((r) => ({
-            key: r.reqId,
-            label: <b>{r.name}</b>,
-            sub: `${r.reqId} · ${r.prjNm} · ${r.grade} · ${STATUS_LABEL[r.status]}`,
+            key: r.rk,
+            label: <b>{r.rk}</b>,
+            sub: `${r.name && r.name !== r.reqId ? `${r.name} · ` : ""}${r.prjNm} · ${STATUS_LABEL[r.status]}`,
             a: r.agg,
           }));
 
@@ -194,7 +202,7 @@ export function ResultDashboard({
       <PageHeader
         eyebrow="Phase 2 결과"
         title="측정 결과"
-        description={`${scopeNote} · 개발자가 확정한 공수만 계산합니다. 기준은 선정 양식의 기준 공수(M/D)입니다.`}
+        description={`${scopeNote} · 개발자가 확정한 공수만 계산합니다. 기준은 요구사항·단계별 기준 공수(M/D), 산식은 기준 데이터 > 05 집계 로직입니다.`}
         actions={
           <Button icon="file" onClick={() => router.push(`/dashboard/basis${query(vm.filter)}`)}>
             산출 근거 보기
@@ -202,18 +210,6 @@ export function ResultDashboard({
         }
       >
         <div className={d.filters}>
-          <Segmented
-            ariaLabel="구분"
-            value={vm.filter.kind || "ALL"}
-            onChange={(k) =>
-              go({ kind: k === "ALL" ? "" : (k as "개발" | "운영") })
-            }
-            options={[
-              { key: "ALL", label: "전체" },
-              { key: "개발", label: "개발 과제" },
-              { key: "운영", label: "운영 과제" },
-            ]}
-          />
           <Select
             value={vm.filter.prjId}
             onChange={(e) => go({ prjId: e.target.value })}
@@ -223,7 +219,7 @@ export function ResultDashboard({
             <option value="">과제 전체</option>
             {vm.projectOptions.map((p) => (
               <option key={p.prjId} value={p.prjId}>
-                {p.prjNm}
+                {p.prjId} {p.prjNm}
               </option>
             ))}
           </Select>
@@ -244,27 +240,52 @@ export function ResultDashboard({
         </Panel>
       ) : (
         <>
+          <div className={d.kpiHead}>주요 · 집계 대상 요구사항 {A.reqN}건 · 단계 {A.unitN}개 · 확정 공수 {f1(A.tot)}h</div>
           <div className={d.kpi}>
             <KpiTile
               label="투입 공수 절감률"
               value={pct(A.save, 1)}
-              sub={`기준 ${f1(A.baseMd)} → 투입 ${f1(A.md)} M/D`}
+              sub={`기준 ${f1(A.baseMd)} → 실제 ${f1(A.md)} M/D`}
             />
             <KpiTile
-              label="순절감률 (비용)"
+              label="절감 공수"
+              value={f1(A.saveMd)}
+              unit="M/D"
+              sub={`= ${f1(A.saveMd * vm.settings.mdHours * 60)}분 ÷ ${vm.settings.mdHours * 60}`}
+            />
+            <KpiTile
+              label="비용 순절감률"
               value={pct(A.net, 1)}
               sub={`기준 ${man(A.baseCost)} → 인건비 ${man(A.labor)} + AI ${man(A.aiCost)} 만원`}
             />
             <KpiTile
+              label="비용 순절감액"
+              value={man(A.netAmt)}
+              unit="만원"
+              sub={A.aiNa > 0 ? `AI 비용 빈칸 ${A.aiNa}건 (토큰 단가 미입력) — 0 으로 더함` : "기준 인건비 − 실제 인건비 − AI 비용"}
+            />
+          </div>
+          <div className={d.kpiHead}>보조 · 활용 / 관리</div>
+          <div className={d.kpi}>
+            <KpiTile
               label="AI 활용률"
               value={pct(A.use)}
-              sub={`AI 사용 ${f1(A.inT)}h / 전체 ${f1(A.tot)}h`}
+              sub={`AI 내 ${f1(A.inT)}h / 실제 ${f1(A.tot)}h`}
             />
             <KpiTile
-              label="집계 대상"
-              value={A.reqN}
-              unit="건"
-              sub={`단계 ${A.unitN}개 · 확정 공수 ${f1(A.tot)}h`}
+              label="AI 밖 비중"
+              value={pct(A.outShare)}
+              sub={`AI 밖 ${f1(A.out)}h / 실제 ${f1(A.tot)}h`}
+            />
+            <KpiTile
+              label="태그 입력률"
+              value={pct(vm.tag.rate)}
+              sub={`태그로 배정 ${f1(vm.tag.num / 60)}h / 수집 ${f1(vm.tag.den / 60)}h`}
+            />
+            <KpiTile
+              label="다음 날 확정률"
+              value={pct(vm.nextDay.rate)}
+              sub={ratioSub(vm.nextDay)}
             />
           </div>
 
@@ -286,6 +307,8 @@ export function ResultDashboard({
             </div>
             <AggTable rows={rows} total={A} />
           </Panel>
+
+          {canCompare && <StageMatrix vm={vm} />}
 
           <ByDimPanel vm={vm} />
 
@@ -309,12 +332,16 @@ export function ResultDashboard({
             )}
           </Panel>
 
-          <p className="subtle" style={{ fontSize: 12, marginTop: 12 }}>
-            공수 절감률 = (기준 − 투입) ÷ 기준 · 순절감률 = (기준 인건비 − 측정
-            인건비 − AI 비용) ÷ 기준 인건비 · AI 활용률 = AI 사용 ÷ 전체 투입 ·
-            1 M/D = {vm.settings.mdHours}h · 금액 단위 만원 · 단가는 시스템 관리
-            &gt; 코드·단가
-          </p>
+          <div className={d.sub} style={{ marginTop: 12 }}>
+            {vm.metrics.map((m) => (
+              <div key={m.key}>
+                <b>{m.name}</b> = {m.formula}
+              </div>
+            ))}
+            <div style={{ marginTop: 4 }}>
+              1 M/D = {vm.settings.mdHours}h · 금액 단위 만원 · 태그 입력률·다음 날 확정률은 범위 안 담당자 기준 · 단가는 기준 데이터 &gt; 04 기준정보
+            </div>
+          </div>
         </>
       )}
     </div>

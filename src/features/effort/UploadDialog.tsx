@@ -47,13 +47,13 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
     >
       {result ? (
         <Callout tone="ok">
-          세션 {result.sessions}건을 반영했습니다. 코드로 정해지지 않은 시간은 &apos;확인 필요&apos;에 나타납니다.
+          세션 {result.sessions}건을 반영했습니다. 태그로 정해지지 않은 시간은 &apos;확인 필요&apos;에 나타납니다.
           {result.warnings.length > 0 && <div className={b.xs}>경고 {result.warnings.length}건: {result.warnings.slice(0, 3).join(" / ")}</div>}
         </Callout>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <p className="muted">
-            텔레메트리가 연결되지 않은 PC 에서 씁니다. 스크립트가 Claude Code·Codex 로컬 로그를 읽어 <b>세션별 사용 시간과 요구사항 코드</b>만 JSON 으로 만듭니다(대화 원문은 담지 않음).
+            텔레메트리가 연결되지 않은 PC 에서 씁니다. 스크립트가 Codex 로컬 로그(~/.codex/sessions)를 읽어 <b>세션별 사용 시간·토큰과 공수 태그 후보</b>만 JSON 으로 만듭니다(대화 원문은 담지 않음).
           </p>
           <ol className={b.small} style={{ margin: 0, paddingLeft: 18 }}>
             <li>

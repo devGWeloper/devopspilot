@@ -45,6 +45,9 @@ export function canSee(actor: Actor, req: Requirement): boolean {
 const PATH_RULES: { prefix: string; roles: Role[] }[] = [
   { prefix: "/admin", roles: ["ADMIN"] },
   { prefix: "/api/admin", roles: ["ADMIN"] },
+  { prefix: "/master", roles: ["ADMIN"] },
+  { prefix: "/api/master", roles: ["ADMIN"] },
+
   { prefix: "/monitor", roles: ["ADMIN"] },
   { prefix: "/api/monitor", roles: ["ADMIN"] },
 ];

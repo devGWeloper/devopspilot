@@ -10,7 +10,7 @@ import { dimValues } from "@/lib/dims";
 import { createJsonStore } from "@/lib/store/json";
 import { ensureSeed } from "@/lib/store/seed";
 import type { Store } from "@/lib/store/types";
-import { admin, dev1, mkProject, mkReq, mkStage } from "../helpers";
+import { admin, dev1, mkProject, mkReq, mkStage, mkUser, otelEvents } from "../helpers";
 
 const day = (n: number) => kstDate(Date.now() - n * 86400000);
 const today = kstDate(Date.now());
@@ -20,16 +20,16 @@ beforeEach(async () => {
   store = createJsonStore(mkdtempSync(path.join(tmpdir(), "poc-mon-")));
   await ensureSeed(store, { samples: false });
   // 텔레메트리는 등록된 사용자 것만 받는다
-  await store.users.insert({ userId: "dev01", userNm: "김개발", orgCd: "SKAX", deptNm: "", role: "DEVELOPER", useYn: true, pwdHash: "x", pwdSalt: "x", lastLoginAt: null, regAt: "", updAt: "" });
+  await store.users.insert(mkUser("dev01", "김개발"));
   await store.projects.insert(mkProject({ reqs: [mkReq({ reqId: "R-1", stages: [mkStage({ cd: "DV", ownerId: "dev01", baseMd: 2 })] })] }));
 });
 
 describe("산출 근거", () => {
   it("원장의 확정일만 더하면 집계 값과 같고, 세션의 배정 근거가 남는다", async () => {
-    await ingestOtel(store, [{ userId: "dev01", sessionId: "s", tool: "Claude Code", workDt: day(3), ms: Date.parse(day(3)), minutes: 90, hints: ["R-1-DV"], branch: "" }]);
-    await saveEffort(store, dev1, { unit: "R-1-DV", date: day(3), add: { A1: 2 } });
-    await saveEffort(store, dev1, { unit: "R-1-DV", date: day(2), add: { A1: 3 } });
-    await confirmDays(store, dev1, "R-1", [day(3)]);
+    await ingestOtel(store, otelEvents("dev01", "s", day(3), 90, ["DAE01-R-1-DV"]));
+    await saveEffort(store, dev1, { unit: "DAE01-R-1-DV", date: day(3), add: { A1: 2 } });
+    await saveEffort(store, dev1, { unit: "DAE01-R-1-DV", date: day(2), add: { A1: 3 } });
+    await confirmDays(store, dev1, "DAE01-R-1", [day(3)]);
     const ix = await loadIndex(store);
     const tr = traceUnits(ix, ix.units, true);
     const a = aggTrace(ix, tr);
@@ -37,14 +37,14 @@ describe("산출 근거", () => {
     expect(tr[0].days.filter((d) => !d.counted)).toHaveLength(1);
     const s = tr[0].days.find((d) => d.date === day(3))!.sessions[0];
     expect(s).toMatchObject({ src: "OTEL", min: 90 });
-    expect(s.how).toContain("R-1-DV");
+    expect(s.how).toContain("DAE01-R-1-DV");
   });
 });
 
 describe("이상 감지", () => {
   it("같은 시간 반복·하루 과다를 찾는다", async () => {
-    for (const n of [2, 3, 4, 5]) await saveEffort(store, dev1, { unit: "R-1-DV", date: day(n), add: { A1: 8 } });
-    await saveEffort(store, dev1, { unit: "R-1-DV", date: day(6), add: { A1: 13 } });
+    for (const n of [2, 3, 4, 5]) await saveEffort(store, dev1, { unit: "DAE01-R-1-DV", date: day(n), add: { A1: 8 } });
+    await saveEffort(store, dev1, { unit: "DAE01-R-1-DV", date: day(6), add: { A1: 13 } });
     const ix = await loadIndex(store);
     const rules = detectAnomalies(ix, new Map([["dev01", "김개발"]]), today).map((a) => a.rule);
     expect(rules).toContain("SAME_HOURS");
@@ -64,10 +64,9 @@ describe("이상 감지", () => {
 });
 
 describe("분류 축", () => {
-  it("기대효과는 PM 판단이 우선, 없으면 참고 등급 첫 글자", () => {
-    const p = mkProject();
-    expect(dimValues(p, mkReq({ extra: { "FIT-05": "중 (맥락)", "FIT-06": "상" } })).fit).toBe("상");
-    expect(dimValues(p, mkReq({ extra: { "FIT-05": "하 (명세)" } })).fit).toBe("하");
-    expect(dimValues(p, mkReq({ stages: [mkStage({ cd: "DS", baseMd: 1 }), mkStage({ cd: "DV", baseMd: 3 })] })).stage).toBe("개발");
+  it("태그 단위 속성과 과제 속성을 함께 낸다", () => {
+    const v = dimValues(mkProject({ area: "전환" }), mkStage({ cd: "TS", fit: "상", grade: "고급", spec: "중" }));
+    expect(v).toMatchObject({ fit: "상", grade: "고급", spec: "중", stage: "테스트", area: "전환" });
   });
 });
+
