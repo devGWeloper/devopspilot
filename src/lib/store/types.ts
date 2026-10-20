@@ -1,4 +1,4 @@
-import type { HistoryEntry, HistoryTarget, Project, UserRecord } from "../types";
+import type { HistoryEntry, HistoryTarget, Project, Role, UserRecord } from "../types";
 
 export type MeasKind = "EFFORT" | "CONF" | "AIUSE" | "NOTE";
 
@@ -70,9 +70,13 @@ export class DuplicateKeyError extends Error {
   }
 }
 
+// 10/15 역할 개편 전 코드가 저장소에 남아 있으면 세션 검증에서 거부돼 로그인 직후 로그인 화면으로 되돌아온다.
+// 관리자 외에는 권한이 커지지 않게 열람자로 내리고, 테스트 담당만 TS 단계 공수를 넣도록 개발자로 둔다.
+const LEGACY_ROLE: Record<string, Role> = { AX_ADMIN: "ADMIN", HX_REVIEWER: "VIEWER", PM: "VIEWER", TESTER: "DEVELOPER" };
+
 /** 계정 항목이 늘기 전에 저장된 행도 같은 모양으로 */
 export function normalizeUser(u: UserRecord): UserRecord {
-  return { ...u, hqNm: u.hqNm ?? "", aiAcct: u.aiAcct ?? "", deptNm: u.deptNm ?? "" };
+  return { ...u, role: LEGACY_ROLE[u.role] ?? u.role, hqNm: u.hqNm ?? "", aiAcct: u.aiAcct ?? "", deptNm: u.deptNm ?? "" };
 }
 
 export function filterHistory(rows: HistoryEntry[], f: HistoryFilter): HistoryEntry[] {

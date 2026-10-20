@@ -4,6 +4,7 @@ import type { HistoryEntry, OrgCd, Project, Role, UserRecord } from "../types";
 import { TABLES } from "./schema";
 import {
   DuplicateKeyError,
+  normalizeUser,
   type ConfigValue,
   type HistoryFilter,
   type MeasKind,
@@ -91,7 +92,7 @@ export async function createOracleStore(cfg: DbConfig): Promise<Store> {
 
   await ensureSchema();
 
-  const toUser = (r: Row): UserRecord => ({
+  const toUser = (r: Row): UserRecord => normalizeUser({
     userId: String(r.USER_ID),
     userNm: String(r.USER_NM),
     orgCd: String(r.ORG_CD) as OrgCd,

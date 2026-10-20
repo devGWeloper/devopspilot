@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mkdtempSync } from "fs";
+import { mkdtempSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
 import { createJsonStore } from "@/lib/store/json";
@@ -46,6 +46,24 @@ describe("users", () => {
 
   it("없는 사용자는 null", async () => {
     expect(await fresh().users.get("nobody")).toBeNull();
+  });
+
+  it("10/15 이전 역할 코드로 저장된 계정도 현재 역할로 읽힌다", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "poc-"));
+    const old = (userId: string, role: string) => ({ userId, userNm: userId, orgCd: "SKAX", role, useYn: true, pwdHash: "h", pwdSalt: "s" });
+    writeFileSync(
+      path.join(dir, "users.json"),
+      JSON.stringify([old("admin", "AX_ADMIN"), old("hx01", "HX_REVIEWER"), old("pm01", "PM"), old("qa01", "TESTER"), old("dev01", "DEVELOPER")]),
+    );
+    const s = createJsonStore(dir);
+    expect((await s.users.get("admin"))?.role).toBe("ADMIN");
+    expect(Object.fromEntries((await s.users.list()).map((u) => [u.userId, u.role]))).toEqual({
+      admin: "ADMIN",
+      hx01: "VIEWER",
+      pm01: "VIEWER",
+      qa01: "DEVELOPER",
+      dev01: "DEVELOPER",
+    });
   });
 });
 
