@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { inspectSession, signSession, verifySession, SESSION_TTL_SEC } from "@/lib/auth/session";
+import { signSession, verifySession, SESSION_TTL_SEC } from "@/lib/auth/session";
 import { checkLock, recordFailure, recordSuccess, LOCK_MAX_FAILS } from "@/lib/auth/loginLimiter";
 
 const P = { sub: "admin", name: "관리자", role: "ADMIN" as const, org: "SKAX" as const };
@@ -42,20 +42,6 @@ describe("session", () => {
     expect(await verifySession(undefined, "secret", NOW)).toBeNull();
     expect(await verifySession("abc", "secret", NOW)).toBeNull();
     expect(await verifySession("a.b.c", "secret", NOW)).toBeNull();
-  });
-
-  it("거부 사유를 구분한다", async () => {
-    const t = await signSession(P, "secret", NOW);
-    const reason = async (token: string | undefined, secret = "secret", now = NOW) =>
-      (await inspectSession(token, secret, now)).reason;
-    expect(await reason(undefined)).toBe("NO_COOKIE");
-    expect(await reason("")).toBe("NO_COOKIE");
-    expect(await reason("a.b.c")).toBe("MALFORMED");
-    expect(await reason(t, "other")).toBe("BAD_SIGNATURE");
-    expect(await reason(t, "secret", NOW + SESSION_TTL_SEC + 1)).toBe("EXPIRED");
-    expect(await reason(await signSession({ ...P, role: "ROOT" as never }, "secret", NOW))).toBe("BAD_PAYLOAD");
-    expect(await reason("%%%.***")).toBe("ERROR");
-    expect(await inspectSession(t, "secret", NOW)).toMatchObject({ session: { sub: "admin" }, reason: null });
   });
 });
 

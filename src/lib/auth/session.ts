@@ -60,42 +60,25 @@ export async function signSession(
   return `${body}.${b64url(new Uint8Array(sig))}`;
 }
 
-export type SessionReject = "NO_COOKIE" | "MALFORMED" | "BAD_SIGNATURE" | "EXPIRED" | "BAD_PAYLOAD" | "ERROR";
-
-export type SessionCheck =
-  | { session: SessionPayload; reason: null }
-  | { session: null; reason: SessionReject; error?: string };
-
-// 로그인 직후 로그인 화면으로 되돌아오면 쿠키 미전송·서명 불일치·런타임 오류가 겉으로 똑같아 보여, 사유를 구분해 둔다.
-export async function inspectSession(
-  token: string | undefined | null,
-  secret: string,
-  now = Math.floor(Date.now() / 1000),
-): Promise<SessionCheck> {
-  if (!token) return { session: null, reason: "NO_COOKIE" };
-  const parts = token.split(".");
-  if (parts.length !== 2) return { session: null, reason: "MALFORMED" };
-  const [body, sig] = parts;
-  try {
-    const ok = await crypto.subtle.verify("HMAC", await key(secret), fromB64url(sig), enc.encode(body));
-    if (!ok) return { session: null, reason: "BAD_SIGNATURE" };
-    const p = JSON.parse(new TextDecoder().decode(fromB64url(body))) as Partial<SessionPayload>;
-    if (typeof p.sub !== "string" || !p.sub) return { session: null, reason: "BAD_PAYLOAD" };
-    if (!ROLES.includes(p.role as Role)) return { session: null, reason: "BAD_PAYLOAD" };
-    if (p.org !== "SKAX" && p.org !== "SKHYNIX") return { session: null, reason: "BAD_PAYLOAD" };
-    if (typeof p.exp !== "number") return { session: null, reason: "BAD_PAYLOAD" };
-    if (p.exp < now) return { session: null, reason: "EXPIRED" };
-    const session = { sub: p.sub, name: typeof p.name === "string" ? p.name : "", role: p.role as Role, org: p.org, exp: p.exp };
-    return { session, reason: null };
-  } catch (e) {
-    return { session: null, reason: "ERROR", error: e instanceof Error ? `${e.name}: ${e.message}` : String(e) };
-  }
-}
-
 export async function verifySession(
   token: string | undefined | null,
   secret: string,
   now = Math.floor(Date.now() / 1000),
 ): Promise<SessionPayload | null> {
-  return (await inspectSession(token, secret, now)).session;
+  if (!token) return null;
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
+  const [body, sig] = parts;
+  try {
+    const ok = await crypto.subtle.verify("HMAC", await key(secret), fromB64url(sig), enc.encode(body));
+    if (!ok) return null;
+    const p = JSON.parse(new TextDecoder().decode(fromB64url(body))) as Partial<SessionPayload>;
+    if (typeof p.sub !== "string" || !p.sub) return null;
+    if (!ROLES.includes(p.role as Role)) return null;
+    if (p.org !== "SKAX" && p.org !== "SKHYNIX") return null;
+    if (typeof p.exp !== "number" || p.exp < now) return null;
+    return { sub: p.sub, name: typeof p.name === "string" ? p.name : "", role: p.role as Role, org: p.org, exp: p.exp };
+  } catch {
+    return null;
+  }
 }

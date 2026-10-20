@@ -3,7 +3,7 @@ import { fail, handle, readJson } from "@/lib/api";
 import { checkLock, recordFailure, recordSuccess } from "@/lib/auth/loginLimiter";
 import { verifyPassword } from "@/lib/auth/password";
 import { homePathFor } from "@/lib/auth/permissions";
-import { AUTH_COOKIE, SESSION_TTL_SEC, getSecret, inspectSession, sessionCookieOptions, signSession } from "@/lib/auth/session";
+import { AUTH_COOKIE, SESSION_TTL_SEC, getSecret, sessionCookieOptions, signSession, verifySession } from "@/lib/auth/session";
 import { getStore } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -31,8 +31,7 @@ export const POST = handle(async (req: Request) => {
   await store.users.update(userId, { lastLoginAt: new Date().toISOString() });
   const token = await signSession({ sub: u.userId, name: u.userNm, role: u.role, org: u.orgCd }, getSecret());
   // 미들웨어가 거부할 세션을 내주면 로그인 화면으로 조용히 되돌아갈 뿐이라, 여기서 사유를 알려 준다.
-  const check = await inspectSession(token, getSecret());
-  if (!check.session) {
+  if (!(await verifySession(token, getSecret()))) {
     return fail(409, "BAD_ACCOUNT", `계정 정보(역할 ${u.role} · 소속 ${u.orgCd})가 현재 버전과 맞지 않습니다. 관리자에게 문의해 주세요.`);
   }
   const res = NextResponse.json({
