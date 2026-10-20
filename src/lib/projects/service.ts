@@ -215,7 +215,7 @@ export async function importWorkbook(store: Store, actor: ActorFull, buf: ArrayB
     targetTyp: "PROJECT",
     targetId: "IMPORT",
     actionCd: "IMPORT",
-    summary: `기준정보 엑셀: 과제 신규 ${summary.projectsNew}·갱신 ${summary.projectsUpdated}, 태그 신규 ${summary.tagsNew}·갱신 ${summary.tagsUpdated}, 매핑 ${summary.mapped}, 계정 신규 ${summary.usersNew}·갱신 ${summary.usersUpdated}, 등급 단가 ${summary.grades}, 토큰 단가 ${summary.tokens}`,
+    summary: `기준정보 엑셀: 과제 신규 ${summary.projectsNew}·갱신 ${summary.projectsUpdated}, 요구사항·단계 신규 ${summary.tagsNew}·갱신 ${summary.tagsUpdated}, 매핑 ${summary.mapped}, 계정 신규 ${summary.usersNew}·갱신 ${summary.usersUpdated}, 등급 단가 ${summary.grades}, 토큰 단가 ${summary.tokens}`,
   });
   return okR(summary);
 }
@@ -318,7 +318,7 @@ export function validateStages(input: StageInput[], users: UserRecord[], prev?: 
   const out: Stage[] = [];
   for (const s of input) {
     if (!STAGES.includes(s.cd as Stage["cd"])) return err(400, "BAD_STAGE", `알 수 없는 단계 ${s.cd}`);
-    if (seen.has(s.cd)) return err(400, "DUP_STAGE", "같은 단계를 두 번 넣을 수 없습니다 — 공수 태그 하나에 개발자 한 명입니다.");
+    if (seen.has(s.cd)) return err(400, "DUP_STAGE", "같은 단계를 두 번 넣을 수 없습니다 — 요구사항·단계 하나에 개발자 한 명입니다.");
     seen.add(s.cd);
     const md = Number(s.baseMd);
     if (!Number.isFinite(md) || md < 0) return err(400, "BAD_MD", "기준 M/D 는 0 이상 숫자여야 합니다.");

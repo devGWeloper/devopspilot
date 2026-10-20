@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/Button";
 import { Select, TextInput } from "@/components/ui/Field";
 import { Icon } from "@/components/ui/Icon";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { EmptyState, KpiTile, Panel } from "@/components/ui/Panel";
+import { EmptyState, Panel } from "@/components/ui/Panel";
+import { Stat, StatGroup, Stats } from "@/components/ui/Stats";
 import { f1 } from "@/lib/format";
 import { FORM_FIELDS, FORM_GROUPS, missingRequired, tally, type FormField, type FormGroup } from "@/lib/projects/form";
 import type { SelReqVM, SelectionVM } from "@/lib/views";
@@ -102,15 +103,20 @@ export function SelectionDashboard({ vm }: { vm: SelectionVM }) {
       <PageHeader
         eyebrow="Phase 1 결과"
         title="과제 선정 현황"
-        description="기준정보 엑셀 '01. 과제'·'02. 요구사항-SDLC' 에 입력된 내용을 요구사항 × 단계 단위로 봅니다. 선택값으로 걸러 보고, 행을 누르면 전체 항목이 펼쳐집니다."
+        description="선정된 과제·요구사항의 성격 분포와 입력 상태입니다."
       >
-        <div className={s.kpis}>
-          <KpiTile label="선정 과제" value={vm.projects.length} unit="건" />
-          <KpiTile label="요구사항 (단계)" value={vm.reqs.length} unit="건" />
-          <KpiTile label="기준 공수" value={f1(vm.reqs.reduce((a, r) => a + r.baseMd, 0))} unit="M/D" sub="AI 미적용 기준" />
-          <KpiTile label="균형 점검" value={<span className={warnN ? s.warnTxt : ""}>{warnN}</span>} unit="건" sub={warnN ? "쏠림·공백·미입력 — 분포 참고" : "쏠림·공백 없음"} />
-          <KpiTile label="필수 미입력" value={<span className={missing ? s.miss : ""}>{missing}</span>} unit="건" sub="필수 항목이 빈 요구사항" />
-        </div>
+        {/* 규모 셋과 점검 둘을 나눠 둔다 */}
+        <Stats>
+          <StatGroup>
+            <Stat label="선정 과제" value={vm.projects.length} unit="건" />
+            <Stat label="요구사항(단계)" value={vm.reqs.length} unit="건" />
+            <Stat label="기준 공수" value={f1(vm.reqs.reduce((a, r) => a + r.baseMd, 0))} unit="M/D" />
+          </StatGroup>
+          <StatGroup>
+            <Stat label="균형 점검" value={warnN} unit="건" tone={warnN ? "warn" : undefined} />
+            <Stat label="필수 미입력" value={missing} unit="건" tone={missing ? "danger" : undefined} />
+          </StatGroup>
+        </Stats>
       </PageHeader>
 
       <DistPanel dists={dists} filters={filters} onPick={pickOne} />
@@ -132,7 +138,7 @@ export function SelectionDashboard({ vm }: { vm: SelectionVM }) {
         }
       >
         <div className={s.toolbar}>
-          <TextInput className={s.search} placeholder="과제명 · 태그 · 요구사항 · 담당 검색" value={q} onChange={(e) => setQ(e.target.value)} aria-label="검색" />
+          <TextInput className={s.search} placeholder="과제명 · 공수 태그 · 요구사항 · 담당 검색" value={q} onChange={(e) => setQ(e.target.value)} aria-label="검색" />
           {shownFilters.map((id) => {
             const a = fAxes[id];
             return (
@@ -195,22 +201,7 @@ export function SelectionDashboard({ vm }: { vm: SelectionVM }) {
                   <Fragment key={p.prjId}>
                     <tr className={s.prj}>
                       <td colSpan={colN}>
-                        <div className={s.prjHead}>
-                          <b>{p.prjNm}</b>
-                          <span className="subtle">
-                            요구사항 {rs.length}건 · {f1(rs.reduce((a, r) => a + r.baseMd, 0))} M/D
-                          </span>
-                        </div>
-                        <div className={s.prjInfo}>
-                          {PRJ_INFO.map((fd) => {
-                            const v = val(rs[0], fd.id);
-                            return (
-                              <span key={fd.id}>
-                                <i>{fd.label}</i> {v || <Missing required={fd.required} />}
-                              </span>
-                            );
-                          })}
-                        </div>
+                        <PrjHead name={p.prjNm} r={rs[0]} n={rs.length} md={rs.reduce((a, r) => a + r.baseMd, 0)} />
                       </td>
                     </tr>
                     {rs.map((r) => (
@@ -243,6 +234,47 @@ export function SelectionDashboard({ vm }: { vm: SelectionVM }) {
         </div>
       </Panel>
     </>
+  );
+}
+
+// 과제 줄은 값만 — 항목명은 툴팁으로 두고, 전체 항목은 요구사항 행을 펼쳐서 본다.
+const ORG: string[][] = [["PRJ-03", "PRJ-04"], ["PRJ-14", "PRJ-15"]];
+const TAGS = ["PRJ-06", "PRJ-07", "PRJ-08", "PRJ-10", "PRJ-11", "PRJ-12"];
+
+function PrjHead({ name, r, n, md }: { name: string; r: SelReqVM; n: number; md: number }) {
+  const label = (id: string) => FORM_FIELDS.find((x) => x.id === id)?.label ?? id;
+  const org = ORG.map((ids) => ids.map((id) => val(r, id)).filter(Boolean).join(" ")).filter(Boolean);
+  const pm = val(r, "PRJ-05");
+  const missing = PRJ_INFO.filter((fd) => fd.required && !val(r, fd.id)).map((fd) => fd.label);
+  return (
+    <div className={s.prjCard}>
+      <div className={s.prjHead}>
+        <b>{name}</b>
+        {val(r, "PRJ-02") && <span className={s.prjSys}>{val(r, "PRJ-02")}</span>}
+        <span className={s.prjNum}>
+          요구사항 <b>{n}</b>건 <b>{f1(md)}</b> M/D
+        </span>
+      </div>
+      <div className={s.prjInfo}>
+        {(org.length > 0 || pm) && (
+          <span className={s.prjOrg}>
+            {org.map((x) => (
+              <span key={x}>{x}</span>
+            ))}
+            {pm && <span>PM {pm}</span>}
+          </span>
+        )}
+        {TAGS.map((id) => {
+          const v = val(r, id);
+          return v ? (
+            <span key={id} className={s.prjTag} title={label(id)}>
+              {id === "PRJ-12" ? `PROMIS ${v}` : v}
+            </span>
+          ) : null;
+        })}
+        {missing.length > 0 && <span className={s.miss}>미입력: {missing.join(", ")}</span>}
+      </div>
+    </div>
   );
 }
 

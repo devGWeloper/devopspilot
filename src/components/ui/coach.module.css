@@ -1,0 +1,356 @@
+/* 바탕은 클릭을 통과시키고, 어두운 조각·말풍선·상단 바만 클릭을 받는다 */
+.root {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  pointer-events: none;
+  animation: fade 200ms var(--ease);
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.dim {
+  position: fixed;
+  background: rgba(15, 23, 42, 0.68);
+  pointer-events: auto;
+  transition: all 320ms var(--ease);
+}
+
+.ring {
+  position: fixed;
+  border: 2px solid #fff;
+  border-radius: 10px;
+  pointer-events: none;
+  transition: all 320ms var(--ease);
+}
+
+/* 눌러 볼 수 있는 칸은 숨 쉬듯 */
+.ringLive::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border: 2px solid #fff;
+  border-radius: inherit;
+  animation: pulse 1.5s var(--ease) infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  80%,
+  100% {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+}
+
+/* 보기만 하는 칸은 실수로 누르지 않게 막는다 */
+.block {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  cursor: default;
+}
+
+.badge,
+.done {
+  position: fixed;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  pointer-events: none;
+  transition: all 320ms var(--ease);
+}
+
+.badge {
+  width: 26px;
+  height: 26px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.done {
+  width: 20px;
+  height: 20px;
+  background: var(--ink);
+  border: 2px solid #fff;
+  color: #fff;
+  animation: pop 260ms var(--ease);
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+}
+
+/* 말풍선 — 짚은 칸에 붙어서 한 줄로 말한다 */
+.bubble {
+  position: fixed;
+  max-width: 300px;
+  padding: 14px 16px 12px;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
+  transition: left 320ms var(--ease), top 320ms var(--ease);
+  animation: rise 260ms var(--ease);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+}
+
+.measure {
+  left: -9999px;
+  top: 0;
+  visibility: hidden;
+}
+
+.bubble::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  transform: rotate(45deg);
+}
+
+.bottom::before {
+  top: -7px;
+  left: calc(var(--tail) - 7px);
+}
+
+.top::before {
+  bottom: -7px;
+  left: calc(var(--tail) - 7px);
+}
+
+.right::before {
+  left: -7px;
+  top: calc(var(--tail) - 7px);
+}
+
+.left::before {
+  right: -7px;
+  top: calc(var(--tail) - 7px);
+}
+
+.say {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-top: 10px;
+}
+
+.try {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.hand {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  animation: nudge 1s var(--ease) infinite alternate;
+}
+
+@keyframes nudge {
+  to {
+    transform: translateY(-3px);
+  }
+}
+
+.next {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 12px 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.next:hover {
+  background: var(--ink-2);
+}
+
+/* 상단 진행 바 */
+.bar {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 8px 7px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.94);
+  color: #fff;
+  font-size: 13.5px;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
+}
+
+.prog {
+  display: flex;
+  gap: 4px;
+}
+
+.seg {
+  width: 22px;
+  height: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+
+.segDone {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.segOn {
+  background: #fff;
+}
+
+.count {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgba(255, 255, 255, 0.7);
+  font: inherit;
+  font-size: 12.5px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.link:hover {
+  color: #fff;
+}
+
+.x {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+
+.x:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root,
+  .dim,
+  .ring,
+  .badge,
+  .done,
+  .bubble,
+  .hand,
+  .ringLive::after {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* 설명이 붙은 말풍선 — 한 줄 요약 아래 몇 줄 */
+.wide {
+  max-width: 380px;
+}
+
+.wide .say {
+  white-space: normal;
+}
+
+.more {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.more p {
+  margin: 0 0 6px;
+}
+
+.more ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.more li + li {
+  margin-top: 3px;
+}
+
+.more dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  margin: 6px 0 0;
+}
+
+.more dt {
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.more dd {
+  margin: 0;
+}

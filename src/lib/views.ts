@@ -1,7 +1,8 @@
 // 화면별로 서버가 내려줄 직렬화 가능한 데이터. 숫자 계산은 measure/metrics.ts 를 부르기만 한다.
 import { canSee, type Actor } from "./auth/permissions";
 import { DIMS, catsOf, dimValues, type DimKey } from "./dims";
-import { aggTrace, aggUnits, cellOf, confirmedSum, metricDefs, nextDayConfRate, pendingOf, reqsOwnedBy, sessionCost, tagRate, traceUnits, reqStatus, rowsOf, stageStatus, unitsOfReq, type Agg, type Cell, type Index, type MetricDef, type Ratio, type ReqStatus, type RowSt } from "./measure/metrics";
+import { aggTrace, aggUnits, cellOf, metricDefs, nextDayConfRate, pendingOf, reqsOwnedBy, sessionCost, tagRate, traceUnits, reqStatus, rowsOf, stageStatus, unitsOfReq, type Agg, type Cell, type Index, type MetricDef, type Ratio, type ReqStatus, type RowSt } from "./measure/metrics";
+import { unitDayKey } from "./measure/match";
 import { detectAnomalies, type Anomaly } from "./measure/monitor";
 import type { ActType, MonitorNote, TokenPrice } from "./measure/types";
 import { reqBaseMd, reqDone, reqKey, type Unit } from "./measure/units";
@@ -106,53 +107,64 @@ export interface PendingVM {
   options: { code: string; label: string; cand: boolean }[];
 }
 
-/** 단계 띠 한 칸 — 태그 없음 / 남의 단계 / 내 단계 */
-export interface StageBoxVM {
-  cd: StageCd;
-  who: "none" | "other" | "mine";
+/** 내 담당 단계 하나 — 공수 입력 표의 한 줄 */
+export interface EffortUnitVM {
   code: string;
+  stage: StageCd;
   workType: string;
-  ownerNm: string;
-  status: ReqStatus;
   done: boolean;
   md: number;
   baseMd: number;
+  inT: number;
+  out: number;
 }
 
-export type EffortCellVM = CellVM & { unit: string; done: boolean };
-
-export interface EffortRowVM {
-  date: string;
-  st: RowSt;
-  revCount: number;
-  cells: Partial<Record<StageCd, EffortCellVM>>;
-  tot: number;
+/** AI 시간이 어떤 Codex 세션에서 왔는지 — 개발자가 자동 반영을 믿을 수 있게 */
+export interface EffortSessVM {
+  src: "OTEL" | "LOG";
+  start: string;
+  end: string;
+  min: number;
+  how: string;
 }
 
-/** 공수 입력 화면의 요구사항 하나 — 일자 × 단계 */
+export type EffortCellVM = CellVM & { sess: EffortSessVM[] };
+
 export interface EffortReqVM {
   rk: string;
   reqId: string;
   name: string;
   prjId: string;
   prjNm: string;
-  sysNm: string;
-  teamNm: string;
   status: ReqStatus;
-  md: number;
-  baseMd: number;
-  inT: number;
+  /** 같은 요구사항의 다른 사람 단계 — 누구와 나눠 맡았는지 */
+  others: { stage: StageCd; ownerNm: string }[];
+  units: EffortUnitVM[];
+}
+
+/** 하루 — 그날 내 요구사항별 확정 상태와 단계별 칸 */
+export interface EffortDayVM {
+  date: string;
+  /** 요구사항(rk)별 상태 — 기록이 있는 요구사항만 */
+  st: Record<string, RowSt>;
+  /** 공수 태그 → 칸 — 값이 있는 칸만 */
+  cells: Record<string, EffortCellVM>;
+  ai: number;
   out: number;
+  tot: number;
   need: number;
-  strip: StageBoxVM[];
-  /** 입력 칸이 열리는 단계(내 담당) */
-  mine: StageCd[];
-  /** 세션 첫 줄에 넣을 내 단계 코드 — 측정 완료 단계는 뺀다 */
-  codes: string[];
-  rows: EffortRowVM[];
-  /** 확정된 날 단계별 합(h) */
-  confSum: Partial<Record<StageCd, number>>;
-  confDays: number;
+  pending: number;
+}
+
+export interface EffortStatsVM {
+  needDays: number;
+  pendN: number;
+  pendH: number;
+  /** 확정된 날의 Codex(AI 도구 내)·그 외 시간 합 */
+  confAi: number;
+  confOut: number;
+  /** 마지막으로 들어온 Codex 세션 */
+  last: { date: string; time: string; src: "OTEL" | "LOG" } | null;
 }
 
 export interface EffortVM {
@@ -162,10 +174,18 @@ export interface EffortVM {
   today: string;
   mdHours: number;
   reqs: EffortReqVM[];
+  /** 최신 날짜부터 */
+  days: EffortDayVM[];
   pending: PendingVM[];
+  stats: EffortStatsVM;
 }
 
 const cellVM = (c: Cell): CellVM => ({ ai: c.ai, mn: c.mn, inT: c.inT, out: c.out, tot: c.tot, add: c.add, memo: c.memo });
+
+/** 기록이 없어도 최근 며칠은 날짜 목록에 둔다 — 오늘 한 일을 바로 넣을 수 있게 */
+const RECENT_DAYS = 7;
+
+const minusDays = (ymd: string, n: number) => new Date(Date.parse(ymd) - n * 86400000).toISOString().slice(0, 10);
 
 export function effortView(ix: Index, users: UserRecord[], userId: string, today: string): EffortVM {
   const devs = users.filter((u) => u.role === "DEVELOPER" && u.useYn).map((u) => ({ userId: u.userId, userNm: u.userNm }));
@@ -173,59 +193,60 @@ export function effortView(ix: Index, users: UserRecord[], userId: string, today
   const byReq = new Map<Requirement, Unit[]>();
   mineUnits.forEach((u) => byReq.set(u.req, [...(byReq.get(u.req) ?? []), u]));
 
+  const days = new Map<string, EffortDayVM>();
+  const dayOf = (date: string) => {
+    let d = days.get(date);
+    if (!d) days.set(date, (d = { date, st: {}, cells: {}, ai: 0, out: 0, tot: 0, need: 0, pending: 0 }));
+    return d;
+  };
+  for (let i = 0; i < RECENT_DAYS; i++) dayOf(minusDays(today, i));
+
+  let confAi = 0;
+  let confOut = 0;
   const reqs = Array.from(byReq, ([req, us]): EffortReqVM => {
-    const prj = us[0].prj;
-    const strip = STAGES.map((cd): StageBoxVM => {
-      const s = req.stages.find((x) => x.cd === cd);
-      const u = s && unitsOfReq(ix, req).find((x) => x.stage === cd);
-      return {
-        cd,
-        who: !s ? "none" : s.ownerId === userId ? "mine" : "other",
-        code: u?.code ?? "",
-        workType: s?.workType ?? "",
-        ownerNm: s ? s.ownerNm || s.ownerId || "미지정" : "",
-        status: stageStatus(ix, req, cd),
-        done: !!s?.done,
-        md: u ? aggUnits(ix, [u], false).md : 0,
-        baseMd: s?.baseMd ?? 0,
-      };
-    });
-    const rows = rowsOf(ix, userId, req).map((r): EffortRowVM => {
-      const cells: Partial<Record<StageCd, EffortCellVM>> = {};
-      for (const u of us) cells[u.stage] = { ...cellVM(cellOf(ix, u.code, r.date)), unit: u.code, done: u.s.done };
-      return { date: r.date, st: r.st, revCount: r.revCount, cells, tot: Object.values(cells).reduce((a, c) => a + (c?.tot ?? 0), 0) };
-    });
-    const a = aggUnits(ix, us, false);
+    const rk = us[0].reqKey;
+    for (const r of rowsOf(ix, userId, req)) {
+      const d = dayOf(r.date);
+      d.st[rk] = r.st;
+      if (r.st !== "conf") d.need++;
+      for (const u of us) {
+        const c = cellOf(ix, u.code, r.date);
+        if (!c.ai && !c.out) continue;
+        const sess = (ix.alloc.srcByUnitDay.get(unitDayKey(u.code, r.date)) ?? []).map((x) => ({ src: x.src, start: x.start, end: x.end, min: x.min, how: x.how }));
+        d.cells[u.code] = { ...cellVM(c), sess };
+        d.ai += c.inT;
+        d.out += c.out;
+        d.tot += c.tot;
+        if (r.st === "conf") {
+          confAi += c.inT;
+          confOut += c.out;
+        }
+      }
+    }
     return {
-      rk: us[0].reqKey,
+      rk,
       reqId: req.reqId,
       name: req.name && req.name !== req.reqId ? req.name : "",
-      prjId: prj.prjId,
-      prjNm: prj.prjNm,
-      sysNm: prj.sysNm,
-      teamNm: prj.teamNm,
+      prjId: us[0].prj.prjId,
+      prjNm: us[0].prj.prjNm,
       status: reqStatus(ix, req),
-      md: a.md,
-      baseMd: us.reduce((x, u) => x + u.s.baseMd, 0),
-      inT: a.inT,
-      out: a.out,
-      need: rows.filter((r) => r.st !== "conf").length,
-      strip,
-      mine: us.map((u) => u.stage),
-      codes: us.filter((u) => !u.s.done).map((u) => u.code),
-      rows,
-      confSum: confirmedSum(ix, userId, req).byStage,
-      confDays: rows.filter((r) => r.st === "conf").length,
+      others: req.stages.filter((s) => s.ownerId !== userId).map((s) => ({ stage: s.cd, ownerNm: s.ownerNm || s.ownerId || "미지정" })),
+      units: STAGES.flatMap((cd) => {
+        const u = us.find((x) => x.stage === cd);
+        if (!u) return [];
+        const a = aggUnits(ix, [u], false);
+        return [{ code: u.code, stage: cd, workType: u.s.workType, done: u.s.done, md: a.md, baseMd: u.s.baseMd, inT: a.inT, out: a.out }];
+      }),
     };
   });
 
   const label = (code: string) => {
     const u = ix.unitByCode.get(code);
-    return u ? `${code} · ${reqLabel(u.req)} · ${STAGE_LABEL[u.stage]}` : code;
+    return u ? `${reqLabel(u.req)} · ${STAGE_LABEL[u.stage]}` : code;
   };
   const open = mineUnits.filter((u) => !u.s.done).map((u) => u.code);
   const pending = pendingOf(ix, userId)
-    .sort((x, y) => x.session.workDt.localeCompare(y.session.workDt))
+    .sort((x, y) => x.session.workDt.localeCompare(y.session.workDt) || x.session.start.localeCompare(y.session.start))
     .map(
       (p): PendingVM => ({
         datId: p.session.datId,
@@ -239,6 +260,11 @@ export function effortView(ix: Index, users: UserRecord[], userId: string, today
         options: [...p.cands.map((code) => ({ code, label: label(code), cand: true })), ...open.filter((c) => !p.cands.includes(c)).map((code) => ({ code, label: label(code), cand: false }))],
       }),
     );
+  pending.forEach((p) => dayOf(p.date).pending++);
+
+  const mine = ix.data.sessions.filter((x) => x.userId === userId);
+  const lastS = mine.reduce<(typeof mine)[number] | null>((a, x) => (!a || `${x.workDt} ${x.end}` > `${a.workDt} ${a.end}` ? x : a), null);
+  const list = Array.from(days.values()).sort((a, b) => b.date.localeCompare(a.date));
   return {
     userId,
     userNm: users.find((u) => u.userId === userId)?.userNm ?? userId,
@@ -246,7 +272,16 @@ export function effortView(ix: Index, users: UserRecord[], userId: string, today
     today,
     mdHours: ix.data.settings.mdHours,
     reqs,
+    days: list,
     pending,
+    stats: {
+      needDays: list.filter((d) => d.need > 0).length,
+      pendN: pending.length,
+      pendH: pending.reduce((a, p) => a + p.minutes, 0) / 60,
+      confAi,
+      confOut,
+      last: lastS ? { date: lastS.workDt, time: lastS.end || lastS.start, src: lastS.src } : null,
+    },
   };
 }
 

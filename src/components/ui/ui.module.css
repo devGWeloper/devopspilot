@@ -150,6 +150,38 @@
   padding: var(--s5) var(--s6);
   min-width: 0;
 }
+.kpiLabel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.kpiHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11.5px;
+  color: var(--subtle);
+  white-space: nowrap;
+}
+.kpiHit {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.kpiHit:hover {
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+.kpiHit:hover .kpiHint {
+  color: var(--ink);
+}
 .kpiValue {
   font-size: 34px;
   font-weight: 700;

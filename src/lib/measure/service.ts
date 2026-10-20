@@ -60,7 +60,7 @@ export async function saveEffort(store: Store, actor: ActorFull, input: EffortIn
   if (!u) return notFoundR("단계");
   if (!can(actor, "effort.edit", { ownerId: u.ownerId })) return forbiddenR("내 담당 단계만 입력할 수 있습니다.");
   if (!isDate(input.date) || input.date > todayKst()) return err(400, "BAD_DATE", "오늘 이후 날짜는 입력할 수 없습니다.");
-  if (u.s.done) return err(409, "DONE", "측정 완료된 태그입니다.");
+  if (u.s.done) return err(409, "DONE", "측정 완료된 단계입니다.");
   if (dayState(ix, actor.userId, u.req, input.date).st === "conf")
     return err(409, "CONFIRMED", "확정된 날입니다. '수정'을 눌러 확정을 푼 뒤 고쳐 주세요.");
 
@@ -116,28 +116,46 @@ export async function confirmDays(store: Store, actor: ActorFull, rk: string, da
   const f = findReq(ix.data.projects, rk);
   if (!f) return notFoundR("요구사항");
   if (!can(actor, "effort.edit", { req: f.req })) return forbiddenR("내 담당 요구사항만 확정할 수 있습니다.");
-  const rows = rowsOf(ix, actor.userId, f.req).filter((r) => r.st !== "conf" && (!dates || dates.includes(r.date)));
+  return okR({ count: await confirmRows(store, actor, ix, [{ prj: f.prj, req: f.req, dates }]) });
+}
+
+/** 하루 확정 — 그날 기록이 있는 내 요구사항을 한 번에 */
+export async function confirmDate(store: Store, actor: ActorFull, date: string): Promise<ServiceResult<{ count: number }>> {
+  if (!can(actor, "effort.edit", { ownerId: actor.userId })) return forbiddenR("본인 공수만 확정할 수 있습니다.");
+  if (!isDate(date)) return err(400, "BAD_DATE", "날짜가 올바르지 않습니다.");
+  const ix = await loadIndex(store);
+  const targets = ix.data.projects.flatMap((prj) => prj.reqs.filter((req) => can(actor, "effort.edit", { req })).map((req) => ({ prj, req, dates: [date] })));
+  return okR({ count: await confirmRows(store, actor, ix, targets) });
+}
+
+async function confirmRows(store: Store, actor: ActorFull, ix: Index, targets: { prj: Project; req: Project["reqs"][number]; dates?: string[] }[]): Promise<number> {
   const now = new Date().toISOString();
-  const out = rows.map((r) => {
-    const prev = ix.conf.get(confKey(actor.userId, rk, r.date));
-    const reconfirm = !!prev && (prev.state === "EDIT" || prev.state === "CONF");
-    const c: DayConf = {
-      userId: actor.userId,
-      prjId: f.prj.prjId,
-      reqId: f.req.reqId,
-      workDt: r.date,
-      state: "CONF",
-      confirmedAt: now,
-      firstConfirmedAt: prev?.firstConfirmedAt ?? prev?.confirmedAt ?? now,
-      revCount: (prev?.revCount ?? 0) + (reconfirm ? 1 : 0),
-      snap: daySnap(ix, actor.userId, f.req, r.date),
-    };
-    return row("CONF", confId(actor.userId, rk, r.date), { prjId: f.prj.prjId, reqId: f.req.reqId, workDt: r.date, userId: actor.userId }, c, "MANUAL", actor.userId);
-  });
-  await store.meas.upsert(out);
-  if (rows.some((r) => r.revCount > 0 || r.st === "edit"))
-    await record(store, actor, { targetTyp: "EFFORT", targetId: rk, actionCd: "RECONFIRM", summary: `${rk} ${rows.map((r) => r.date).join(", ")} 다시 확정` });
-  return okR({ count: out.length });
+  const out: MeasRow[] = [];
+  const again: string[] = [];
+  for (const { prj, req, dates } of targets) {
+    const rk = reqKey(prj.prjId, req.reqId);
+    const rows = rowsOf(ix, actor.userId, req).filter((r) => r.st !== "conf" && (!dates || dates.includes(r.date)));
+    for (const r of rows) {
+      const prev = ix.conf.get(confKey(actor.userId, rk, r.date));
+      const reconfirm = !!prev && (prev.state === "EDIT" || prev.state === "CONF");
+      const c: DayConf = {
+        userId: actor.userId,
+        prjId: prj.prjId,
+        reqId: req.reqId,
+        workDt: r.date,
+        state: "CONF",
+        confirmedAt: now,
+        firstConfirmedAt: prev?.firstConfirmedAt ?? prev?.confirmedAt ?? now,
+        revCount: (prev?.revCount ?? 0) + (reconfirm ? 1 : 0),
+        snap: daySnap(ix, actor.userId, req, r.date),
+      };
+      out.push(row("CONF", confId(actor.userId, rk, r.date), { prjId: prj.prjId, reqId: req.reqId, workDt: r.date, userId: actor.userId }, c, "MANUAL", actor.userId));
+    }
+    if (rows.some((r) => r.revCount > 0 || r.st === "edit")) again.push(`${rk} ${rows.map((r) => r.date).join(", ")}`);
+  }
+  if (out.length) await store.meas.upsert(out);
+  for (const a of again) await record(store, actor, { targetTyp: "EFFORT", targetId: a.split(" ")[0], actionCd: "RECONFIRM", summary: `${a} 다시 확정` });
+  return out.length;
 }
 
 async function setConfState(store: Store, actor: ActorFull, rk: string, date: string, state: "EDIT" | "EXTRA"): Promise<ServiceResult<null>> {
@@ -187,8 +205,8 @@ export async function resolveSession(store: Store, actor: ActorFull, datId: stri
     if (sum > Math.ceil(s.minutes)) return err(400, "OVER", `${Math.ceil(s.minutes)}분을 넘을 수 없습니다.`);
     for (const p of parts) {
       const u = ix.unitByCode.get(p.unit);
-      if (!u || u.ownerId !== actor.userId) return err(400, "NOT_MINE", `${p.unit} 은(는) 내 담당 태그가 아닙니다.`);
-      if (u.s.done) return err(400, "DONE", `${p.unit} 은(는) 측정 완료된 태그입니다.`);
+      if (!u || u.ownerId !== actor.userId) return err(400, "NOT_MINE", `${p.unit} 은(는) 내 담당 단계가 아닙니다.`);
+      if (u.s.done) return err(400, "DONE", `${p.unit} 은(는) 측정 완료된 단계입니다.`);
     }
     s.resolution = { kind: "ASSIGN", parts, by: actor.userId, at };
   }

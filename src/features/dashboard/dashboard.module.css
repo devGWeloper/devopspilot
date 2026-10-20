@@ -69,7 +69,7 @@
 
 .types {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 8px 32px;
 }
 
@@ -236,4 +236,175 @@
 /* 기준보다 많이 든 칸만 — 위험 신호 */
 .mxOver {
   color: var(--danger);
+}
+
+/* 대표 결과 — 한 문장과 기준 대비 막대 */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) 1fr;
+  gap: var(--s8);
+  align-items: center;
+}
+
+.heroMain {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--s3) var(--s4);
+  margin: calc(-1 * var(--s3)) calc(-1 * var(--s4));
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+
+.heroMain:hover {
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+
+.heroVal {
+  font-size: 52px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.heroLine {
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.heroSub {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.heroLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--subtle);
+}
+
+.heroMain:hover .heroLink {
+  color: var(--ink);
+}
+
+.heroBars > div {
+  margin-bottom: 0;
+}
+
+.heroNote {
+  margin: 10px 0 0 48px;
+  font-size: 12px;
+  color: var(--subtle);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s3);
+  margin-top: var(--s3);
+}
+
+.tiles > * {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+}
+
+/* 표 안 절감률 막대 */
+.saveCell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.mini {
+  flex: none;
+  width: 160px;
+  height: 8px;
+  background: var(--surface-2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.mini i {
+  display: block;
+  height: 100%;
+  background: var(--ink-2);
+}
+
+.mini i.neg {
+  background: var(--danger);
+}
+
+.saveCell b {
+  min-width: 52px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* AI 없이 한 일 */
+.typeRow {
+  display: grid;
+  grid-template-columns: 120px 1fr 56px 40px;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.typeRow b,
+.typeRow > span:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.typeTrack {
+  height: 8px;
+  background: var(--surface-2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.typeTrack i {
+  display: block;
+  height: 100%;
+  background: var(--subtle);
+}
+
+.quality {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 24px;
+  margin-top: var(--s4);
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.quality > span {
+  cursor: help;
+}
+
+@media (max-width: 900px) {
+  .hero {
+    grid-template-columns: 1fr;
+    gap: var(--s5);
+  }
+  .tiles {
+    grid-template-columns: 1fr;
+  }
 }

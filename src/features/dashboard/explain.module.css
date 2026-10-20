@@ -1,0 +1,282 @@
+.titleVal {
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.foot {
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--subtle);
+}
+
+/* 식 — 숫자를 그대로 넣은 계산식 */
+.eq {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 6px 8px;
+  margin: var(--s5) 0 var(--s4);
+  padding: var(--s4);
+  background: var(--surface-2);
+  border-radius: var(--r-md);
+}
+
+.term {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+
+.termStrong {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.termLabel {
+  font-size: 11px;
+  color: var(--subtle);
+}
+
+.termStrong .termLabel {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.termVal {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.termVal small {
+  margin-left: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.op {
+  padding-bottom: 8px;
+  font-size: 20px;
+  color: var(--subtle);
+}
+
+/* 막대 — 같은 눈금으로 기준과 실제 */
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: var(--s4);
+}
+
+.barRow {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.barName {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.track {
+  display: flex;
+  height: 30px;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+
+.seg {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.seg span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.base {
+  background: var(--line-strong);
+  color: var(--ink);
+}
+
+.ink {
+  background: var(--ink-2);
+  color: #fff;
+}
+
+.mid {
+  background: var(--subtle);
+  color: #fff;
+}
+
+.light {
+  background: var(--line-strong);
+  color: var(--ink);
+}
+
+.gap {
+  justify-content: flex-end;
+  background: repeating-linear-gradient(-45deg, transparent 0 5px, var(--line) 5px 6px);
+  border: 1px dashed var(--line-strong);
+  color: var(--ink);
+}
+
+.over {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--danger);
+  padding-left: 48px;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding-left: 48px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 2px;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+
+/* 각 숫자의 출처 */
+.from {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.from th,
+.from td {
+  padding: 7px 8px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.from th {
+  width: 96px;
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.fromV {
+  width: 150px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fromHow {
+  color: var(--subtle);
+}
+
+/* 하위 구성 */
+.parts {
+  margin-top: var(--s5);
+}
+
+.partsHead {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line-strong);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.part {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) 1fr 96px 64px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.partName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.partTrack {
+  height: 8px;
+  background: var(--surface-2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.partBar {
+  height: 100%;
+  background: var(--ink-2);
+}
+
+.partNeg {
+  background: var(--danger);
+}
+
+.partV,
+.partR {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.neg {
+  color: var(--danger);
+}
+
+/* 숫자를 누르면 계산이 열린다는 표시 */
+.hit {
+  padding: 0;
+  border: 0;
+  border-bottom: 1px dashed var(--line-strong);
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hit:hover {
+  border-bottom-color: var(--ink);
+}
+
+@media (max-width: 640px) {
+  .part {
+    grid-template-columns: minmax(0, 1fr) 80px 56px;
+  }
+  .partTrack {
+    display: none;
+  }
+  .fromV {
+    width: auto;
+  }
+}

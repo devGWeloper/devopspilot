@@ -26,7 +26,7 @@ export function StageMatrix({ vm }: { vm: DashVM }) {
       }
     >
       <p className={d.sub} style={{ padding: "0 20px 8px" }}>
-        칸 = 기준 M/D → 확정 실제 M/D (절감률). 집계 범위 밖(측정 중) 단계는 상태만 보이고, 위 &apos;측정 중인 요구사항도 포함&apos;을 켜면 숫자가 나옵니다. 기준보다 많이 든 칸만 표시합니다.
+        칸 = 기준 → 실제 공수(M/D), 아래 공수 절감률. 빨간 칸은 기준보다 더 든 단계입니다. 측정 중인 단계는 상태만 보입니다.
       </p>
       <div style={{ overflowX: "auto" }}>
         <table className={d.table}>

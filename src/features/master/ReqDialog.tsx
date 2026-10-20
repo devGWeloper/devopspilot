@@ -125,16 +125,16 @@ export function ReqDialog({ info, req, devs, workTypes, onClose }: { info: Proje
 
       <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <b>SDLC 단계</b>
-        <span className={b.xs}>태그 하나에 담당 한 명 · 기준 공수 합계 {f1(total)} M/D</span>
+        <span className={b.xs}>단계 하나에 담당 한 명 · 기준 공수 합계 {f1(total)} M/D</span>
       </div>
       <div className={b.tw} style={{ marginTop: 6 }}>
         <table className={b.tbl}>
           <thead>
             <tr>
-              <th>단계 · 태그</th>
+              <th>단계 · 공수 태그</th>
               <th>업무 유형</th>
               <th>담당</th>
-              <th className="r">기준 M/D</th>
+              <th className="r">기준 공수(M/D)</th>
               {PICKS.map(([k, label]) => (
                 <th key={k}>{label}</th>
               ))}
@@ -194,7 +194,7 @@ export function ReqDialog({ info, req, devs, workTypes, onClose }: { info: Proje
                   <input type="checkbox" aria-label="측정 완료" checked={!!s.done} onChange={(e) => setS(i, { done: e.target.checked })} />
                 </td>
                 <td>
-                  <Button size="sm" variant="ghost" disabled={s.started || stages.length === 1} title={s.started ? "공수가 입력된 태그는 지울 수 없습니다" : undefined} onClick={() => setStages((xs) => xs.filter((_, k) => k !== i))}>
+                  <Button size="sm" variant="ghost" disabled={s.started || stages.length === 1} title={s.started ? "공수가 입력된 단계는 지울 수 없습니다" : undefined} onClick={() => setStages((xs) => xs.filter((_, k) => k !== i))}>
                     빼기
                   </Button>
                 </td>
@@ -211,7 +211,7 @@ export function ReqDialog({ info, req, devs, workTypes, onClose }: { info: Proje
         </div>
       )}
       <p className={b.xs} style={{ marginTop: 12 }}>
-        완료 = 측정 완료. 측정 결과에 집계하고 그 태그는 더 이상 공수를 받지 않습니다. 등급은 인건비 단가 기준입니다.
+        완료 = 측정 완료. 측정 결과에 집계하고 그 단계는 더 이상 공수를 받지 않습니다. 등급은 인건비 단가 기준입니다.
       </p>
     </Modal>
   );

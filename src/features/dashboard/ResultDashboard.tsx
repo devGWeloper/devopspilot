@@ -2,18 +2,21 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
+import { Button } from "@/components/ui/Button";
 import { Checkbox, Select } from "@/components/ui/Field";
+import { Icon } from "@/components/ui/Icon";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState, KpiTile, Panel } from "@/components/ui/Panel";
-import { Segmented, Tabs } from "@/components/ui/Tabs";
+import { Tabs } from "@/components/ui/Tabs";
 import { f1, man, pct } from "@/lib/format";
-import type { Agg, Ratio } from "@/lib/measure/metrics";
+import type { Agg } from "@/lib/measure/metrics";
 import { ACT_TYPES } from "@/lib/measure/types";
-import { STAGE_LABEL } from "@/lib/types";
+import { STAGE_LABEL, type StageCd } from "@/lib/types";
 import type { DashFilter, DashVM } from "@/lib/views";
-import { Button } from "@/components/ui/Button";
 import { STATUS_LABEL } from "../common/bits";
 import { ByDimPanel } from "./ByDimPanel";
+import { Bars, ExplainModal, type ExplainKey, type ExplainTarget } from "./Explain";
+import x from "./explain.module.css";
 import { StageMatrix } from "./StageMatrix";
 import d from "./dashboard.module.css";
 
@@ -25,29 +28,48 @@ type Row = {
   a: Agg;
   indent?: boolean;
   onClick?: () => void;
+  /** 계산 보기 팝업에 넘길 범위·하위 구성 */
+  ex: Omit<ExplainTarget, "key" | "a">;
 };
 
-function AggTable({ rows, total }: { rows: Row[]; total: Agg }) {
-  const cells = (a: Agg) => (
+/** 절감률 막대 — 0~100% 눈금, 기준보다 더 들면 빨간 점 하나 */
+function SaveBar({ v }: { v: number | null }) {
+  const neg = v !== null && v < 0;
+  return (
+    <span className={d.mini}>
+      <i className={neg ? d.neg : undefined} style={{ width: neg ? 4 : `${Math.min(1, v ?? 0) * 100}%` }} />
+    </span>
+  );
+}
+
+function AggTable({ rows, total, onExplain }: { rows: Row[]; total: Row; onExplain: (k: ExplainKey, r: Row) => void }) {
+  // 과제 줄은 눌러서 펼치므로 퍼센트 클릭이 펼치기로 번지지 않게 막는다.
+  const hit = (k: ExplainKey, r: Row, v: string) => (
+    <button
+      type="button"
+      className={x.hit}
+      title="계산 보기"
+      onClick={(e) => {
+        e.stopPropagation();
+        onExplain(k, r);
+      }}
+    >
+      {v}
+    </button>
+  );
+  const cells = (r: Row, a = r.a) => (
     <>
-      <td className={d.r}>{f1(a.baseMd)}</td>
-      <td className={d.r}>{f1(a.inT)}</td>
-      <td className={d.r}>{f1(a.out)}</td>
-      <td className={d.r}>{f1(a.md)}</td>
-      <td className={d.r}>{f1(a.saveMd)}</td>
       <td className={d.r}>
-        <b>{pct(a.save, 1)}</b>
+        {f1(a.baseMd)} <span className="subtle">→</span> <b>{f1(a.md)}</b>
       </td>
-      <td className={d.r}>{pct(a.use)}</td>
-      <td className={d.r}>{man(a.baseCost)}</td>
-      <td className={d.r}>{man(a.labor)}</td>
-      <td className={d.r}>
-        {man(a.aiCost)}
-        {a.aiNa > 0 && <span className={d.sub}> 빈칸 {a.aiNa}</span>}
+      <td>
+        <div className={d.saveCell}>
+          <SaveBar v={a.save} />
+          <b className={a.save !== null && a.save < 0 ? d.low : undefined}>{hit("save", r, pct(a.save, 1))}</b>
+        </div>
       </td>
-      <td className={d.r}>
-        <b>{pct(a.net, 1)}</b>
-      </td>
+      <td className={d.r}>{hit("net", r, pct(a.net, 1))}</td>
+      <td className={d.r}>{hit("use", r, pct(a.use))}</td>
     </>
   );
   return (
@@ -56,34 +78,20 @@ function AggTable({ rows, total }: { rows: Row[]; total: Agg }) {
         <thead>
           <tr>
             <th />
-            <th className={d.r}>기준 M/D</th>
-            <th className={d.r}>AI 사용 h</th>
-            <th className={d.r}>AI 없이 h</th>
-            <th className={d.r}>투입 M/D</th>
-            <th className={d.r}>절감 M/D</th>
-            <th className={d.r}>공수 절감률</th>
+            <th className={d.r}>기준 → 실제 공수 (M/D)</th>
+            <th className={d.r} style={{ width: "30%" }}>공수 절감률</th>
+            <th className={d.r}>비용 순절감률</th>
             <th className={d.r}>AI 활용률</th>
-            <th className={d.r}>기준 인건비</th>
-            <th className={d.r}>측정 인건비</th>
-            <th className={d.r}>AI 비용</th>
-            <th className={d.r}>순절감률</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr
-              key={r.key}
-              className={[
-                r.indent ? d.indent : "",
-                r.onClick ? d.click : "",
-              ].join(" ")}
-              onClick={r.onClick}
-            >
+            <tr key={r.key} className={[r.indent ? d.indent : "", r.onClick ? d.click : ""].join(" ")} onClick={r.onClick}>
               <td>
                 {r.label}
                 {r.sub && <div className={d.sub}>{r.sub}</div>}
               </td>
-              {cells(r.a)}
+              {cells(r)}
             </tr>
           ))}
         </tbody>
@@ -97,8 +105,6 @@ function AggTable({ rows, total }: { rows: Row[]; total: Agg }) {
     </div>
   );
 }
-
-const ratioSub = (r: Ratio) => (r.den ? `확정 ${r.num} / 대상 ${r.den} (사번·일자)` : "마감이 지난 기록 없음");
 
 export function ResultDashboard({
   vm,
@@ -115,13 +121,10 @@ export function ResultDashboard({
   const [pending, start] = useTransition();
   const [view, setView] = useState<View>("project");
   const [open, setOpen] = useState<Set<string>>(new Set());
-  const toggle = (id: string) =>
-    setOpen((x) =>
-      x.has(id)
-        ? new Set(Array.from(x).filter((y) => y !== id))
-        : new Set([...Array.from(x), id]),
-    );
+  const [ex, setEx] = useState<ExplainTarget | null>(null);
+  const toggle = (id: string) => setOpen((s) => (s.has(id) ? new Set(Array.from(s).filter((y) => y !== id)) : new Set([...Array.from(s), id])));
   const A = vm.total;
+  const H = vm.settings.mdHours;
 
   const query = (f: DashFilter) => {
     const q = new URLSearchParams();
@@ -129,16 +132,26 @@ export function ResultDashboard({
     if (f.includeIng) q.set("ing", "1");
     return q.size ? `?${q}` : "";
   };
+  const go = (patch: Partial<DashFilter>) => start(() => router.push(`${path}${query({ ...vm.filter, ...patch })}`, { scroll: false }));
 
-  function go(patch: Partial<DashFilter>) {
-    const n = { ...vm.filter, ...patch };
-    const q = new URLSearchParams();
-    if (n.prjId) q.set("prj", n.prjId);
-    if (n.includeIng) q.set("ing", "1");
-    start(() =>
-      router.push(`${path}${q.size ? `?${q}` : ""}`, { scroll: false }),
-    );
-  }
+  type ReqRow = DashVM["reqs"][number];
+  const reqName = (r: ReqRow) => (r.name && r.name !== r.reqId ? `${r.rk} ${r.name}` : r.rk);
+  const reqEx = (r: ReqRow): Row["ex"] => ({
+    scope: reqName(r),
+    prjId: r.prjId,
+    partsTitle: "SDLC 단계",
+    parts: Object.entries(vm.matrix.find((m) => m.rk === r.rk)?.cells ?? {}).flatMap(([cd, c]) => (c?.agg ? [{ key: cd, label: STAGE_LABEL[cd as StageCd], a: c.agg }] : [])),
+  });
+  const totalRow: Row = {
+    key: "total",
+    label: "합계",
+    a: A,
+    ex:
+      vm.projects.length > 1
+        ? { scope: "전체", partsTitle: "과제", parts: vm.projects.map((p) => ({ key: p.prjId, label: p.prjNm, a: p.agg })) }
+        : { scope: vm.projects[0]?.prjNm ?? "전체", prjId: vm.projects[0]?.prjId, partsTitle: "요구사항", parts: vm.reqs.map((r) => ({ key: r.rk, label: reqName(r), a: r.agg })) },
+  };
+  const explain = (key: ExplainKey, r: Row = totalRow) => setEx({ key, a: r.a, ...r.ex });
 
   const rows: Row[] =
     view === "stage"
@@ -148,6 +161,7 @@ export function ResultDashboard({
             label: <b>{STAGE_LABEL[s.cd]}</b>,
             sub: `${s.agg.unitN}건`,
             a: s.agg,
+            ex: { scope: `${STAGE_LABEL[s.cd]} 단계`, partsTitle: "업무 유형", parts: s.workTypes.map((w) => ({ key: w.workType, label: w.workType, a: w.agg })) },
           },
           ...(s.workTypes.length > 1
             ? s.workTypes.map((w) => ({
@@ -155,6 +169,7 @@ export function ResultDashboard({
                 label: w.workType,
                 a: w.agg,
                 indent: true,
+                ex: { scope: `${STAGE_LABEL[s.cd]} · ${w.workType}` },
               }))
             : []),
         ])
@@ -164,130 +179,118 @@ export function ResultDashboard({
               key: p.prjId,
               label: (
                 <b>
-                  <span className={d.caret}>
-                    {open.has(p.prjId) ? "▾" : "▸"}
-                  </span>
+                  <span className={d.caret}>{open.has(p.prjId) ? "▾" : "▸"}</span>
                   {p.prjNm}
                 </b>
               ),
-              sub: `측정 완료 ${p.doneN}/${p.reqN} · 눌러서 요구사항 보기`,
+              sub: `요구사항 측정 완료 ${p.doneN}/${p.reqN}`,
               a: p.agg,
               onClick: () => toggle(p.prjId),
+              ex: { scope: p.prjNm, prjId: p.prjId, partsTitle: "요구사항", parts: vm.reqs.filter((r) => r.prjId === p.prjId).map((r) => ({ key: r.rk, label: reqName(r), a: r.agg })) },
             },
             ...(open.has(p.prjId)
               ? vm.reqs
                   .filter((r) => r.prjId === p.prjId)
                   .map((r) => ({
                     key: r.rk,
-                    label: r.rk,
-                    sub: `${r.name && r.name !== r.reqId ? `${r.name} · ` : ""}${STATUS_LABEL[r.status]}`,
+                    label: r.name && r.name !== r.reqId ? r.name : r.rk,
+                    sub: `${r.rk} · ${STATUS_LABEL[r.status]}`,
                     a: r.agg,
                     indent: true,
+                    ex: reqEx(r),
                   }))
               : []),
           ])
         : vm.reqs.map((r) => ({
             key: r.rk,
-            label: <b>{r.rk}</b>,
-            sub: `${r.name && r.name !== r.reqId ? `${r.name} · ` : ""}${r.prjNm} · ${STATUS_LABEL[r.status]}`,
+            label: <b>{r.name && r.name !== r.reqId ? r.name : r.rk}</b>,
+            sub: `${r.rk} · ${r.prjNm} · ${STATUS_LABEL[r.status]}`,
             a: r.agg,
+            ex: reqEx(r),
           }));
 
-  const types = ACT_TYPES.map((t) => ({ t, h: A.byType[t.cd] ?? 0 })).filter(
-    (x) => x.h > 0,
-  );
+  const types = ACT_TYPES.map((t) => ({ t, h: A.byType[t.cd] ?? 0 }))
+    .filter((t) => t.h > 0)
+    .sort((p, q) => q.h - p.h);
+  const typeMax = Math.max(...types.map((t) => t.h), 1e-9);
+  const over = A.save !== null && A.save < 0;
 
   return (
     <div style={{ opacity: pending ? 0.6 : 1, transition: "opacity 120ms" }}>
       <PageHeader
-        eyebrow="Phase 2 결과"
         title="측정 결과"
-        description={`${scopeNote} · 개발자가 확정한 공수만 계산합니다. 기준은 요구사항·단계별 기준 공수(M/D), 산식은 기준 데이터 > 05 집계 로직입니다.`}
+        description={`${scopeNote} · 개발자가 확정한 공수로 계산합니다. 숫자를 누르면 계산식이 열립니다.`}
         actions={
           <Button icon="file" onClick={() => router.push(`/dashboard/basis${query(vm.filter)}`)}>
-            산출 근거 보기
+            산출 근거
           </Button>
         }
       >
         <div className={d.filters}>
-          <Select
-            value={vm.filter.prjId}
-            onChange={(e) => go({ prjId: e.target.value })}
-            aria-label="과제"
-            style={{ maxWidth: 260 }}
-          >
+          <Select value={vm.filter.prjId} onChange={(e) => go({ prjId: e.target.value })} aria-label="과제" style={{ maxWidth: 260 }}>
             <option value="">과제 전체</option>
             {vm.projectOptions.map((p) => (
               <option key={p.prjId} value={p.prjId}>
-                {p.prjId} {p.prjNm}
+                {p.prjNm}
               </option>
             ))}
           </Select>
-          <Checkbox
-            label="측정 중인 요구사항도 포함"
-            checked={vm.filter.includeIng}
-            onChange={(e) => go({ includeIng: e.target.checked })}
-          />
+          <Checkbox label="측정 중인 요구사항도 포함" checked={vm.filter.includeIng} onChange={(e) => go({ includeIng: e.target.checked })} />
         </div>
       </PageHeader>
 
       {A.reqN === 0 ? (
         <Panel>
-          <EmptyState title="아직 집계할 요구사항이 없습니다">
-            측정 완료로 지정된 요구사항이 없습니다. &apos;측정 중인 요구사항도
-            포함&apos;을 켜면 진행 중 값을 볼 수 있습니다.
-          </EmptyState>
+          <EmptyState title="아직 집계할 요구사항이 없습니다">측정 완료로 지정된 요구사항이 없습니다. &apos;측정 중인 요구사항도 포함&apos;을 켜면 진행 중 값을 볼 수 있습니다.</EmptyState>
         </Panel>
       ) : (
         <>
-          <div className={d.kpiHead}>주요 · 집계 대상 요구사항 {A.reqN}건 · 단계 {A.unitN}개 · 확정 공수 {f1(A.tot)}h</div>
-          <div className={d.kpi}>
-            <KpiTile
-              label="투입 공수 절감률"
-              value={pct(A.save, 1)}
-              sub={`기준 ${f1(A.baseMd)} → 실제 ${f1(A.md)} M/D`}
-            />
-            <KpiTile
-              label="절감 공수"
-              value={f1(A.saveMd)}
-              unit="M/D"
-              sub={`= ${f1(A.saveMd * vm.settings.mdHours * 60)}분 ÷ ${vm.settings.mdHours * 60}`}
-            />
-            <KpiTile
-              label="비용 순절감률"
-              value={pct(A.net, 1)}
-              sub={`기준 ${man(A.baseCost)} → 인건비 ${man(A.labor)} + AI ${man(A.aiCost)} 만원`}
-            />
-            <KpiTile
-              label="비용 순절감액"
-              value={man(A.netAmt)}
-              unit="만원"
-              sub={A.aiNa > 0 ? `AI 비용 빈칸 ${A.aiNa}건 (토큰 단가 미입력) — 0 으로 더함` : "기준 인건비 − 실제 인건비 − AI 비용"}
-            />
+          <Panel>
+            <div className={d.hero}>
+              <button type="button" className={d.heroMain} onClick={() => explain("save")}>
+                <span className="eyebrow">공수 절감률</span>
+                <span className={`${d.heroVal} ${over ? d.low : ""}`}>{pct(A.save, 1)}</span>
+                <span className={d.heroLine}>
+                  기준 공수 <b>{f1(A.baseMd)} M/D</b> 걸릴 일을 실제 <b>{f1(A.md)} M/D</b> 에 끝냈습니다
+                </span>
+                <span className={d.heroSub}>
+                  {over ? `${f1(-A.saveMd)} M/D 더 들었습니다` : `${f1(A.saveMd)} M/D 절감`} · 요구사항 {A.reqN}건 · 단계 {A.unitN}개
+                </span>
+                <span className={d.heroLink}>
+                  계산식 보기 <Icon name="chevronRight" size={12} />
+                </span>
+              </button>
+              <div className={d.heroBars}>
+                <Bars
+                  base={A.baseMd}
+                  unit=" M/D"
+                  fmt={f1}
+                  gapLabel="절감"
+                  segs={[
+                    { label: "AI 사용", v: A.inT / H, tone: "ink" },
+                    { label: "AI 없이", v: A.out / H, tone: "mid" },
+                  ]}
+                />
+                <p className={d.heroNote}>1 M/D = {H}시간 · 실제 공수 = 개발자가 확정한 시간 {f1(A.tot)}h</p>
+              </div>
+            </div>
+          </Panel>
+
+          <div className={d.tiles}>
+            <KpiTile label="비용 순절감률" value={pct(A.net, 1)} onClick={() => explain("net")} sub={`${man(A.netAmt)}만원 절감 · AI 비용 ${man(A.aiCost)}만원 포함`}>
+              {A.aiNa > 0 && <span className={d.sub}>토큰 단가가 없어 AI 비용 0 으로 둔 세션 {A.aiNa}건</span>}
+            </KpiTile>
+            <KpiTile label="AI 활용률" value={pct(A.use)} onClick={() => explain("use")} sub={`일한 ${f1(A.tot)}h 중 ${f1(A.inT)}h 를 Codex 와 함께`} />
+            <KpiTile label="AI 없이 한 시간" value={f1(A.out)} unit="h" onClick={() => explain("use")} sub={types[0] ? `가장 많은 일: ${types[0].t.label} ${f1(types[0].h)}h` : "입력 없음"} />
           </div>
-          <div className={d.kpiHead}>보조 · 활용 / 관리</div>
-          <div className={d.kpi}>
-            <KpiTile
-              label="AI 활용률"
-              value={pct(A.use)}
-              sub={`AI 내 ${f1(A.inT)}h / 실제 ${f1(A.tot)}h`}
-            />
-            <KpiTile
-              label="AI 밖 비중"
-              value={pct(A.outShare)}
-              sub={`AI 밖 ${f1(A.out)}h / 실제 ${f1(A.tot)}h`}
-            />
-            <KpiTile
-              label="태그 입력률"
-              value={pct(vm.tag.rate)}
-              sub={`태그로 배정 ${f1(vm.tag.num / 60)}h / 수집 ${f1(vm.tag.den / 60)}h`}
-            />
-            <KpiTile
-              label="다음 날 확정률"
-              value={pct(vm.nextDay.rate)}
-              sub={ratioSub(vm.nextDay)}
-            />
-          </div>
+
+          <ExplainModal
+            t={ex}
+            mdHours={H}
+            onKey={(key) => setEx((t) => t && { ...t, key })}
+            onClose={() => setEx(null)}
+            onBasis={() => router.push(`/dashboard/basis${query({ ...vm.filter, prjId: ex?.prjId ?? vm.filter.prjId })}`)}
+          />
 
           <Panel flush style={{ marginTop: 20 }}>
             <div style={{ padding: "4px 20px 0" }}>
@@ -295,52 +298,46 @@ export function ResultDashboard({
                 value={view}
                 onChange={setView}
                 items={[
-                  {
-                    key: "project",
-                    label: "과제별",
-                    count: vm.projects.length,
-                  },
+                  { key: "project", label: "과제별", count: vm.projects.length },
                   { key: "stage", label: "SDLC 단계별" },
                   { key: "req", label: "요구사항별", count: vm.reqs.length },
                 ]}
               />
             </div>
-            <AggTable rows={rows} total={A} />
+            <AggTable rows={rows} total={totalRow} onExplain={explain} />
           </Panel>
 
           {canCompare && <StageMatrix vm={vm} />}
 
           <ByDimPanel vm={vm} />
 
-          <Panel title="AI 없이 한 일 — 작업 유형별" style={{ marginTop: 20 }}>
+          <Panel title="AI 없이 한 일" style={{ marginTop: 20 }}>
             {types.length === 0 ? (
               <p className="muted">입력된 시간이 없습니다.</p>
             ) : (
               <div className={d.types}>
                 {types.map(({ t, h }) => (
-                  <div key={t.cd} className={d.kv}>
+                  <div key={t.cd} className={d.typeRow}>
                     <span>{t.label}</span>
-                    <b>
-                      {f1(h)}h{" "}
-                      <span className="subtle">
-                        {pct(A.out ? h / A.out : null)}
-                      </span>
-                    </b>
+                    <span className={d.typeTrack}>
+                      <i style={{ width: `${(h / typeMax) * 100}%` }} />
+                    </span>
+                    <b>{f1(h)}h</b>
+                    <span className="subtle">{pct(h / A.out)}</span>
                   </div>
                 ))}
               </div>
             )}
           </Panel>
 
-          <div className={d.sub} style={{ marginTop: 12 }}>
-            {vm.metrics.map((m) => (
-              <div key={m.key}>
-                <b>{m.name}</b> = {m.formula}
-              </div>
-            ))}
-            <div style={{ marginTop: 4 }}>
-              1 M/D = {vm.settings.mdHours}h · 금액 단위 만원 · 태그 입력률·다음 날 확정률은 범위 안 담당자 기준 · 단가는 기준 데이터 &gt; 04 기준정보
-            </div>
+          <div className={d.quality}>
+            <b>데이터 신뢰도</b>
+            <span title="Codex 사용 시간 중 브랜치·프롬프트에 적힌 요구사항 코드로 자동 연결된 시간의 비율. 낮으면 사람이 직접 배정한 시간이 많다는 뜻입니다.">
+              AI 사용 자동 연결 <b>{pct(vm.tag.rate)}</b> <span className="subtle">({f1(vm.tag.num / 60)}h / {f1(vm.tag.den / 60)}h)</span>
+            </span>
+            <span title="입력한 날의 다음 영업일 안에 확정한 비율 (사번·일자 기준, 마감 전인 날은 제외)">
+              다음 날까지 확정 <b>{pct(vm.nextDay.rate)}</b> <span className="subtle">({vm.nextDay.num} / {vm.nextDay.den}일)</span>
+            </span>
           </div>
         </>
       )}

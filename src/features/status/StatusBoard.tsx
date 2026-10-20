@@ -1,19 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useDeferredValue, useMemo, useState } from "react";
+import { type ReactNode, useDeferredValue, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Chip, type Tone } from "@/components/ui/Chip";
 import { TextInput } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { EmptyState, KpiTile, Panel } from "@/components/ui/Panel";
+import { EmptyState, Panel } from "@/components/ui/Panel";
+import { Stat, StatGroup, Stats } from "@/components/ui/Stats";
 import { Segmented } from "@/components/ui/Tabs";
 import { f1 } from "@/lib/format";
 import type { ReqStatus } from "@/lib/measure/metrics";
 import { FIELD_BY_ID, tally } from "@/lib/projects/form";
 import { STAGE_LABEL } from "@/lib/types";
-import type { ProjectInfo, ReqVM, StatusVM } from "@/lib/views";
+import type { ProjectInfo, ReqVM, StageVM, StatusVM } from "@/lib/views";
 import { Progress, STATUS_LABEL } from "../common/bits";
 import st from "./status.module.css";
 
@@ -81,23 +82,22 @@ export function StatusBoard({
           )
         }
       >
-        <div className={st.kpis}>
-          <KpiTile label="과제" value={vm.projects.length} unit="건" />
-          <KpiTile label="요구사항" value={all.length} unit="건" />
-          <KpiTile
-            label="단계"
-            value={all.reduce((a, r) => a + r.stages.length, 0)}
-            unit="건"
-            sub="요구사항 × SDLC 단계"
-          />
-          <KpiTile
-            label="측정 완료"
-            value={count("DONE")}
-            unit="건"
-            sub="모든 단계 완료"
-          />
-          <KpiTile label="측정 중" value={count("ING")} unit="건" />
-        </div>
+        {/* 규모 셋과 진척 둘을 나눠 둔다 */}
+        <Stats>
+          <StatGroup>
+            <Stat label="과제" value={vm.projects.length} unit="건" />
+            <Stat label="요구사항" value={all.length} unit="건" />
+            <Stat
+              label="단계"
+              value={all.reduce((a, r) => a + r.stages.length, 0)}
+              unit="건"
+            />
+          </StatGroup>
+          <StatGroup>
+            <Stat label="측정 완료" value={count("DONE")} unit="건" />
+            <Stat label="측정 중" value={count("ING")} unit="건" />
+          </StatGroup>
+        </Stats>
       </PageHeader>
 
       <div className={st.filters}>
@@ -166,7 +166,8 @@ export function StatusBoard({
                 .filter(Boolean)
                 .join(" · ") || "—"}
             </div>
-            <Traits info={p.info} reqs={p.reqs} />
+            <SysTraits info={p.info} />
+            <Traits reqs={p.reqs} />
             <table className={st.table}>
               <thead>
                 <tr>
@@ -244,75 +245,148 @@ const PRJ_TRAITS: [keyof ProjectInfo, string][] = [
   ["vcs", "PRJ-10"],
   ["pms", "PRJ-11"],
 ];
-type StageKey = "difficulty" | "grade" | "fit" | "spec" | "ctx" | "gen";
-// 태그(단계)마다 값을 가지므로 과제 안에서 어떻게 섞였는지를 센다 — 과제 하나가 한 성격에 몰렸는지 보려고.
-const TAG_TRAITS: [StageKey, string][] = [
+type StageKey = "difficulty" | "fit" | "spec" | "ctx" | "gen";
+// 상·중·하 축은 표로 나란히 놓아야 과제가 한 성격에 몰렸는지 한눈에 보인다.
+const LV_TRAITS: [StageKey, string][] = [
   ["difficulty", "REQ-04"],
-  ["grade", "REQ-05"],
   ["fit", "FIT-06"],
   ["spec", "FIT-01"],
   ["ctx", "FIT-02"],
   ["gen", "FIT-03"],
 ];
 
-/** 과제 성격 — 시스템 특성(과제 시트)과 공수 태그 구성(요구사항-SDLC 시트) */
-function Traits({ info, reqs }: { info: ProjectInfo; reqs: ReqVM[] }) {
-  const tags = reqs.flatMap((r) => r.stages);
-  // 상·중·하는 0건도 보여야 치우침이 보이고, 단계·등급처럼 선택지가 많은 축은 있는 것만.
-  const mix = (opts: string[], vals: string[], zeros: boolean) => {
-    const blank = vals.filter((v) => !v).length;
-    if (blank === vals.length) return <span className={st.none}>미입력</span>;
-    const rows = tally(opts, vals).filter((x) => zeros || x.n > 0);
-    return (
-      <span className={st.mix}>
-        {rows.map((x) => (
-          <span key={x.v} className={x.n ? "" : st.none}>
-            {x.v} <b>{x.n}</b>
-          </span>
-        ))}
-        {blank > 0 && <span className={st.none}>미입력 {blank}</span>}
-      </span>
-    );
-  };
+/** 시스템 특성(과제 시트) — 값만 한 줄로, 항목명은 툴팁 */
+function SysTraits({ info }: { info: ProjectInfo }) {
+  const xs = PRJ_TRAITS.map(([k, id]) => ({
+    id,
+    label: FIELD_BY_ID[id].label,
+    v: String(info[k] ?? ""),
+  })).filter((x) => x.v);
+  if (!xs.length) return null;
   return (
-    <div className={st.traits}>
-      <div className={st.traitRow}>
-        <span className={st.traitHead}>시스템 특성</span>
-        <div className={st.traitItems}>
-          {PRJ_TRAITS.map(([k, id]) => (
-            <span key={id} className={st.trait}>
-              <i>{FIELD_BY_ID[id].label}</i>
-              {String(info[k] ?? "") || <span className={st.none}>—</span>}
-            </span>
-          ))}
-        </div>
-      </div>
-      <div className={st.traitRow}>
-        <span className={st.traitHead}>태그 구성 {tags.length}</span>
-        <div className={st.traitItems}>
-          <span className={st.trait}>
-            <i>단계</i>
-            {mix(
-              FIELD_BY_ID["REQ-03"].options ?? [],
-              tags.map((x) => STAGE_LABEL[x.cd]),
-              false,
-            )}
-          </span>
-          {TAG_TRAITS.map(([k, id]) => (
-            <span key={id} className={st.trait}>
-              <i>{FIELD_BY_ID[id].label}</i>
-              {mix(
-                FIELD_BY_ID[id].options ?? [],
-                tags.map((x) => x[k] ?? ""),
-                k !== "grade",
-              )}
-            </span>
-          ))}
-        </div>
-      </div>
+    <div className={st.sys}>
+      {xs.map((x) => (
+        <span key={x.id} className={st.sysItem} title={x.label}>
+          {x.v}
+        </span>
+      ))}
     </div>
   );
 }
+
+/** 공수 태그 성격 분포(요구사항-SDLC 시트) — 평소엔 접어 둔다 */
+function Traits({ reqs }: { reqs: ReqVM[] }) {
+  const tags = reqs.flatMap((r) => r.stages);
+  if (!tags.length) return null;
+  const line = (opts: string[], vals: string[]) =>
+    tally(opts, vals)
+      .filter((x) => x.n > 0)
+      .map((x) => `${x.v} ${x.n}`)
+      .join(" · ") || "—";
+  const lv = FIELD_BY_ID["FIT-01"].options ?? [];
+  const blankAny = LV_TRAITS.some(([k]) => tags.some((x) => !x[k]));
+  return (
+    <details className={st.traits}>
+      <summary>과제 성격 분포</summary>
+      <div className={st.traitBody}>
+        <dl className={st.traitLines}>
+          <dt>SDLC 단계</dt>
+          <dd>
+            {line(
+              FIELD_BY_ID["REQ-03"].options ?? [],
+              tags.map((x) => STAGE_LABEL[x.cd]),
+            )}
+          </dd>
+          <dt>{FIELD_BY_ID["REQ-05"].label}</dt>
+          <dd>
+            {line(
+              FIELD_BY_ID["REQ-05"].options ?? [],
+              tags.map((x) => x.grade),
+            )}
+          </dd>
+        </dl>
+        <table className={st.traitTable}>
+          <thead>
+            <tr>
+              <th />
+              {lv.map((v) => (
+                <th key={v}>{v}</th>
+              ))}
+              {blankAny && <th>미입력</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {LV_TRAITS.map(([k, id]) => {
+              const vals = tags.map((x) => x[k] ?? "");
+              const cells = [
+                ...lv.map((v) => vals.filter((x) => x === v).length),
+                ...(blankAny ? [vals.filter((x) => !x).length] : []),
+              ];
+              return (
+                <tr key={id}>
+                  <th>{FIELD_BY_ID[id].label}</th>
+                  {cells.map((n, i) => (
+                    <td key={i} className={n ? "" : st.none}>
+                      {n || "·"}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
+}
+
+type Cell = (x: StageVM) => ReactNode;
+const dash = (v: string) => v || <span className={st.none}>—</span>;
+const pick = (id: string, k: keyof StageVM): [string, Cell] => [
+  FIELD_BY_ID[id].label,
+  (x) => dash(String(x[k] ?? "")),
+];
+// 단계가 최대 4개라 단계를 열로 세워야 항목명이 잘리지 않고 단계끼리 비교된다.
+const REQ_GROUPS: { title: string; rows: [string, Cell][] }[] = [
+  {
+    title: "담당 · 공수",
+    rows: [
+      ["공수 태그", (x) => <code className={st.code}>{x.code}</code>],
+      ["업무 유형", (x) => dash(x.workType)],
+      [
+        "담당",
+        (x) => (x.ownerId ? x.ownerNm : <span className={st.warn}>미지정</span>),
+      ],
+      pick("REQ-05", "grade"),
+      pick("REQ-07", "baseSrc"),
+    ],
+  },
+  {
+    title: "과제 성격",
+    rows: [
+      pick("REQ-04", "difficulty"),
+      pick("FIT-06", "fit"),
+      pick("FIT-01", "spec"),
+      pick("FIT-02", "ctx"),
+      pick("FIT-03", "gen"),
+    ],
+  },
+  {
+    title: "진척",
+    rows: [
+      ["투입 / 기준", (x) => <Progress md={x.md} base={x.baseMd} />],
+      [
+        "상태",
+        (x) => (
+          <>
+            {STATUS_LABEL[x.status]}
+            {x.doneAt && <span className={st.sub}> {x.doneAt.slice(0, 10)}</span>}
+          </>
+        ),
+      ],
+    ],
+  },
+];
 
 function ReqView({
   info,
@@ -327,53 +401,51 @@ function ReqView({
     <Modal
       open
       wide
-      eyebrow={`${info.prjId} ${info.prjNm}`}
-      title={`${req.rk}${req.name && req.name !== req.reqId ? ` ${req.name}` : ""}`}
+      eyebrow={info.prjId}
+      title={
+        <span className={st.mTitle}>
+          <span>{req.reqId}</span>
+          {req.name && req.name !== req.reqId && (
+            <span className={st.mName}>{req.name}</span>
+          )}
+        </span>
+      }
       onClose={onClose}
       footer={<Button onClick={onClose}>닫기</Button>}
     >
-      <table className={st.table}>
+      <div className={st.mSum}>
+        <span className={st.mPrj}>{info.prjNm}</span>
+        <span className={st.mProg}>
+          <Progress md={req.md} base={req.baseMd} />
+          <Chip tone={ST_TONE[req.status]} dot>
+            {STATUS_LABEL[req.status]}
+          </Chip>
+        </span>
+      </div>
+      <table className={st.mTable}>
         <thead>
           <tr>
-            <th>공수 태그</th>
-            <th>담당</th>
-            <th>난이도 · 등급</th>
-            <th>공수 출처</th>
-            <th>기대효과 · 명세 · 맥락 · 생성</th>
-            <th>투입 / 기준</th>
-            <th>상태</th>
+            <th />
+            {req.stages.map((x) => (
+              <th key={x.cd}>{STAGE_LABEL[x.cd]}</th>
+            ))}
           </tr>
         </thead>
-        <tbody>
-          {req.stages.map((x) => (
-            <tr key={x.cd}>
-              <td>
-                <b>{x.code}</b>
-                <div className={st.sub}>
-                  {STAGE_LABEL[x.cd]}
-                  {x.workType && ` · ${x.workType}`}
-                </div>
-              </td>
-              <td>{x.ownerNm}</td>
-              <td>
-                {x.difficulty || "—"} · {x.grade || "—"}
-              </td>
-              <td>{x.baseSrc || "—"}</td>
-              <td>
-                {[x.fit, x.spec, x.ctx, x.gen].map((v) => v || "—").join(" · ")}
-              </td>
-              <td>
-                <Progress md={x.md} base={x.baseMd} />
-              </td>
-              <td>
-                {STATUS_LABEL[x.status]}
-                {x.doneAt && (
-                  <div className={st.sub}>{x.doneAt.slice(0, 10)}</div>
-                )}
-              </td>
+        {REQ_GROUPS.map((g) => (
+          <tbody key={g.title}>
+            <tr className={st.mGroup}>
+              <td colSpan={req.stages.length + 1}>{g.title}</td>
             </tr>
-          ))}
-        </tbody>
+            {g.rows.map(([label, cell]) => (
+              <tr key={label}>
+                <th>{label}</th>
+                {req.stages.map((x) => (
+                  <td key={x.cd}>{cell(x)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        ))}
       </table>
     </Modal>
   );

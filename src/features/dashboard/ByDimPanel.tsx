@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Select } from "@/components/ui/Field";
 import { Icon } from "@/components/ui/Icon";
 import { Panel } from "@/components/ui/Panel";
-import { f1, man, pct } from "@/lib/format";
+import { f1, pct } from "@/lib/format";
 import type { DimKey } from "@/lib/dims";
 import type { Agg } from "@/lib/measure/metrics";
 import type { DashVM } from "@/lib/views";
@@ -50,12 +50,12 @@ export function ByDimPanel({ vm }: { vm: DashVM }) {
   return (
     <Panel title="과제 성격별 결과" style={{ marginTop: 20 }} flush>
       <div className={d.insight}>
-        <b className={d.insightHead}>성격에 따라 절감률이 크게 갈린 축</b>
+        <b className={d.insightHead}>성격에 따라 절감률이 크게 갈린 기준 (누르면 아래 표가 바뀝니다)</b>
         {ins.length === 0 ? (
           <p className="muted">분류 사이 절감률 차이가 {Math.round(MIN_SPREAD * 100)}%p 이상인 축이 없습니다.</p>
         ) : (
           <ol className={d.insList}>
-            {ins.slice(0, 6).map((x) => (
+            {ins.slice(0, 3).map((x) => (
               <li key={x.key}>
                 <button className={d.insBtn} onClick={() => setAxis(x.key)}>
                   <span className={d.insTitle}>{x.title}</span>
@@ -75,7 +75,7 @@ export function ByDimPanel({ vm }: { vm: DashVM }) {
       </div>
 
       <div className={d.dimBar}>
-        <Select value={axis} onChange={(e) => setAxis(e.target.value as DimKey)} aria-label="분류 축" style={{ minWidth: 200 }}>
+        <Select value={axis} onChange={(e) => setAxis(e.target.value as DimKey)} aria-label="분류 축" style={{ width: 220 }}>
           {vm.byDim.map((x) => (
             <option key={x.key} value={x.key}>
               {x.title}
@@ -83,7 +83,7 @@ export function ByDimPanel({ vm }: { vm: DashVM }) {
           ))}
         </Select>
         <span className="subtle" style={{ fontSize: 12 }}>
-          막대 = 절감률 · 세로선 = 전체 {pct(T.save, 1)} · 확정된 공수만
+          세로선 = 전체 평균 {pct(T.save, 1)}
         </span>
       </div>
 
@@ -92,14 +92,10 @@ export function ByDimPanel({ vm }: { vm: DashVM }) {
           <thead>
             <tr>
               <th>{dm.title}</th>
-              <th className={d.r}>요구사항·단계</th>
-              <th className={d.r}>기준 M/D</th>
-              <th className={d.r}>투입 M/D</th>
-              <th style={{ width: "26%" }}>공수 절감률</th>
+              <th className={d.r}>단계 수</th>
+              <th className={d.r}>기준 → 실제 공수 (M/D)</th>
+              <th style={{ width: "36%" }}>공수 절감률</th>
               <th className={d.r}>전체 대비</th>
-              <th className={d.r}>AI 활용률</th>
-              <th className={d.r}>순절감률</th>
-              <th className={d.r}>AI 비용</th>
             </tr>
           </thead>
           <tbody>
@@ -110,14 +106,14 @@ export function ByDimPanel({ vm }: { vm: DashVM }) {
                   {r.reqN > 0 && r.reqN < FEW && <span className={d.few}>표본 적음</span>}
                 </td>
                 <td className={d.r}>{r.reqN || "—"}</td>
-                {r.reqN ? <Cells a={r.agg} total={T} /> : <td colSpan={7} className="subtle">표본 없음 — 이 성격은 비교할 수 없습니다</td>}
+                {r.reqN ? <Cells a={r.agg} total={T} /> : <td colSpan={3} className="subtle">표본 없음 — 이 성격은 비교할 수 없습니다</td>}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <p className={d.foot}>
-        <Icon name="info" size={13} /> 요구사항의 성격(기준정보 엑셀 값)으로 묶어 같은 산식으로 계산한 값입니다. 요구사항 수가 적은 분류는 한두 건의 결과가 그대로 드러나므로 함께 보세요.
+        <Icon name="info" size={13} /> 기준정보 엑셀의 과제 성격 값으로 묶어 같은 산식으로 계산했습니다. &apos;표본 적음&apos;은 1건뿐이라 우연일 수 있습니다.
       </p>
     </Panel>
   );
@@ -128,8 +124,9 @@ function Cells({ a, total }: { a: Agg; total: Agg }) {
   const w = (v: number | null) => `${Math.max(0, Math.min(100, (v ?? 0) * 100))}%`;
   return (
     <>
-      <td className={d.r}>{f1(a.baseMd)}</td>
-      <td className={d.r}>{f1(a.md)}</td>
+      <td className={d.r}>
+        {f1(a.baseMd)} <span className="subtle">→</span> {f1(a.md)}
+      </td>
       <td>
         <div className={d.sbar}>
           <i style={{ width: w(a.save) }} className={a.save !== null && a.save < 0 ? d.neg : undefined} />
@@ -138,9 +135,6 @@ function Cells({ a, total }: { a: Agg; total: Agg }) {
         </div>
       </td>
       <td className={`${d.r} ${diff !== null && diff < -0.1 ? d.low : ""}`}>{diff === null ? "—" : `${diff >= 0 ? "+" : ""}${Math.round(diff * 1000) / 10}%p`}</td>
-      <td className={d.r}>{pct(a.use)}</td>
-      <td className={d.r}>{pct(a.net, 1)}</td>
-      <td className={d.r}>{man(a.aiCost)}</td>
     </>
   );
 }

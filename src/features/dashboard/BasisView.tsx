@@ -12,7 +12,7 @@ import type { BasisDayVM, BasisUnitVM, BasisVM } from "@/lib/views";
 import d from "./dashboard.module.css";
 import b from "./basis.module.css";
 
-const ST: Record<string, string> = { conf: "확정", edit: "재확정 필요", need: "미확정" };
+const ST: Record<string, string> = { conf: "확정", edit: "다시 확정 필요", need: "미확정" };
 const SRC: Record<string, string> = { OTEL: "텔레메트리", LOG: "로그 업로드" };
 const h2 = (v: number) => (Math.round(v * 100) / 100).toString();
 
@@ -27,11 +27,11 @@ export function BasisView({ vm, scope }: { vm: BasisVM; scope: string }) {
       <PageHeader
         eyebrow="측정 결과"
         title="산출 근거"
-        description={`${scope} — 측정 결과 화면의 숫자가 어떤 입력값과 설정값으로 계산됐는지 보여 줍니다. 아래 원장을 모두 더하면 위 숫자가 됩니다.`}
+        description={`${scope} — 측정 결과 화면의 숫자가 어떤 입력값과 설정값으로 계산됐는지 보여 줍니다. 아래 단계별 내역을 모두 더하면 위 숫자가 됩니다.`}
         actions={
           <>
             <Button icon="download" onClick={() => downloadCsv(vm)}>
-              원장 CSV
+              산출 근거 CSV
             </Button>
             <Button icon="chevronLeft" onClick={back}>
               측정 결과로
@@ -48,25 +48,25 @@ export function BasisView({ vm, scope }: { vm: BasisVM; scope: string }) {
         <>
           <Panel title="계산식">
             <div className={b.formulas}>
-              <Formula name="투입 공수 절감률" value={pct(A.save, 1)}>
-                (기준 <b>{f1(A.baseMd)}</b> − 투입 <b>{f1(A.md)}</b>) ÷ 기준 <b>{f1(A.baseMd)}</b> M/D
-                <Sub>기준 M/D = 집계 대상 요구사항·단계 {A.unitN}개의 기준 공수 합 · 절감 공수 = {f1(A.saveMd)} M/D</Sub>
+              <Formula name="공수 절감률" value={pct(A.save, 1)}>
+                (기준 <b>{f1(A.baseMd)}</b> − 실제 <b>{f1(A.md)}</b>) ÷ 기준 <b>{f1(A.baseMd)}</b> M/D
+                <Sub>기준 공수 = 집계 대상 요구사항·단계 {A.unitN}개의 기준 공수 합 · 절감 공수 = {f1(A.saveMd)} M/D</Sub>
                 <Sub>
-                  투입 M/D = 확정 공수 <b>{h2(A.tot)}h</b> ÷ 1 M/D {S.mdHours}h = {f1(A.md)} · 확정 공수 = AI 사용 {h2(A.inT)}h + AI 없이 {h2(A.out)}h
+                  실제 공수 = 확정한 시간 <b>{h2(A.tot)}h</b> ÷ 1 M/D {S.mdHours}h = {f1(A.md)} · 확정한 시간 = AI 사용 {h2(A.inT)}h + AI 없이 {h2(A.out)}h
                 </Sub>
               </Formula>
-              <Formula name="순절감률 (비용)" value={pct(A.net, 1)}>
-                (기준 인건비 <b>{man(A.baseCost)}</b> − 측정 인건비 <b>{man(A.labor)}</b> − AI 비용 <b>{man(A.aiCost)}</b>) ÷ 기준 인건비 <b>{man(A.baseCost)}</b> 만원
-                <Sub>기준 인건비 = Σ 태그 기준 M/D × 태그의 필요 개발자 등급 단가 · 순절감액 = {man(A.netAmt)} 만원</Sub>
-                <Sub>측정 인건비 = Σ (태그 확정 공수 ÷ {S.mdHours}h) × 등급 단가</Sub>
+              <Formula name="비용 순절감률" value={pct(A.net, 1)}>
+                (기준 인건비 <b>{man(A.baseCost)}</b> − 실제 인건비 <b>{man(A.labor)}</b> − AI 비용 <b>{man(A.aiCost)}</b>) ÷ 기준 인건비 <b>{man(A.baseCost)}</b> 만원
+                <Sub>기준 인건비 = Σ 단계 기준 공수 × 그 단계 필요 등급 단가 · 순절감액 = {man(A.netAmt)} 만원</Sub>
+                <Sub>실제 인건비 = Σ (단계 확정 시간 ÷ {S.mdHours}h) × 등급 단가</Sub>
                 <Sub>
                   AI 비용 = Σ 배정된 Codex 세션 토큰 × 모델 토큰 단가 (나눠 배정하면 분 비율로 나눔)
                   {A.aiNa > 0 && <b> · 비용 빈칸 {A.aiNa}건(토큰 미수집·단가 없음)은 0 으로 더함</b>}
                 </Sub>
               </Formula>
               <Formula name="AI 활용률" value={pct(A.use)}>
-                AI 사용 <b>{h2(A.inT)}h</b> ÷ 확정 공수 <b>{h2(A.tot)}h</b>
-                <Sub>AI 사용 = 자동 수집 {h2(A.ai)}h − 개발자가 줄인 {h2(A.ai - A.inT)}h · AI 밖 비중 {pct(A.outShare)}</Sub>
+                AI 사용 <b>{h2(A.inT)}h</b> ÷ 실제 공수 <b>{h2(A.tot)}h</b>
+                <Sub>AI 사용 = Codex 자동 수집 {h2(A.ai)}h − 개발자가 줄인 {h2(A.ai - A.inT)}h · AI 없이 비중 {pct(A.outShare)}</Sub>
               </Formula>
             </div>
           </Panel>
@@ -107,24 +107,24 @@ export function BasisView({ vm, scope }: { vm: BasisVM; scope: string }) {
               <table className={b.kv}>
                 <tbody>
                   <tr>
-                    <th>미확정·재확정 필요</th>
+                    <th>미확정·다시 확정 필요</th>
                     <td>
                       {vm.excluded.days}칸 · {h2(vm.excluded.hours)}h
                     </td>
                   </tr>
                   <tr>
-                    <th>미배정 AI 사용</th>
+                    <th>요구사항 미지정 Codex 사용</th>
                     <td>
                       {vm.pending.n}건 · {h2(vm.pending.hours)}h
                     </td>
                   </tr>
                   <tr>
-                    <th>업무 외 표시</th>
+                    <th>업무 외 사용</th>
                     <td>{vm.offCount}건</td>
                   </tr>
                 </tbody>
               </table>
-              <p className={b.note}>개발자가 확정한 날만 결과에 들어갑니다. 미배정 AI 사용은 어느 요구사항인지 정해지면 그 단계에 더해집니다.</p>
+              <p className={b.note}>개발자가 확정한 날만 결과에 들어갑니다. 요구사항 미지정 Codex 사용은 어느 요구사항인지 정해지면 그 단계에 더해집니다.</p>
             </Panel>
           </div>
 
@@ -154,7 +154,7 @@ function Ledger({ units, mdHours }: { units: BasisUnitVM[]; mdHours: number }) {
   const toggle = (k: string) => setOpen((x) => (x.has(k) ? new Set(Array.from(x).filter((y) => y !== k)) : new Set([...Array.from(x), k])));
   const prjs = Array.from(new Map(units.map((u) => [u.prjId, u.prjNm])));
   return (
-    <Panel title="단계별 원장" flush style={{ marginTop: 20 }}>
+    <Panel title="단계별 내역" flush style={{ marginTop: 20 }}>
       <p className={b.note} style={{ padding: "0 20px 12px" }}>
         줄을 누르면 일자별 입력과 AI 세션(어디서 수집됐고 왜 이 단계에 붙었는지)이 펼쳐집니다. 회색 줄은 확정되지 않아 집계에서 빠진 날입니다.
       </p>
@@ -165,10 +165,10 @@ function Ledger({ units, mdHours }: { units: BasisUnitVM[]; mdHours: number }) {
               <th>요구사항 · 단계</th>
               <th>담당</th>
               <th className={d.r}>등급 단가</th>
-              <th className={d.r}>기준 M/D</th>
-              <th className={d.r}>확정 공수</th>
-              <th className={d.r}>투입 M/D</th>
-              <th className={d.r}>측정 인건비</th>
+              <th className={d.r}>기준 공수</th>
+              <th className={d.r}>확정 시간</th>
+              <th className={d.r}>실제 공수</th>
+              <th className={d.r}>실제 인건비</th>
               <th className={d.r}>AI 사용</th>
               <th className={d.r}>AI 비용</th>
             </tr>
@@ -221,7 +221,7 @@ function Ledger({ units, mdHours }: { units: BasisUnitVM[]; mdHours: number }) {
         </table>
       </div>
       <p className={b.note} style={{ padding: "12px 20px" }}>
-        금액 단위 만원. 투입 M/D = 확정 공수 ÷ {mdHours}h, 측정 인건비 = 투입 M/D × 등급 단가.
+        금액 단위 만원. 실제 공수(M/D) = 확정 시간 ÷ {mdHours}h, 실제 인건비 = 실제 공수 × 등급 단가.
       </p>
     </Panel>
   );
@@ -235,8 +235,8 @@ function Days({ days }: { days: BasisDayVM[] }) {
         <tr>
           <th>일자</th>
           <th>상태</th>
-          <th className={b.r}>AI 수집</th>
-          <th className={b.r}>줄임</th>
+          <th className={b.r}>Codex 자동 수집</th>
+          <th className={b.r}>줄인 시간</th>
           <th className={b.r}>AI 사용</th>
           <th>AI 없이 한 일</th>
           <th className={b.r}>합계</th>
@@ -284,7 +284,7 @@ function Days({ days }: { days: BasisDayVM[] }) {
 
 // 원장 전체를 일자 단위 한 줄씩 — 엑셀에서 피벗으로 다시 계산해 볼 수 있게.
 function downloadCsv(vm: BasisVM) {
-  const head = ["과제", "요구사항ID", "요구사항", "단계", "공수태그", "담당", "등급", "등급단가", "기준MD", "일자", "상태", "집계포함", "AI수집h", "줄임h", "AI사용h", "AI없이h", "합계h", "AI비용", "AI비용빈칸", "세션수"];
+  const head = ["과제", "요구사항ID", "요구사항", "단계", "공수태그", "담당", "등급", "등급단가", "기준MD", "일자", "상태", "집계포함", "Codex자동수집h", "줄인시간h", "AI사용h", "AI없이h", "합계h", "AI비용", "AI비용빈칸", "세션수"];
   const lines = [head];
   for (const u of vm.units)
     for (const x of u.days)

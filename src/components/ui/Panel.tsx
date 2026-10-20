@@ -43,23 +43,41 @@ export function KpiTile({
   unit,
   sub,
   children,
+  onClick,
+  hint = "계산 보기",
 }: {
   label: string;
   value: ReactNode;
   unit?: string;
   sub?: ReactNode;
   children?: ReactNode;
+  onClick?: () => void;
+  hint?: string;
 }) {
-  return (
-    <div className={s.kpi}>
-      <span className="eyebrow">{label}</span>
+  const body = (
+    <>
+      <span className={s.kpiLabel}>
+        <span className="eyebrow">{label}</span>
+        {onClick && (
+          <span className={s.kpiHint}>
+            {hint} <Icon name="chevronRight" size={12} />
+          </span>
+        )}
+      </span>
       <div>
         <span className={s.kpiValue}>{value}</span>
         {unit && <span className={s.kpiUnit}>{unit}</span>}
       </div>
       {sub && <span className={s.kpiSub}>{sub}</span>}
       {children}
-    </div>
+    </>
+  );
+  return onClick ? (
+    <button type="button" className={`${s.kpi} ${s.kpiHit}`} onClick={onClick}>
+      {body}
+    </button>
+  ) : (
+    <div className={s.kpi}>{body}</div>
   );
 }
 

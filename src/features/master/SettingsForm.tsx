@@ -156,7 +156,7 @@ export function SettingsForm({ initial }: { initial: Settings }) {
 
       <section>
         <h3 className="h2" style={{ marginBottom: 8 }}>
-          AI 도구 외 작업 유형 <span className={b.xs}>(고정 — 측정 중 바꾸면 입력값의 의미가 달라짐)</span>
+          AI 없이 한 일 — 작업 유형 <span className={b.xs}>(고정 — 측정 중 바꾸면 입력값의 의미가 달라짐)</span>
         </h3>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "4px 16px" }} className={b.small}>
           {ACT_TYPES.map((a) => (

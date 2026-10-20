@@ -45,37 +45,32 @@ function data(confs: DayConf[] = []): MeasureData {
 }
 const users = [mkUser("dev01", "김개발"), mkUser("dev02", "박개발")];
 
-describe("effortView — 요구사항 × 단계", () => {
+describe("effortView — 하루 × 요구사항 × 단계", () => {
   const ix0 = buildIndex(data());
   const conf: DayConf = { userId: "dev01", prjId: "DAE01", reqId: "R1", workDt: D1, state: "CONF", confirmedAt: "x", revCount: 0, snap: daySnap(ix0, "dev01", req, D1) };
   const vm = effortView(buildIndex(data([conf])), users, "dev01", "2026-11-11");
   const r = vm.reqs[0];
 
-  it("단계 띠는 4칸 고정 — 태그 없음·남의 단계·내 단계", () => {
-    expect(r.strip.map((b) => [b.cd, b.who])).toEqual([
-      ["AN", "other"],
-      ["DS", "none"],
-      ["DV", "mine"],
-      ["TS", "mine"],
-    ]);
-    expect(r.strip[0].ownerNm).toBe("박개발");
+  it("요구사항 줄은 내 단계만, 남의 단계는 담당자 이름으로", () => {
+    expect(r.units.map((u) => u.stage)).toEqual(["DV", "TS"]);
+    expect(r.others).toEqual([{ stage: "AN", ownerNm: "박개발" }]);
   });
 
-  it("일자 줄은 내 단계 칸만, 확정 합계는 확정된 날만", () => {
-    expect(r.mine).toEqual(["DV", "TS"]);
-    expect(r.rows.map((x) => [x.date, x.st])).toEqual([
-      [D2, "need"],
-      [D1, "conf"],
-    ]);
-    const d1 = r.rows.find((x) => x.date === D1)!;
-    expect(d1.cells.DV).toMatchObject({ ai: 12, out: 4, tot: 16 });
-    expect(d1.cells.AN).toBeUndefined();
-    expect(r.confSum).toEqual({ DV: 16, TS: 0 });
-    expect(r.need).toBe(1);
+  it("날짜 목록은 최근 7일 + 기록 있는 날, 최신부터", () => {
+    expect(vm.days[0].date).toBe("2026-11-11");
+    expect(vm.days.length).toBe(7);
+    const d1 = vm.days.find((d) => d.date === D1)!;
+    const d2 = vm.days.find((d) => d.date === D2)!;
+    expect(d1.st).toEqual({ "DAE01-R1": "conf" });
+    expect(d2.st).toEqual({ "DAE01-R1": "need" });
+    expect(d1.cells["DAE01-R1-DV"]).toMatchObject({ ai: 12, out: 4, tot: 16 });
+    expect(d1.cells["DAE01-R1-DV"].sess).toHaveLength(1);
+    expect(d1.cells["DAE01-R1-AN"]).toBeUndefined();
+    expect([d1.need, d2.need, d2.tot]).toEqual([0, 1, 2]);
   });
 
-  it("세션 코드는 측정 완료 단계를 뺀다", () => {
-    expect(r.codes).toEqual(["DAE01-R1-TS"]);
+  it("요약 — 확정된 날만 Codex·직접 입력 합", () => {
+    expect(vm.stats).toMatchObject({ needDays: 1, pendN: 0, confAi: 12, confOut: 4, last: { date: D2, src: "OTEL" } });
   });
 });
 

@@ -15,7 +15,7 @@ interface Demo {
 
 const STEPS = [
   ["과제 현황", "선정된 과제·요구사항과 SDLC 단계별 기준 공수"],
-  ["투입 공수", "AI 사용 시간 자동 수집 + AI 도구 외 시간 입력, 날마다 확정"],
+  ["공수 입력", "Codex 사용 시간 자동 수집 + AI 없이 한 시간 입력, 날마다 확정"],
   ["측정 결과", "확정된 값으로 공수 절감률·순절감률·AI 활용률"],
 ];
 
@@ -55,7 +55,7 @@ function LoginForm() {
           <span className={s.org}>SK hynix × SK AX</span>
         </div>
         <div className={s.heroBody}>
-          <span className={s.kicker}>과제 현황 · 투입 공수 · 측정 결과</span>
+          <span className={s.kicker}>과제 현황 · 공수 입력 · 측정 결과</span>
           <h1 className={s.title}>
             AI 활용
             <br />
@@ -63,7 +63,7 @@ function LoginForm() {
           </h1>
           <p className={s.lead}>
             AI 를 활용했을 때 개발 생산성이 얼마나 향상되는지 측정하기 위한 PoC 입니다. 선정된 요구사항의 기준 공수와
-            실제 투입 공수를 SDLC 단계별로 비교합니다.
+            실제 공수를 SDLC 단계별로 비교합니다.
           </p>
           <ol className={s.steps}>
             {STEPS.map(([t, d], i) => (

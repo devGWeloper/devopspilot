@@ -12,7 +12,7 @@ const pretendard = localFont({
 
 export const metadata: Metadata = {
   title: { default: "AI 활용 생산성 향상 PoC", template: "%s · AI 생산성 PoC" },
-  description: "SK hynix × SK AX — AI 활용 생산성 향상 PoC — 과제 현황·투입 공수·측정 결과",
+  description: "SK hynix × SK AX — AI 활용 생산성 향상 PoC — 과제 현황·공수 입력·측정 결과",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

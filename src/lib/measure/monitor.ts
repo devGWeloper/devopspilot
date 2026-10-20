@@ -119,7 +119,7 @@ export function detectAnomalies(ix: Index, names: Map<string, string>, today: st
   const byUser = new Map<string, number>();
   old.forEach((p) => byUser.set(p.session.userId, (byUser.get(p.session.userId) ?? 0) + 1));
   byUser.forEach((n, userId) =>
-    out.push({ key: `PENDING_OLD|${userId}`, rule: "PENDING_OLD", severity: "low", userId, reqId: null, date: null, title: `${nm(userId)} — 미배정 AI 사용 ${n}건`, detail: `${PENDING_DAYS}일 넘게 어느 일인지 정하지 않음` }),
+    out.push({ key: `PENDING_OLD|${userId}`, rule: "PENDING_OLD", severity: "low", userId, reqId: null, date: null, title: `${nm(userId)} — 요구사항 미지정 Codex 사용 ${n}건`, detail: `${PENDING_DAYS}일 넘게 어느 일인지 정하지 않음` }),
   );
 
   const rank: Record<Severity, number> = { high: 0, mid: 1, low: 2 };

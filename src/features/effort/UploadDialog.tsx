@@ -28,7 +28,7 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
   return (
     <Modal
       open
-      title="AI 사용 기록 올리기"
+      title="Codex 기록 올리기"
       onClose={onClose}
       footer={
         result ? (
@@ -47,7 +47,7 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
     >
       {result ? (
         <Callout tone="ok">
-          세션 {result.sessions}건을 반영했습니다. 태그로 정해지지 않은 시간은 &apos;확인 필요&apos;에 나타납니다.
+          세션 {result.sessions}건을 반영했습니다. 공수 태그로 요구사항·단계를 정하지 못한 세션은 그날 화면의 &apos;어느 요구사항 작업인지 모르는 Codex 사용&apos;에 나타납니다.
           {result.warnings.length > 0 && <div className={b.xs}>경고 {result.warnings.length}건: {result.warnings.slice(0, 3).join(" / ")}</div>}
         </Callout>
       ) : (

@@ -18,7 +18,7 @@ export interface AddTarget {
   cell: CellVM | null;
 }
 
-/** AI 도구 외 시간 — 작업 유형 8개, 0.1시간 단위 */
+/** 직접 입력(AI 도구 외) — 작업 유형 8개, 0.1시간 단위 */
 export function AddTimeDialog({ t, onClose }: { t: AddTarget; onClose: () => void }) {
   const { run, busy } = useMutate();
   const [v, setV] = useState<Partial<Record<ActType, string>>>(
@@ -31,7 +31,7 @@ export function AddTimeDialog({ t, onClose }: { t: AddTarget; onClose: () => voi
   const memoMissing = nums.A8 > 0 && !memo.trim();
 
   async function save() {
-    const ok = await run(() => api("/api/effort/entry", { body: { unit: t.unit, date: t.date, add: nums, memo } }), out ? `AI 도구 외 ${f1(out)}시간을 저장했습니다.` : "AI 도구 외 시간을 지웠습니다.");
+    const ok = await run(() => api("/api/effort/entry", { body: { unit: t.unit, date: t.date, add: nums, memo } }), out ? `직접 입력 ${f1(out)}시간을 저장했습니다.` : "직접 입력 시간을 지웠습니다.");
     if (ok) onClose();
   }
 
@@ -39,13 +39,13 @@ export function AddTimeDialog({ t, onClose }: { t: AddTarget; onClose: () => voi
     <Modal
       open
       wide
-      title="AI 도구 외 투입 시간"
+      title="직접 입력 — Codex 밖에서 한 일"
       eyebrow={`${fmtDay(t.date)} · ${t.title}`}
       onClose={onClose}
       footer={
         <>
           <span className="muted" style={{ marginRight: "auto", fontSize: 13 }}>
-            AI 도구 내 {f1(inT)}h + <b>AI 도구 외 {f1(out)}h</b> = 이 단계 투입 <b>{f1(inT + out)}h</b>
+            Codex {f1(inT)}h + <b>직접 입력 {f1(out)}h</b> = 이 단계 투입 <b>{f1(inT + out)}h</b>
           </span>
           <Button onClick={onClose}>취소</Button>
           <Button variant="primary" loading={busy} disabled={memoMissing} onClick={save}>

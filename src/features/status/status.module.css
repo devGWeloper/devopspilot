@@ -1,9 +1,3 @@
-.kpis {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--s3);
-}
-
 .filters {
   display: flex;
   gap: var(--s3);
@@ -39,55 +33,95 @@
   color: var(--muted);
 }
 
-.traits {
+.sys {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 6px;
-  margin: 0 20px 14px;
-  padding: 10px 14px;
+  padding: 0 20px 12px;
+}
+
+.sysItem {
+  font-size: 12px;
+  color: var(--ink-2);
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
+  padding: 1px 8px;
   background: var(--surface-2);
+}
+
+.traits {
+  margin: 0 20px 12px;
   font-size: 12.5px;
 }
 
-.traitRow {
-  display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  align-items: baseline;
+.traits summary {
+  cursor: pointer;
+  width: fit-content;
+  font-size: 12px;
+  color: var(--muted);
+  user-select: none;
 }
 
-.traitItems {
+.traits summary:hover {
+  color: var(--ink);
+}
+
+.traitBody {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 18px;
+  gap: 12px 32px;
+  align-items: flex-start;
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
 }
 
-.traitHead {
+.traitLines {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 6px 14px;
+  margin: 0;
+}
+
+.traitLines dt {
+  color: var(--subtle);
+}
+
+.traitLines dd {
+  margin: 0;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.traitTable {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.traitTable th,
+.traitTable td {
+  padding: 3px 10px;
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+}
+
+.traitTable thead th {
   font-size: 11.5px;
   font-weight: 700;
   color: var(--muted);
 }
 
-.trait {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  color: var(--ink-2);
-}
-
-.trait i {
-  font-style: normal;
+.traitTable tbody th {
+  text-align: left;
+  font-weight: 400;
   color: var(--subtle);
+  padding-left: 0;
 }
 
-.mix {
-  display: inline-flex;
-  gap: 8px;
-}
-
-.mix b {
-  font-variant-numeric: tabular-nums;
+.traitTable tbody tr:last-child th,
+.traitTable tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .none {
@@ -160,9 +194,100 @@
   color: var(--warn);
 }
 
-@media (max-width: 900px) {
-  .kpis {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+/* 요구사항 상세 */
+.mTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  word-break: keep-all;
 }
+
+.mName {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.mSum {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px 16px;
+  padding-bottom: 14px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.mPrj {
+  color: var(--muted);
+  word-break: keep-all;
+}
+
+.mProg {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 260px;
+}
+
+.mTable {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+  word-break: keep-all;
+}
+
+.mTable thead th {
+  text-align: left;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.mTable thead th:first-child {
+  width: 128px;
+}
+
+.mTable tbody th {
+  text-align: left;
+  font-weight: 400;
+  color: var(--subtle);
+  padding: 7px 12px 7px 0;
+  white-space: nowrap;
+}
+
+.mTable td {
+  padding: 7px 12px;
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.mTable tbody th {
+  border-bottom: 1px solid var(--line);
+}
+
+.mGroup td {
+  padding: 16px 0 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.mTable tbody:first-of-type .mGroup td {
+  padding-top: 10px;
+}
+
+.code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 

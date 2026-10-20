@@ -101,7 +101,7 @@ function CollectLog({ rows, otelOn }: { rows: CollectRowVM[]; otelOn: boolean })
   return (
     <>
       <p className={b.note} style={{ marginBottom: 8 }}>
-        텔레메트리 수신 {otelOn ? "켜짐" : <b className={b.warn}>꺼짐 — config.yml 의 collect.token 을 넣어야 받습니다</b>} · 개발자 × 일자 × 출처별 Codex 세션 · 태그 = 공수 태그로 자동 배정된 시간 · 미배정 = 아직
+        텔레메트리 수신 {otelOn ? "켜짐" : <b className={b.warn}>꺼짐 — config.yml 의 collect.token 을 넣어야 받습니다</b>} · 개발자 × 일자 × 출처별 Codex 세션 · 자동 연결 = 공수 태그로 자동 배정된 시간 · 요구사항 미지정 = 아직
         &apos;확인 필요&apos;에 남은 세션 · 비용 빈칸 = 토큰 미수집 또는 단가 없는 모델
       </p>
       <div className={b.tw}>
@@ -113,8 +113,8 @@ function CollectLog({ rows, otelOn }: { rows: CollectRowVM[]; otelOn: boolean })
               <th>출처</th>
               <th className="r">세션</th>
               <th className="r">시간 (h)</th>
-              <th className="r">태그 (h)</th>
-              <th className="r">미배정</th>
+              <th className="r">자동 연결 (h)</th>
+              <th className="r">요구사항 미지정</th>
               <th className="r">토큰</th>
               <th className="r">AI 비용</th>
             </tr>

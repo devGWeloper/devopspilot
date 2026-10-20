@@ -4,7 +4,7 @@ import { tmpdir } from "os";
 import path from "path";
 import { kstDate } from "@/lib/measure/ingest";
 import { rowsOf } from "@/lib/measure/metrics";
-import { confirmDays, ingestOtel, loadIndex, reopenDay, resolveSession, saveEffort, todayKst, uploadLog } from "@/lib/measure/service";
+import { confirmDate, confirmDays, ingestOtel, loadIndex, reopenDay, resolveSession, saveEffort, todayKst, uploadLog } from "@/lib/measure/service";
 import { createJsonStore } from "@/lib/store/json";
 import { ensureSeed } from "@/lib/store/seed";
 import type { Store } from "@/lib/store/types";
@@ -64,6 +64,21 @@ describe("공수 입력·확정", () => {
     expect(ix.data.confs[0].firstConfirmedAt).toBe(first);
     expect(ix.data.confs[0].confirmedAt).not.toBe(first);
     expect((await store.history.list({ targetTyp: "EFFORT" })).length).toBeGreaterThan(0);
+  });
+
+  it("하루 확정 — 그날 기록이 있는 내 요구사항만, 개발자 본인만", async () => {
+    await store.projects.insert(mkProject({ prjId: "DAE02", reqs: [mkReq({ reqId: "R-9", stages: [mkStage({ cd: "TS", ownerId: "dev01" })] })] }));
+    await saveEffort(store, dev1, { unit: DV, date: D, add: { A1: 2 } });
+    await saveEffort(store, dev1, { unit: "DAE02-R-9-TS", date: D, add: { A2: 1 } });
+    await saveEffort(store, dev2, { unit: "DAE01-R-2-DV", date: D, add: { A1: 1 } });
+    expect(await confirmDate(store, admin, D)).toMatchObject({ ok: false, status: 403 });
+    expect(await confirmDate(store, dev1, D)).toMatchObject({ ok: true, value: { count: 2 } });
+    const ix = await loadIndex(store);
+    expect(ix.data.confs.map((c) => [c.userId, c.prjId, c.reqId]).sort()).toEqual([
+      ["dev01", "DAE01", "R-1"],
+      ["dev01", "DAE02", "R-9"],
+    ]);
+    expect(await confirmDate(store, dev1, D)).toMatchObject({ ok: true, value: { count: 0 } });
   });
 
   it("측정 완료 태그는 입력 불가", async () => {

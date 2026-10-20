@@ -1,220 +1,270 @@
-.kpis {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--s3);
-}
-
 .miss {
   color: var(--danger);
   font-weight: 600;
 }
 
-.warnTxt {
-  color: var(--warn);
-}
-
-.warnN {
-  display: inline-block;
-  min-width: 16px;
-  margin-left: 2px;
-  padding: 0 4px;
-  border-radius: 8px;
-  background: var(--warn-soft);
-  color: var(--warn);
-  font-size: 11px;
-  font-weight: 700;
-  text-align: center;
-}
-
-.note {
-  padding: 0 20px 12px;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.dims {
+/* 성격별 분포 요약 — 그룹별 열, 항목마다 막대 하나 */
+.sumGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   border-top: 1px solid var(--line);
 }
 
-.dim {
-  padding: 14px 20px 16px;
-  border-right: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-
-.dimHead {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 8px;
-  font-size: 13px;
-}
-
-.dimHead span {
-  font-size: 12px;
-}
-
-.bars {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.sumCol {
+  padding: 16px 20px 20px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 16px;
 }
 
-.barBtn {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 120px minmax(0, 1fr) 64px;
-  gap: 8px;
-  align-items: center;
-  padding: 2px 4px;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: none;
-  font: inherit;
-  font-size: 12.5px;
-  text-align: left;
-  color: inherit;
-}
-
-.barBtn:not(:disabled):hover {
-  background: var(--surface-2);
-}
-
-.barBtn:disabled {
-  cursor: default;
-}
-
-.picked {
-  background: var(--bg-deep) !important;
-  font-weight: 700;
-}
-
-.barLabel {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--ink-2);
-}
-
-.track {
-  height: 8px;
-  background: var(--bg-deep);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.track i {
-  display: block;
-  height: 100%;
-  background: var(--ink-2);
-}
-
-.barNum {
-  text-align: right;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.barNum small {
-  margin-left: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--muted);
-}
-
-.zeroTxt {
-  color: var(--subtle);
-  font-weight: 500;
-}
-
-.folded {
-  margin: 4px 4px 0;
-  font-size: 11.5px;
-  color: var(--subtle);
-}
-
-.warns {
-  list-style: none;
-  margin: 8px 4px 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 12px;
-  color: var(--warn);
-  font-weight: 600;
-}
-
-.warns li {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-}
-
-.crossPick {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.cross td,
-.cross th {
+.sumCol + .sumCol {
   border-left: 1px solid var(--line);
 }
 
-.cross td:first-child,
-.cross th:first-child {
-  border-left: 0;
-}
-
-.c {
-  text-align: center !important;
-  font-variant-numeric: tabular-nums;
-}
-
-.cnt {
+.sumHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0;
+  font-size: 13.5px;
   font-weight: 700;
+  color: var(--ink);
 }
 
-.zero {
-  color: var(--line-strong);
-}
-
-.cellBtn {
-  min-width: 32px;
-  padding: 2px 8px;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: none;
-  font: inherit;
-  color: inherit;
-  text-decoration: underline dotted var(--line-strong);
-}
-
-.cellBtn:hover {
-  background: var(--bg-deep);
-}
-
-.gap {
-  color: var(--danger);
-}
-
-.share {
-  display: block;
-  font-size: 11px;
+.sumHead span {
+  font-size: 12px;
   font-weight: 500;
   color: var(--muted);
 }
 
-.table tfoot td {
-  background: var(--surface-2);
+.sb {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sbHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.sbLabel {
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.sbWarn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--warn);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sbBar {
+  display: flex;
+  gap: 2px;
+  height: 28px;
+}
+
+.sbSeg {
+  flex-basis: 0;
+  min-width: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 0 7px;
+  overflow: hidden;
+  border: 0;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.sbSeg:first-child {
+  border-radius: var(--r-sm) 0 0 var(--r-sm);
+}
+
+.sbSeg:last-child {
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+
+.sbSeg:only-child {
+  border-radius: var(--r-sm);
+}
+
+.sbSeg:hover {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
+.sbSeg b {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.sbV {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sbPicked {
+  box-shadow: inset 0 0 0 2px var(--ink), 0 0 0 1px var(--surface);
+  text-decoration: underline;
+}
+
+.sbBlank {
+  background: repeating-linear-gradient(135deg, transparent 0 4px, rgba(180, 68, 60, 0.18) 4px 6px);
+  color: var(--danger);
+  box-shadow: inset 0 0 0 1px var(--danger);
+}
+
+
+
+
+
+/* 교차 분포 — 축 이름을 단 격자, 가장자리에 행·열 합계 막대 */
+.crossPick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.mx {
+  display: grid;
+  gap: 6px;
+  align-items: stretch;
+  width: max-content;
+  max-width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.mxY {
+  grid-column: 1;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 1px;
+  justify-self: center;
+  align-self: center;
+  font-size: 12px;
   font-weight: 700;
-  border-top: 1px solid var(--line-strong);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.mxRow {
+  grid-column: 2;
+  align-self: center;
+  max-width: 180px;
+  padding-right: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mxCell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 72px;
+  border: 0;
+  border-radius: var(--r-md, 8px);
+  font: inherit;
+  transition: box-shadow 120ms;
+}
+
+.mxCell:hover {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink);
+}
+
+.mxCell b {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.mxCell small {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.mxEmpty {
+  height: 72px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-md, 8px);
+  background: repeating-linear-gradient(135deg, transparent 0 6px, var(--surface-2) 6px 8px);
+}
+
+.mxMargin {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.mxMargin i,
+.mxColBar i {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line-strong);
+}
+
+.mxMargin i {
+  max-width: 56px;
+  flex: none;
+}
+
+.mxColFoot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.mxColBar {
+  display: block;
+}
+
+.mxCol {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.mxCol b {
+  margin-left: 4px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.mxX {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
 }
 
 .groups {
@@ -341,38 +391,76 @@
 }
 
 .prj td {
-  background: var(--bg-deep);
-  padding: 8px 20px;
+  background: var(--surface-2);
+  padding: 12px 20px 10px;
+  border-top: 1px solid var(--line-strong);
 }
 
-.prjHead {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
-  position: sticky;
-  left: 20px;
-  width: max-content;
-}
-
-.prjHead span {
-  font-size: 12px;
-}
-
-.prjInfo {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 14px;
-  margin-top: 3px;
-  font-size: 12px;
-  color: var(--ink-2);
+/* 가로로 스크롤해도 과제 정보는 제자리에 */
+.prjCard {
   position: sticky;
   left: 20px;
   max-width: calc(100vw - 360px);
 }
 
-.prjInfo i {
-  font-style: normal;
+.prjHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+
+.prjHead > b {
+  font-size: 14.5px;
+  color: var(--ink);
+}
+
+.prjSys {
+  font-size: 12.5px;
   color: var(--muted);
+}
+
+.prjNum {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.prjNum b {
+  margin: 0 1px 0 3px;
+  font-weight: 700;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.prjInfo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.prjOrg {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+  color: var(--ink-2);
+}
+
+.prjOrg span + span {
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 1px solid var(--line-strong);
+}
+
+.prjTag {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink-2);
+  white-space: nowrap;
 }
 
 .req {
@@ -445,10 +533,14 @@
 }
 
 @media (max-width: 1100px) {
-  .kpis {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .sumGrid {
+    grid-template-columns: minmax(0, 1fr);
   }
-  .prjInfo,
+  .sumCol + .sumCol {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .prjCard,
   .detail {
     max-width: calc(100vw - 80px);
   }

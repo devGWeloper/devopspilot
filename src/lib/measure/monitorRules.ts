@@ -25,6 +25,6 @@ export const RULES: Record<RuleCd, { label: string; why: string }> = {
   TOO_GOOD: { label: "절감률 과대", why: "측정 완료인데 절감률이 80% 를 넘습니다. 입력이 빠졌을 수 있습니다." },
   NO_AI: { label: "AI 사용 없음", why: "측정 완료인데 AI 사용 시간이 0 입니다. 수집 누락이거나 AI 를 쓰지 않았습니다." },
   LATE_CONF: { label: "확정 지연", why: "입력이 있는데 5일 넘게 확정하지 않았습니다." },
-  PENDING_OLD: { label: "미배정 AI 사용 방치", why: "어느 일인지 정하지 않은 AI 사용이 3일 넘게 남아 있습니다." },
+  PENDING_OLD: { label: "요구사항 미지정 Codex 사용 방치", why: "어느 일인지 정하지 않은 AI 사용이 3일 넘게 남아 있습니다." },
 };
 

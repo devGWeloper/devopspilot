@@ -117,7 +117,7 @@ function ProjectTable({ vm, onEdit, onRemove }: { vm: MasterVM; onEdit: (info: P
               <th>등급</th>
               <th>배포 · 영역</th>
               <th>버전 · 작업 관리</th>
-              <th className="r">태그</th>
+              <th className="r">단계 수</th>
               <th />
             </tr>
           </thead>
@@ -183,7 +183,7 @@ function TagTable({ vm, onEdit }: { vm: MasterVM; onEdit: (info: ProjectInfo, re
           onChange={setMode}
           options={[
             { key: "grid", label: "SDLC 단계 격자" },
-            { key: "list", label: "태그 목록" },
+            { key: "list", label: "요구사항·단계 목록" },
           ]}
         />
         <Select value={prj} onChange={(e) => setPrj(e.target.value)} style={{ maxWidth: 260 }}>
@@ -194,7 +194,7 @@ function TagTable({ vm, onEdit }: { vm: MasterVM; onEdit: (info: ProjectInfo, re
             </option>
           ))}
         </Select>
-        <TextInput placeholder="태그·요구사항·사번 검색" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 240 }} />
+        <TextInput placeholder="공수 태그·요구사항·사번 검색" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 240 }} />
         <span className={b.xs}>
           행 = 요구사항 × 단계 (공수 태그 = 과제 ID-요구사항 ID-단계). 담당 = &apos;03. 공수 태그 매핑&apos;의 사번 한 명
           {unmapped > 0 && (
@@ -301,7 +301,7 @@ function StageGrid({ reqs, onEdit }: { reqs: ReqVM[]; onEdit: (r: ReqVM) => void
             {STAGES.map((cd) => (
               <th key={cd} className="r">
                 {STAGE_LABEL[cd]}
-                <div className={b.xs}>기준 M/D · 담당</div>
+                <div className={b.xs}>기준 공수(M/D) · 담당</div>
               </th>
             ))}
             <th className="r">합계 M/D</th>

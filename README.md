@@ -36,6 +36,19 @@ npm run local
 - 계정 테이블이 비어 있으면 `admin` / `admin123!` 1건을 만듭니다. 데모 계정·샘플 과제는 Oracle 에는 들어가지 않습니다.
 - 운영에서는 `config.yml` 의 `auth.secret`(또는 환경변수 `AUTH_SECRET`)을 꼭 넣으세요. HTTPS 면 `AUTH_COOKIE_SECURE=true`.
 
+### 사내 서버 배포 (`deploy.sh`)
+
+```bash
+# 최초 1회 — deploy.sh 위쪽 [설정](GIT_REPO_URL·브랜치·DEPLOY_DIR) 을 고친 뒤
+mkdir -p /home/idms/devopspilot && cp deploy.sh /home/idms/devopspilot/
+cd /home/idms/devopspilot && ./deploy.sh prd        # 첫 실행은 config.yml 이 없어 멈춤
+cp config.example.yml config.yml && vi config.yml   # db·auth.secret·collect.token
+./deploy.sh prd                                     # 이후 배포는 이것만 (dev: ./deploy.sh dev)
+```
+
+- 순서: git fetch·reset → config.yml 확인 → 서버 중지 → `npm install` → `.next` 비우고 빌드 → devDeps 정리 → `next start -p 5176` (nohup, `app.pid`·`app.log`, 배포 기록 `deploy.log`).
+- `config.yml`·`data/` 는 git 에 없어서 배포해도 그대로 남습니다. prd 는 `config.yml` 이 없으면 배포를 멈춥니다(데모 데이터로 뜨지 않게).
+
 ## 화면
 
 | 경로 | 화면 | 사용 |
