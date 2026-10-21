@@ -249,6 +249,16 @@
   font-weight: 650;
 }
 
+.addbPen {
+  margin-left: 6px;
+  color: var(--subtle);
+  font-weight: 400;
+}
+
+.addbOn:hover .addbPen {
+  color: var(--ink);
+}
+
 .z {
   color: var(--subtle);
   font-weight: 400;

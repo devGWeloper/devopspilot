@@ -506,11 +506,21 @@ function UnitRow({
             <button
               data-tour="add"
               className={`${s.addb} ${c?.out ? s.addbOn : ""}`}
+              title={c?.out ? `직접 입력 ${hm(c.out)} — 눌러서 고치기` : "직접 입력"}
               onClick={() =>
                 onAdd({ unit: u.code, date, title, cell: c ?? null, busy: busyFor(u.code) })
               }
             >
-              {c?.out ? `${hm(c.out)} 수정` : "＋ 입력"}
+              {c?.out ? (
+                <>
+                  {hm(c.out)}
+                  <span className={s.addbPen} aria-hidden>
+                    ✎
+                  </span>
+                </>
+              ) : (
+                "＋ 입력"
+              )}
             </button>
           )}
           {types.length > 0 && (
