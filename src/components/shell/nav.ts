@@ -18,7 +18,7 @@ export const NAV: NavGroup[] = [
     label: "PoC",
     items: [
       { href: "/selection", label: "과제 선정 현황", icon: "layers" },
-      { href: "/", label: "과제 현황", icon: "folder" },
+      { href: "/status", label: "과제 현황", icon: "folder" },
       { href: "/effort", label: "공수 입력", icon: "clock" },
       { href: "/dashboard", label: "측정 결과", icon: "gauge" },
     ],

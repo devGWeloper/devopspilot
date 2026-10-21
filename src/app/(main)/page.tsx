@@ -1,13 +1,9 @@
-import { StatusBoard } from "@/features/status/StatusBoard";
+import { redirect } from "next/navigation";
+import { homePathFor } from "@/lib/auth/permissions";
 import { pageActor } from "@/lib/auth/server";
-import { loadIndex } from "@/lib/measure/service";
-import { getStore } from "@/lib/store";
-import { statusView } from "@/lib/views";
 
-export const metadata = { title: "PoC 과제 현황" };
-
+// 주소만 치고 들어와도 로그인 직후와 같은 첫 화면을 보게 한다.
 export default async function Page() {
   const actor = await pageActor();
-  const ix = await loadIndex(await getStore());
-  return <StatusBoard vm={statusView(ix, actor)} canManage={actor.role === "ADMIN"} />;
+  redirect(homePathFor(actor.role));
 }

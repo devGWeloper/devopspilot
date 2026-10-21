@@ -33,6 +33,6 @@ describe("permissions", () => {
     expect(canAccessPath("VIEWER", "/api/admin/users")).toBe(false);
     expect(canAccessPath("VIEWER", "/dashboard")).toBe(true);
     expect(homePathFor("DEVELOPER")).toBe("/effort");
-    expect(homePathFor("VIEWER")).toBe("/");
+    expect(homePathFor("VIEWER")).toBe("/selection");
   });
 });

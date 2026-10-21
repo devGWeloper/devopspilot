@@ -6,7 +6,7 @@ AI 활용 생산성 향상 PoC 포털 — Next.js 14 (App Router) · React 18 ·
 `npm test` (vitest) · `python -m unittest discover -s scripts/tests` · `npm run typecheck` · `npm run build` (빌드 전 `.next` 삭제 권장) · `npm run local` (build + start, 사내 시연용)
 
 ## 구조
-- 화면: `/selection` 과제 선정 현황 · `/` 과제 현황(조회) · `/effort` 공수 입력 · `/dashboard` 측정 결과(+`/basis` 산출 근거) · `/master` 기준 데이터(엑셀 5시트 편집·올리기·내려받기) · `/monitor` 공수 모니터링 · `/guide` 작성 가이드 · `/admin` 시스템 관리. 페이지는 서버 컴포넌트가 `lib/views.ts` 로 데이터를 만들어 넘기고, 변경 후 `router.refresh()`(`features/common/useMutate`).
+- 화면: `/selection` 과제 선정 현황(관리자·열람자 첫 화면, `/` 는 역할별 첫 화면으로 보냄) · `/status` 과제 현황(조회) · `/effort` 공수 입력 · `/dashboard` 측정 결과(+`/basis` 산출 근거) · `/master` 기준 데이터(엑셀 5시트 편집·올리기·내려받기) · `/monitor` 공수 모니터링 · `/guide` 작성 가이드 · `/admin` 시스템 관리. 페이지는 서버 컴포넌트가 `lib/views.ts` 로 데이터를 만들어 넘기고, 변경 후 `router.refresh()`(`features/common/useMutate`).
 - `src/lib/dims.ts` 과제 성격 분류 축(선정 분포·성격별 결과 공용)
 - `src/lib/measure/` — `metrics.ts`(측정 지표 유일한 계산 위치·지표 정의 `metricDefs`, `traceUnits`→`aggTrace` 로 근거와 숫자가 같은 경로), `monitor.ts`(이상 감지 규칙), `match.ts`(Codex 세션 → 공수 태그 매칭), `ingest.ts`(Codex OTLP 로그 이벤트·로그 업로드 파싱), `service.ts`(공수 입력·확정·배정)
 - `src/lib/projects/` — `workbook.ts`(기준정보 엑셀 '생산성 측정 PoC 데이터' 5시트 읽기·쓰기), `service.ts`(엑셀 병합·과제/요구사항/단계 편집), `normalize.ts`(이전 저장 형식 맞춤), `form.ts`(선정 현황 항목)

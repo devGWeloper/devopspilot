@@ -133,8 +133,15 @@ export function StatusBoard({
           style={{ maxWidth: 280 }}
         />
         {shown.length > 1 && (
-          <Button size="sm" variant="ghost" onClick={() => setAll(!allOpen)}>
+          <Button
+            size="sm"
+            className={st.allToggle}
+            icon={allOpen ? "chevronUp" : "chevronDown"}
+            aria-expanded={allOpen}
+            onClick={() => setAll(!allOpen)}
+          >
             {allOpen ? "요구사항 모두 접기" : "요구사항 모두 펼치기"}
+            <span className={st.allCount}>과제 {shown.length}건</span>
           </Button>
         )}
       </div>

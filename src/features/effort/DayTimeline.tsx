@@ -73,7 +73,8 @@ export function DayTimeline({ lanes, work, untimed = 0 }: { lanes: Lane[]; work:
       <header className={s.head}>
         <b>이 날 작업 흐름</b>
         <span className="subtle">
-          {fromMin(first)} ~ {fromMin(last)} · PoC 작업 {hm(done.reduce((a, b) => a + (b.min ?? toMin(b.end) - toMin(b.start)), 0) / 60)}
+          {/* 시간대 없는 예전 값은 그릴 자리가 없지만 합계는 표와 같아야 한다 */}
+          {fromMin(first)} ~ {fromMin(last)} · PoC 작업 {hm(done.reduce((a, b) => a + (b.min ?? toMin(b.end) - toMin(b.start)), 0) / 60 + untimed)}
           {outMin > 0 && ` · 근무시간(${work.start}~${work.end}) 외 ${hm(outMin / 60)}`}
         </span>
         <span className={s.legend}>
@@ -119,7 +120,6 @@ export function DayTimeline({ lanes, work, untimed = 0 }: { lanes: Lane[]; work:
           직접 입력과 Codex 사용이 {hm(clashMin / 60)} 겹칩니다 ({clashes.map((c) => `${c.start}~${c.end}`).join(", ")}) — 같은 시간이 두 번 잡혔습니다. 그 시간에 Codex 를 쓰지 않았다면 Codex 칸의 &apos;시간 빼기&apos;로, 아니면 직접 입력 시간대를 고쳐 주세요.
         </p>
       )}
-      {untimed > 0 && <p className={s.note}>시간대 없이 넣은 직접 입력 {hm(untimed)}은 그림에 없습니다.</p>}
     </section>
   );
 }

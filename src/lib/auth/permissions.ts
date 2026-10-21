@@ -62,5 +62,5 @@ export function canAccessPath(role: Role, pathname: string): boolean {
 }
 
 export function homePathFor(role: Role): string {
-  return role === "DEVELOPER" ? "/effort" : "/";
+  return role === "DEVELOPER" ? "/effort" : "/selection";
 }

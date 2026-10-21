@@ -294,18 +294,35 @@
 
 /* 요구사항 표 펼치기 — 과제 성격 분포와 같은 모양 */
 .reqToggle {
-  display: block;
+  display: inline-flex;
+  align-items: center;
   margin: 0 20px 12px;
-  padding: 0;
-  border: 0;
+  padding: 4px 10px 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
   background: none;
   font-size: 12px;
   color: var(--muted);
   cursor: pointer;
 }
 
-.reqToggle:hover {
+.reqToggle:hover,
+.reqToggle[aria-expanded="true"] {
+  border-color: var(--line-strong);
   color: var(--ink);
+}
+
+/* 필터(왼쪽)와 표 전체 조작(오른쪽)을 떼어 놓아 검색창 옆 부속처럼 안 보이게 한다 */
+.allToggle {
+  margin-left: auto;
+}
+
+.allCount {
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+  color: var(--muted);
+  font-weight: 400;
 }
 
 .caret {

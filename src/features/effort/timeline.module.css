@@ -171,12 +171,6 @@
   color: var(--danger);
 }
 
-.note {
-  margin: 6px 0 0;
-  font-size: 12px;
-  color: var(--subtle);
-}
-
 @media (max-width: 700px) {
   .grid {
     grid-template-columns: 1fr;
