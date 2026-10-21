@@ -32,7 +32,7 @@ const KIND_LABEL: Record<BarKind, string> = {
 const STEP = 30;
 
 /**
- * 그날 PoC 일을 한 시각만 그린다 — 개발자는 이 PoC 말고 다른 일도 하므로 9~18시 같은 고정 축이면 빈칸이 대부분이 된다.
+ * 축은 출근 시각에서 시작해 날마다 같은 자리에서 읽히게 하고, 끝은 그날 마지막 PoC 일까지만 그린다.
  * 직접 입력이 Codex 사용과 겹친 곳은 같은 시간이 두 번 잡힌 것이라 빨갛게 표시한다.
  */
 export function DayTimeline({ lanes, work, untimed = 0 }: { lanes: Lane[]; work: Interval; untimed?: number }) {
@@ -40,7 +40,7 @@ export function DayTimeline({ lanes, work, untimed = 0 }: { lanes: Lane[]; work:
   if (!all.length) return null;
   const first = Math.min(...all.map((b) => toMin(b.start)));
   const last = Math.max(...all.map((b) => toMin(b.end)));
-  const lo = Math.floor(first / STEP) * STEP;
+  const lo = Math.floor(Math.min(first, toMin(work.start)) / STEP) * STEP;
   const hi = Math.max(lo + 60, Math.ceil(last / STEP) * STEP);
   const span = hi - lo;
   const every = span > 6 * 60 ? 60 : STEP;
