@@ -1,4 +1,5 @@
 import type { StageCd } from "../types";
+import type { EffortSpan } from "./spans";
 
 /** AI 도구 외 작업 유형 — 측정 기간 중 바꾸면 이미 입력한 값의 의미가 달라지므로 코드에 고정한다. */
 export type ActType = "A1" | "A2" | "A3" | "A4" | "A5" | "A6" | "A7" | "A8";
@@ -24,7 +25,10 @@ export interface EffortEntry {
   workDt: string;
   /** AI 수집 시간 중 실제 작업이 아니었던 시간 (자리 비움 등) */
   reduceH: number;
+  /** 유형별 합계(h) — 측정 지표는 이것만 쓴다. 시간대로 넣은 부분은 spans 의 합과 같다 */
   add: Partial<Record<ActType, number>>;
+  /** 직접 입력 시간대. 시간대를 받기 전에 넣은 값은 없어서 add 와의 차이가 '시간대 없음'이다 */
+  spans?: EffortSpan[];
   memo: string;
 }
 
@@ -95,6 +99,9 @@ export interface Settings {
   tokenPrice: Record<string, TokenPrice>;
   /** 확정 대상 기간 시작일 */
   measureStart: string;
+  /** 기본 근무시간 "HH:MM" — 직접 입력 기본 시각, 타임라인의 근무시간 외 표시. 이 밖의 입력(조기 출근·야근)도 받는다 */
+  workStart: string;
+  workEnd: string;
   workTypes: Record<StageCd, string[]>;
 }
 

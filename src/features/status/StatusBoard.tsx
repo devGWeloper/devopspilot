@@ -39,6 +39,8 @@ export function StatusBoard({
   const [view, setView] = useState<{ info: ProjectInfo; req: ReqVM } | null>(
     null,
   );
+  // 과제가 많으면 요구사항 표가 길어 평소엔 접어 두고, 검색·상태로 거를 때는 맞는 줄을 바로 보이게 펼친다.
+  const [flipped, setFlipped] = useState<Set<string>>(new Set());
 
   const all = vm.projects.flatMap((p) => p.reqs);
   const count = (s: ReqStatus) => all.filter((r) => r.status === s).length;
@@ -67,13 +69,25 @@ export function StatusBoard({
       }))
       .filter((p) => p.rows.length > 0);
   }, [vm, f, dq]);
+  const narrowed = f !== "ALL" || !!dq.trim();
+  const isOpen = (id: string) => narrowed !== flipped.has(id);
+  const flip = (id: string) =>
+    setFlipped((x) => {
+      const n = new Set(x);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const allOpen = shown.length > 0 && shown.every((p) => isOpen(p.info.prjId));
+  const setAll = (open: boolean) =>
+    setFlipped(new Set(open === narrowed ? [] : shown.map((p) => p.info.prjId)));
 
   return (
     <>
       <PageHeader
         eyebrow="Phase 1 결과"
         title="과제 현황"
-        description="선정된 과제·요구사항과 단계별 측정 진척입니다. 요구사항을 누르면 단계별 상세를 볼 수 있습니다."
+        description="선정된 과제·요구사항과 단계별 측정 진척입니다. 과제마다 '요구사항 상세보기'를 펼치고, 요구사항을 누르면 단계별 상세를 볼 수 있습니다."
         actions={
           canManage && (
             <Link href="/master">
@@ -118,6 +132,11 @@ export function StatusBoard({
           onChange={(e) => setQ(e.target.value)}
           style={{ maxWidth: 280 }}
         />
+        {shown.length > 1 && (
+          <Button size="sm" variant="ghost" onClick={() => setAll(!allOpen)}>
+            {allOpen ? "요구사항 모두 접기" : "요구사항 모두 펼치기"}
+          </Button>
+        )}
       </div>
 
       {shown.length === 0 && (
@@ -168,6 +187,16 @@ export function StatusBoard({
             </div>
             <SysTraits info={p.info} />
             <Traits reqs={p.reqs} />
+            <button
+              type="button"
+              className={st.reqToggle}
+              aria-expanded={isOpen(p.info.prjId)}
+              onClick={() => flip(p.info.prjId)}
+            >
+              <span className={st.caret}>{isOpen(p.info.prjId) ? "▾" : "▸"}</span>
+              요구사항 {narrowed ? `${p.rows.length}/${p.reqs.length}` : p.reqs.length}건 상세보기
+            </button>
+            {isOpen(p.info.prjId) && (
             <table className={st.table}>
               <thead>
                 <tr>
@@ -223,6 +252,7 @@ export function StatusBoard({
                 ))}
               </tbody>
             </table>
+            )}
           </Panel>
         ))}
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Field";
 import { Icon } from "@/components/ui/Icon";
 import { Panel } from "@/components/ui/Panel";
@@ -41,14 +42,23 @@ function insightsOf(dims: Dim[]): Insight[] {
   return out.sort((a, b) => b.spread - a.spread);
 }
 
-export function ByDimPanel({ vm }: { vm: DashVM }) {
+export function ByDimPanel({ vm, onExport, exporting }: { vm: DashVM; onExport: () => void; exporting: boolean }) {
   const [axis, setAxis] = useState<DimKey>("fit");
   const ins = insightsOf(vm.byDim);
   const dm = vm.byDim.find((x) => x.key === axis) ?? vm.byDim[0];
   const T = vm.total;
 
   return (
-    <Panel title="과제 성격별 결과" style={{ marginTop: 20 }} flush>
+    <Panel
+      title="과제 성격별 결과"
+      style={{ marginTop: 20 }}
+      flush
+      actions={
+        <Button size="sm" icon="download" loading={exporting} onClick={onExport} title="모든 분류 축의 집계를 과제별·단계별·요구사항별 집계와 함께 내려받습니다">
+          엑셀로 보기
+        </Button>
+      }
+    >
       <div className={d.insight}>
         <b className={d.insightHead}>성격에 따라 절감률이 크게 갈린 기준 (누르면 아래 표가 바뀝니다)</b>
         {ins.length === 0 ? (

@@ -4,6 +4,7 @@ import { DIMS, catsOf, dimValues, type DimKey } from "./dims";
 import { aggTrace, aggUnits, cellOf, metricDefs, nextDayConfRate, pendingOf, reqsOwnedBy, sessionCost, tagRate, traceUnits, reqStatus, rowsOf, stageStatus, unitsOfReq, type Agg, type Cell, type Index, type MetricDef, type Ratio, type ReqStatus, type RowSt } from "./measure/metrics";
 import { unitDayKey } from "./measure/match";
 import { detectAnomalies, type Anomaly } from "./measure/monitor";
+import type { EffortSpan } from "./measure/spans";
 import type { ActType, MonitorNote, TokenPrice } from "./measure/types";
 import { reqBaseMd, reqDone, reqKey, type Unit } from "./measure/units";
 import { formValues } from "./projects/form";
@@ -92,6 +93,8 @@ export interface CellVM {
   out: number;
   tot: number;
   add: Partial<Record<ActType, number>>;
+  /** 직접 입력 시간대 */
+  spans: EffortSpan[];
   memo: string;
 }
 
@@ -121,11 +124,14 @@ export interface EffortUnitVM {
 
 /** AI 시간이 어떤 Codex 세션에서 왔는지 — 개발자가 자동 반영을 믿을 수 있게 */
 export interface EffortSessVM {
+  datId: string;
   src: "OTEL" | "LOG";
   start: string;
   end: string;
   min: number;
   how: string;
+  /** 개발자가 직접 배정한 세션 — 잘못 넣었으면 되돌릴 수 있다 */
+  manual: boolean;
 }
 
 export type EffortCellVM = CellVM & { sess: EffortSessVM[] };
@@ -154,6 +160,8 @@ export interface EffortDayVM {
   tot: number;
   need: number;
   pending: number;
+  /** 개발자가 '업무 외 사용'으로 뺀 세션 — 잘못 뺐으면 되돌릴 수 있다 */
+  off: { datId: string; start: string; end: string; minutes: number }[];
 }
 
 export interface EffortStatsVM {
@@ -173,6 +181,8 @@ export interface EffortVM {
   devs: { userId: string; userNm: string }[];
   today: string;
   mdHours: number;
+  /** 기본 근무시간 — 이 밖의 입력은 받되 타임라인에 근무시간 외로 보인다 */
+  work: { start: string; end: string };
   reqs: EffortReqVM[];
   /** 최신 날짜부터 */
   days: EffortDayVM[];
@@ -180,7 +190,7 @@ export interface EffortVM {
   stats: EffortStatsVM;
 }
 
-const cellVM = (c: Cell): CellVM => ({ ai: c.ai, mn: c.mn, inT: c.inT, out: c.out, tot: c.tot, add: c.add, memo: c.memo });
+const cellVM = (c: Cell, spans: EffortSpan[] = []): CellVM => ({ ai: c.ai, mn: c.mn, inT: c.inT, out: c.out, tot: c.tot, add: c.add, spans, memo: c.memo });
 
 /** 기록이 없어도 최근 며칠은 날짜 목록에 둔다 — 오늘 한 일을 바로 넣을 수 있게 */
 const RECENT_DAYS = 7;
@@ -196,11 +206,13 @@ export function effortView(ix: Index, users: UserRecord[], userId: string, today
   const days = new Map<string, EffortDayVM>();
   const dayOf = (date: string) => {
     let d = days.get(date);
-    if (!d) days.set(date, (d = { date, st: {}, cells: {}, ai: 0, out: 0, tot: 0, need: 0, pending: 0 }));
+    if (!d) days.set(date, (d = { date, st: {}, cells: {}, ai: 0, out: 0, tot: 0, need: 0, pending: 0, off: [] }));
     return d;
   };
   for (let i = 0; i < RECENT_DAYS; i++) dayOf(minusDays(today, i));
 
+  const mine = ix.data.sessions.filter((x) => x.userId === userId);
+  const sessById = new Map(mine.map((x) => [x.datId, x]));
   let confAi = 0;
   let confOut = 0;
   const reqs = Array.from(byReq, ([req, us]): EffortReqVM => {
@@ -212,8 +224,16 @@ export function effortView(ix: Index, users: UserRecord[], userId: string, today
       for (const u of us) {
         const c = cellOf(ix, u.code, r.date);
         if (!c.ai && !c.out) continue;
-        const sess = (ix.alloc.srcByUnitDay.get(unitDayKey(u.code, r.date)) ?? []).map((x) => ({ src: x.src, start: x.start, end: x.end, min: x.min, how: x.how }));
-        d.cells[u.code] = { ...cellVM(c), sess };
+        const sess = (ix.alloc.srcByUnitDay.get(unitDayKey(u.code, r.date)) ?? []).map((x) => ({
+          datId: x.datId,
+          src: x.src,
+          start: x.start,
+          end: x.end,
+          min: x.min,
+          how: x.how,
+          manual: sessById.get(x.datId)?.resolution?.kind === "ASSIGN",
+        }));
+        d.cells[u.code] = { ...cellVM(c, ix.effort.get(unitDayKey(u.code, r.date))?.spans), sess };
         d.ai += c.inT;
         d.out += c.out;
         d.tot += c.tot;
@@ -261,8 +281,9 @@ export function effortView(ix: Index, users: UserRecord[], userId: string, today
       }),
     );
   pending.forEach((p) => dayOf(p.date).pending++);
+  for (const x of mine)
+    if (x.resolution?.kind === "OFF") dayOf(x.workDt).off.push({ datId: x.datId, start: x.start, end: x.end, minutes: x.minutes });
 
-  const mine = ix.data.sessions.filter((x) => x.userId === userId);
   const lastS = mine.reduce<(typeof mine)[number] | null>((a, x) => (!a || `${x.workDt} ${x.end}` > `${a.workDt} ${a.end}` ? x : a), null);
   const list = Array.from(days.values()).sort((a, b) => b.date.localeCompare(a.date));
   return {
@@ -271,6 +292,7 @@ export function effortView(ix: Index, users: UserRecord[], userId: string, today
     devs,
     today,
     mdHours: ix.data.settings.mdHours,
+    work: { start: ix.data.settings.workStart, end: ix.data.settings.workEnd },
     reqs,
     days: list,
     pending,
@@ -317,7 +339,17 @@ export interface DashVM {
   nextDay: Ratio;
   metrics: MetricDef[];
   stages: { cd: StageCd; agg: Agg; workTypes: { workType: string; agg: Agg }[] }[];
-  projects: { prjId: string; prjNm: string; doneN: number; reqN: number; agg: Agg }[];
+  projects: {
+    prjId: string;
+    prjNm: string;
+    doneN: number;
+    reqN: number;
+    agg: Agg;
+    /** 단계별 — 단계 흐름(워터폴) 그림용 */
+    stages: Partial<Record<StageCd, Agg>>;
+    /** 과제 단위 성격 값 — AI 비용 × 절감률 분포의 범례 */
+    dims: Partial<Record<DimKey, string>>;
+  }[];
   reqs: { rk: string; reqId: string; name: string; prjId: string; prjNm: string; status: ReqStatus; agg: Agg }[];
   /** 요구사항 × 단계 기준 대비 — 관리자용. 집계 범위 밖 단계는 숫자 없이 상태만 */
   matrix: MatrixRowVM[];
@@ -355,13 +387,19 @@ export function dashView(ix: Index, actor: Actor, filter: DashFilter, nowIso: st
   });
   const projects = visible
     .filter((x) => units.some((u) => u.prj === x.p))
-    .map((x) => ({
-      prjId: x.p.prjId,
-      prjNm: x.p.prjNm,
-      doneN: x.reqs.filter((r) => reqDone(r)).length,
-      reqN: x.reqs.length,
-      agg: agg(units.filter((u) => u.prj === x.p)),
-    }));
+    .map((x) => {
+      const pu = units.filter((u) => u.prj === x.p);
+      const dv = pu[0] ? dimValues(x.p, pu[0].s) : null;
+      return {
+        prjId: x.p.prjId,
+        prjNm: x.p.prjNm,
+        doneN: x.reqs.filter((r) => reqDone(r)).length,
+        reqN: x.reqs.length,
+        agg: agg(pu),
+        stages: Object.fromEntries(STAGES.filter((cd) => pu.some((u) => u.stage === cd)).map((cd) => [cd, agg(pu.filter((u) => u.stage === cd))])),
+        dims: Object.fromEntries(DIMS.filter((d) => d.level === "prj").map((d) => [d.key, dv?.[d.key] ?? ""])),
+      };
+    });
   const reqs = visible.flatMap((x) =>
     x.reqs
       .filter((r) => reqSet.has(r))

@@ -20,9 +20,26 @@ const STEPS: CoachStep[] = [
     target: "kpis",
     text: "남은 할 일은 여기서 한눈에",
     side: "bottom",
-    more: <p>&lsquo;확정할 날&rsquo;과 &lsquo;골라야 할 Codex 사용&rsquo;을 0 으로 만드는 게 목표예요. 숫자를 누르면 그 날로 바로 갑니다.</p>,
+    more: <p>&lsquo;확정할 날&rsquo;과 &lsquo;미분류 Codex 세션&rsquo;을 0 으로 만드는 게 목표예요. 숫자를 누르면 그 날로 바로 갑니다.</p>,
   },
-  { target: "days", text: "여기서 날짜를 고르세요", side: "right", live: true },
+  {
+    target: "days",
+    text: "달력에서 날짜를 누르세요",
+    side: "right",
+    live: true,
+    more: <p>&lsquo;확정&rsquo; 배지는 확정할 날, 숫자 배지는 미분류 Codex 세션이 남은 날이에요. ✓ 는 확정을 끝낸 날입니다.</p>,
+  },
+  {
+    target: "dayFlow",
+    text: "그날 PoC 일이 시간 순으로 보여요",
+    side: "bottom",
+    more: (
+      <p>
+        검정은 Codex, 회색은 직접 입력한 시간대예요. PoC 일을 한 시간만 그려서 빈칸은 다른 업무를 한 시간입니다. <b>빨간 테두리</b>는 직접 입력과 Codex 가 겹친 곳(같은 시간이 두 번
+        잡힘), 빗금은 기본 근무시간 밖이에요.
+      </p>
+    ),
+  },
   {
     target: "stages",
     text: "요구사항마다 SDLC 단계별로 나눠서 적어요",
@@ -59,19 +76,24 @@ const STEPS: CoachStep[] = [
     target: ["aiCell", "ai"],
     text: "Codex 시간은 여기 자동으로 들어와요",
     side: "bottom",
-    more: <p>세션 건수를 누르면 어느 세션에서 왔는지 보여요. 자리를 비운 시간이 섞였으면 &lsquo;시간 빼기&rsquo;로 빼세요.</p>,
+    more: <p>세션 건수를 누르면 어느 세션에서 왔는지 보여요. 자리를 비운 시간이 섞였으면 &lsquo;시간 빼기&rsquo;로 10분 단위로 빼세요.</p>,
   },
   {
     target: "pending",
     text: "요구사항을 못 찾은 Codex 사용이에요",
     side: "bottom",
-    more: <p>첫 줄 코드가 없거나 틀린 세션이 여기 모여요. 어느 요구사항·단계 일인지 직접 골라 주세요.</p>,
+    more: <p>첫 줄 코드가 없거나 틀린 세션이 여기 모여요. 어느 요구사항·단계 일인지 고른 뒤 &lsquo;이동&rsquo;을 누르세요. 잘못 옮겼으면 그 단계의 세션 목록에서 되돌릴 수 있어요.</p>,
   },
   {
     target: ["add", "addCol"],
-    text: "AI 없이 한 일만 여기 입력",
+    text: "AI 없이 한 일은 시간대로 입력",
     side: "bottom",
-    more: <p>회의, 문서 작성, 수동 테스트처럼 Codex 를 안 쓴 시간을 그 일을 한 단계 줄에 넣어요.</p>,
+    more: (
+      <p>
+        회의, 문서 작성, 수동 테스트처럼 Codex 를 안 쓴 일을 <b>시작~종료</b>(10분 단위)로 그 일을 한 단계 줄에 넣어요. 일찍 나왔거나 야근한 시간도 그대로 적으면 되고, Codex 를 쓴
+        시간과는 겹치지 않게 해 주세요.
+      </p>
+    ),
   },
   {
     target: ["confirm", "daySum"],

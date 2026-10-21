@@ -33,3 +33,13 @@ export function man(v: number | null | undefined): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return "—";
   return Math.round(v / 10_000).toLocaleString("ko-KR");
 }
+
+/** 시간(h) → "1시간 10분" — 공수 입력이 분 단위라 입력 화면은 시·분으로 보여 준다 */
+export function hm(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return "—";
+  const m = Math.round(v * 60);
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  if (!h) return `${mm}분`;
+  return mm ? `${h}시간 ${mm}분` : `${h}시간`;
+}

@@ -1,5 +1,6 @@
 // 데모 데이터 — 목업 v17 의 과제·요구사항을 옮기고, 일자는 실행 시점 기준 최근 평일로 맞춘다(언제 띄워도 '진행 중'으로 보이게).
 import { kstDate } from "../measure/ingest";
+import { spanMin, type EffortSpan } from "../measure/spans";
 import type { ActType, AiSession, DayConf, EffortEntry } from "../measure/types";
 import { reqKey, unitCode } from "../measure/units";
 import type { Project, StageCd } from "../types";
@@ -54,30 +55,30 @@ const REQS: R[] = [
 
 /** [요구사항 ID-단계, 일자 인덱스들, AI 시간 합(h), AI 도구 외 합(h), 작업 유형 순환] — 데모 요구사항 ID 는 과제끼리 겹치지 않는다 */
 const PLAN: [string, number[], number, number, ActType[]][] = [
-  ["REQ0033-DV", [0, 1, 2, 3], 13, 5, ["A1", "A3", "A5"]],
-  ["REQ0033-TS", [4, 5], 4, 2, ["A2"]],
-  ["REQ0038-DS", [2, 3], 3, 2, ["A3", "A4"]],
-  ["REQ0038-DV", [4, 5, 6, 7], 14, 7, ["A1", "A6", "A3"]],
-  ["REQ0038-TS", [8], 4, 3, ["A2"]],
-  ["REQ0055-DV", [0, 1, 2, 3, 4], 22, 12, ["A1", "A5", "A3"]],
-  ["REQ0055-TS", [5, 6], 4, 3.5, ["A2", "A5"]],
-  ["REQ0058-DS", [7, 8], 7, 6, ["A4", "A3"]],
-  ["REQ0021-DV", [0, 1, 2], 9, 4, ["A1", "A3"]],
-  ["REQ0021-TS", [3], 3, 3, ["A2"]],
-  ["REQ0027-DV", [4, 5, 6, 7, 8], 24, 10, ["A1", "A2", "A6"]],
-  ["REQ0027-TS", [8], 2, 2.5, ["A2"]],
-  ["REQ0083-AN", [0, 1], 6, 3.5, ["A5", "A4"]],
-  ["REQ0024-DV", [3, 4, 5, 6, 7, 8], 10, 4, ["A1", "A3"]],
-  ["REQ0081-DV", [2, 3, 4, 5, 6, 7, 8, 9], 20, 8, ["A1", "A1", "A2"]],
-  ["REQ0060-DS", [5, 6], 8, 3, ["A4", "A5"]],
-  ["REQ0060-DV", [7, 8, 9], 15, 4, ["A1", "A3"]],
-  ["REQ0047-AN", [0, 1], 3, 2, ["A5", "A4"]],
-  ["REQ0047-DV", [0, 1, 2, 3, 4, 5, 6, 7, 8], 30, 4, ["A5", "A3", "A1"]],
-  ["REQ0047-TS", [8, 9], 3.5, 0.5, ["A5"]],
-  ["REQ0051-DS", [2, 3, 4, 5], 7.5, 2, ["A4", "A3"]],
-  ["REQ0051-DV", [6, 7, 8, 9], 6.5, 0.5, ["A3"]],
-  ["REQ0012-DV", [0, 1, 2], 6, 2, ["A1"]],
-  ["REQ0012-TS", [3], 2, 1, ["A2"]],
+  ["REQ0033-DV", [0, 1, 2, 3], 10.5, 7.5, ["A1", "A3", "A5"]],
+  ["REQ0033-TS", [4, 5], 3, 3, ["A2", "A5"]],
+  ["REQ0038-DS", [2, 3], 2, 3, ["A3", "A4"]],
+  ["REQ0038-DV", [4, 5, 6, 7], 13, 8, ["A1", "A6", "A3"]],
+  ["REQ0038-TS", [8], 2.5, 4.5, ["A2", "A4"]],
+  ["REQ0055-DV", [0, 1, 2, 3, 4], 22.5, 11.5, ["A1", "A5", "A3"]],
+  ["REQ0055-TS", [5, 6], 3.5, 4, ["A2", "A5"]],
+  ["REQ0058-DS", [7, 8], 6, 7, ["A4", "A3"]],
+  ["REQ0021-DV", [0, 1, 2], 7, 6, ["A1", "A3"]],
+  ["REQ0021-TS", [3], 3, 3, ["A2", "A5"]],
+  ["REQ0027-DV", [4, 5, 6, 7, 8], 17, 17, ["A1", "A2", "A6"]],
+  ["REQ0027-TS", [8], 2.5, 2, ["A2", "A3"]],
+  ["REQ0083-AN", [0, 1], 3.5, 6, ["A5", "A4"]],
+  ["REQ0024-DV", [3, 4, 5, 6, 7, 8], 9, 5, ["A1", "A3"]],
+  ["REQ0081-DV", [2, 3, 4, 5, 6, 7, 8, 9], 15, 13, ["A1", "A1", "A2"]],
+  ["REQ0060-DS", [5, 6], 4.5, 6.5, ["A4", "A5"]],
+  ["REQ0060-DV", [7, 8, 9], 9.5, 9.5, ["A1", "A3"]],
+  ["REQ0047-AN", [0, 1], 2, 3, ["A5", "A4"]],
+  ["REQ0047-DV", [0, 1, 2, 3, 4, 5, 6, 7, 8], 19.5, 14.5, ["A5", "A3", "A1"]],
+  ["REQ0047-TS", [8, 9], 2, 2, ["A5", "A2"]],
+  ["REQ0051-DS", [2, 3, 4, 5], 3.5, 6, ["A4", "A3"]],
+  ["REQ0051-DV", [6, 7, 8, 9], 4.5, 2.5, ["A3", "A5"]],
+  ["REQ0012-DV", [0, 1, 2], 4, 4, ["A1", "A5"]],
+  ["REQ0012-TS", [3], 1.5, 1.5, ["A2", "A4"]],
 ];
 
 /** 확정하지 않은 채로 남겨 둘 (개발자, 최근 며칠) — '확정 필요' 화면을 보여 주기 위해 */
@@ -159,33 +160,75 @@ export function sampleData(now = Date.now()): SampleData {
   const efforts: EffortEntry[] = [];
   const sessions: AiSession[] = [];
   const touched = new Map<string, { prjId: string; reqId: string; userId: string; date: string }>();
+  // 사람·날짜마다 PoC 일을 이어 붙인다 — 하루 종일 한 세션이 아니라 회의·검토 같은 직접 한 일과 Codex 세션이 번갈아, 다른 업무 사이사이에.
+  const cursor = new Map<string, number>();
+  const at = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  const ten = (m: number) => Math.max(10, Math.round(m / 10) * 10);
+  // 계획상 PoC 일이 많은 날은 일찍 시작한다 — 자정을 넘기지 않게.
+  const planned = new Map<string, number>();
+  for (const [key, idxs, aiH, addH] of PLAN) {
+    const owner = reqOf(key).s.ownerId!;
+    for (const di of idxs) planned.set(`${owner}|${days[di]}`, (planned.get(`${owner}|${days[di]}`) ?? 0) + (aiH + addH) / idxs.length);
+  }
+  const take = (userId: string, date: string, di: number, len: number, gap: number) => {
+    const k = `${userId}|${date}`;
+    const seed = di * 37 + userId.charCodeAt(4) * 53;
+    // 대개 08:30~10:00 에 시작하고, 가끔 일찍 나온 날도 있다.
+    let start = cursor.get(k) ?? ((planned.get(k) ?? 0) > 9 ? 7 * 60 : seed % 7 === 0 ? 7 * 60 + 50 : 8 * 60 + 30 + ten(seed % 90));
+    // 점심(12:00~13:00)에 걸치면 오후로 넘긴다.
+    if (start < 13 * 60 && (start >= 12 * 60 || (start >= 11 * 60 && start + ten(len) > 12 * 60 + 10))) start = 13 * 60;
+    const end = Math.min(23 * 60 + 50, start + ten(len));
+    cursor.set(k, Math.min(23 * 60, end + gap));
+    return { start: at(start), end: at(end) };
+  };
   for (const [key, idxs, aiH, addH, mix] of PLAN) {
     const { p, r, s, unit } = reqOf(key);
     const userId = s.ownerId!;
     idxs.forEach((di, k) => {
       const date = days[di];
       const aiMin = Math.round((aiH / idxs.length) * 60 + ((di * 13) % 9) - 4);
-      const h = Math.round((addH / idxs.length) * 2) / 2;
-      // 일부 세션은 과제ID-요구사항ID 만 남겨 '확인 필요'를 만든다(단계가 2개 이상인 요구사항).
-      const hints = key === "REQ0051-DV" && k === 1 ? [reqKey(p.prjId, r.reqId)] : [unit];
-      if (aiMin > 0)
+      const dm = Math.round((addH / idxs.length) * 2) * 30;
+      // Codex 는 길면 세션을 2~3개로, 직접 입력은 1시간 이상이면 두 유형으로 나눈다.
+      const n = aiMin >= 150 ? 3 : aiMin >= 70 ? 2 : aiMin > 0 ? 1 : 0;
+      const w = [[1], [0.6, 0.4], [0.45, 0.2, 0.35]][Math.max(0, n - 1)];
+      const ai = w.slice(0, n).map((x, j) => (j === n - 1 ? aiMin - w.slice(0, j).reduce((a, y) => a + Math.round(aiMin * y), 0) : Math.round(aiMin * x)));
+      const first = dm >= 60 ? ten(dm * (0.35 + ((di + k) % 3) * 0.1)) : dm;
+      const direct = (dm >= 60 ? [first, dm - first] : dm > 0 ? [dm] : []).map((m, j) => ({ m, type: mix[(k + j) % mix.length] }));
+      const blocks: ({ kind: "ai"; m: number; j: number } | { kind: "direct"; m: number; type: ActType })[] = [];
+      for (let x = 0, a = 0, d = 0; a < ai.length || d < direct.length; x++) {
+        const wantDirect = (x + di + k) % 2 === 0;
+        if ((wantDirect && d < direct.length) || a >= ai.length) blocks.push({ kind: "direct", ...direct[d++] });
+        else blocks.push({ kind: "ai", m: ai[a], j: a++ });
+      }
+      const spans: EffortSpan[] = [];
+      blocks.forEach((b, x) => {
+        // 늦게까지 이어지는 날은 쉬는 틈 없이 붙인다 — 계획이 많은 날만 야근으로 보이게.
+        const gap = (cursor.get(`${userId}|${date}`) ?? 0) >= 16 * 60 ? 0 : 10 + ((di * 7 + k * 11 + x * 13) % 2) * 10;
+        if (b.kind === "direct") {
+          spans.push({ type: b.type, ...take(userId, date, di, b.m, gap) });
+          return;
+        }
+        // 일부 세션은 과제ID-요구사항ID 만 남겨 '확인 필요'를 만든다(단계가 2개 이상인 요구사항).
+        const hints = key === "REQ0051-DV" && k === 1 && b.j === 0 ? [reqKey(p.prjId, r.reqId)] : [unit];
         sessions.push({
           src: "OTEL",
-          sessionId: `s-${unit}-${di}`,
+          sessionId: `s-${unit}-${di}-${b.j}`,
           userId,
           workDt: date,
           tool: "Codex",
-          minutes: aiMin,
-          start: "09:30",
-          end: "17:40",
+          minutes: b.m,
+          // 세션은 시작~끝 사이에 잠깐씩 쉬는 시간이 섞여 활동 시간보다 길다.
+          ...take(userId, date, di, b.m + ((di + b.j) % 2) * 10, gap),
           branch: "",
           hints,
           resolution: null,
-          tokens: demoTokens(aiMin),
+          tokens: demoTokens(b.m),
         });
-      if (h > 0) {
-        const t = mix[k % mix.length];
-        efforts.push({ unit, prjId: p.prjId, reqId: r.reqId, stage: s.cd, userId, workDt: date, reduceH: 0, add: { [t]: h }, memo: "" });
+      });
+      if (spans.length) {
+        const add: Partial<Record<ActType, number>> = {};
+        for (const x of spans) add[x.type] = (add[x.type] ?? 0) + spanMin(x) / 60;
+        efforts.push({ unit, prjId: p.prjId, reqId: r.reqId, stage: s.cd, userId, workDt: date, reduceH: 0, add, spans, memo: "" });
       }
       touched.set(`${userId}|${reqKey(p.prjId, r.reqId)}|${date}`, { prjId: p.prjId, reqId: r.reqId, userId, date });
     });

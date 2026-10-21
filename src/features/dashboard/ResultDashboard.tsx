@@ -8,6 +8,8 @@ import { Icon } from "@/components/ui/Icon";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState, KpiTile, Panel } from "@/components/ui/Panel";
 import { Tabs } from "@/components/ui/Tabs";
+import { useToast } from "@/components/ui/Toast";
+import { download, errMessage } from "@/lib/apiClient";
 import { f1, man, pct } from "@/lib/format";
 import type { Agg } from "@/lib/measure/metrics";
 import { ACT_TYPES } from "@/lib/measure/types";
@@ -15,9 +17,12 @@ import { STAGE_LABEL, type StageCd } from "@/lib/types";
 import type { DashFilter, DashVM } from "@/lib/views";
 import { STATUS_LABEL } from "../common/bits";
 import { ByDimPanel } from "./ByDimPanel";
+import { CostSaveMatrix } from "./CostSaveMatrix";
 import { Bars, ExplainModal, type ExplainKey, type ExplainTarget } from "./Explain";
 import x from "./explain.module.css";
+import { StageFlow } from "./StageFlow";
 import { StageMatrix } from "./StageMatrix";
+import { TypeBars } from "./TypeBars";
 import d from "./dashboard.module.css";
 
 type View = "stage" | "project" | "req";
@@ -133,6 +138,18 @@ export function ResultDashboard({
     return q.size ? `?${q}` : "";
   };
   const go = (patch: Partial<DashFilter>) => start(() => router.push(`${path}${query({ ...vm.filter, ...patch })}`, { scroll: false }));
+  const { toastError } = useToast();
+  const [exporting, setExporting] = useState(false);
+  const exportXlsx = async () => {
+    setExporting(true);
+    try {
+      await download(`/api/dashboard/export${query(vm.filter)}`, "측정 결과 집계.xlsx");
+    } catch (e) {
+      toastError(errMessage(e));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   type ReqRow = DashVM["reqs"][number];
   const reqName = (r: ReqRow) => (r.name && r.name !== r.reqId ? `${r.rk} ${r.name}` : r.rk);
@@ -209,10 +226,7 @@ export function ResultDashboard({
             ex: reqEx(r),
           }));
 
-  const types = ACT_TYPES.map((t) => ({ t, h: A.byType[t.cd] ?? 0 }))
-    .filter((t) => t.h > 0)
-    .sort((p, q) => q.h - p.h);
-  const typeMax = Math.max(...types.map((t) => t.h), 1e-9);
+  const topType = ACT_TYPES.map((t) => ({ t, h: A.byType[t.cd] ?? 0 })).reduce<{ t: (typeof ACT_TYPES)[number]; h: number } | null>((m, x) => (x.h > 0 && (!m || x.h > m.h) ? x : m), null);
   const over = A.save !== null && A.save < 0;
 
   return (
@@ -221,9 +235,14 @@ export function ResultDashboard({
         title="측정 결과"
         description={`${scopeNote} · 개발자가 확정한 공수로 계산합니다. 숫자를 누르면 계산식이 열립니다.`}
         actions={
-          <Button icon="file" onClick={() => router.push(`/dashboard/basis${query(vm.filter)}`)}>
-            산출 근거
-          </Button>
+          <>
+            <Button icon="download" loading={exporting} onClick={exportXlsx}>
+              집계 엑셀
+            </Button>
+            <Button icon="file" onClick={() => router.push(`/dashboard/basis${query(vm.filter)}`)}>
+              산출 근거
+            </Button>
+          </>
         }
       >
         <div className={d.filters}>
@@ -281,8 +300,13 @@ export function ResultDashboard({
               {A.aiNa > 0 && <span className={d.sub}>토큰 단가가 없어 AI 비용 0 으로 둔 세션 {A.aiNa}건</span>}
             </KpiTile>
             <KpiTile label="AI 활용률" value={pct(A.use)} onClick={() => explain("use")} sub={`일한 ${f1(A.tot)}h 중 ${f1(A.inT)}h 를 Codex 와 함께`} />
-            <KpiTile label="AI 없이 한 시간" value={f1(A.out)} unit="h" onClick={() => explain("use")} sub={types[0] ? `가장 많은 일: ${types[0].t.label} ${f1(types[0].h)}h` : "입력 없음"} />
+            <KpiTile label="AI 없이 한 시간" value={f1(A.out)} unit="h" onClick={() => explain("use")} sub={topType ? `가장 많은 일: ${topType.t.label} ${f1(topType.h)}h` : "입력 없음"} />
           </div>
+
+          {/* 주요 지표 바로 아래 — AI 를 못 쓴 일이 무엇인지가 개선 방향이라 아래로 내려 두지 않는다 */}
+          <Panel title="AI 없이 한 일 — 업무 유형" style={{ marginTop: 12 }} actions={<span className="subtle" style={{ fontSize: 12 }}>AI 없이 {f1(A.out)}h 중 비중 · 과제·요구사항별은 표의 AI 활용률을 누르세요</span>}>
+            <TypeBars a={A} />
+          </Panel>
 
           <ExplainModal
             t={ex}
@@ -307,28 +331,13 @@ export function ResultDashboard({
             <AggTable rows={rows} total={totalRow} onExplain={explain} />
           </Panel>
 
+          <StageFlow vm={vm} />
+
+          <CostSaveMatrix vm={vm} />
+
           {canCompare && <StageMatrix vm={vm} />}
 
-          <ByDimPanel vm={vm} />
-
-          <Panel title="AI 없이 한 일" style={{ marginTop: 20 }}>
-            {types.length === 0 ? (
-              <p className="muted">입력된 시간이 없습니다.</p>
-            ) : (
-              <div className={d.types}>
-                {types.map(({ t, h }) => (
-                  <div key={t.cd} className={d.typeRow}>
-                    <span>{t.label}</span>
-                    <span className={d.typeTrack}>
-                      <i style={{ width: `${(h / typeMax) * 100}%` }} />
-                    </span>
-                    <b>{f1(h)}h</b>
-                    <span className="subtle">{pct(h / A.out)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Panel>
+          <ByDimPanel vm={vm} onExport={exportXlsx} exporting={exporting} />
 
           <div className={d.quality}>
             <b>데이터 신뢰도</b>

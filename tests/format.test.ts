@@ -1,5 +1,5 @@
 import { it, expect } from "vitest";
-import { f1, hours, man, pct, won } from "@/lib/format";
+import { f1, hm, hours, man, pct, won } from "@/lib/format";
 
 it("pct: null 은 —, 반올림 정수, 음수", () => {
   expect(pct(null)).toBe("—");
@@ -27,4 +27,13 @@ it("f1: 소수 1자리 고정, man: 만 원 정수", () => {
   expect(f1(1234.56)).toBe("1,234.6");
   expect(f1(null)).toBe("—");
   expect(man(12_345_678)).toBe("1,235");
+});
+
+it("hm: 분 단위 반올림, 0 시간·0 분은 생략", () => {
+  expect(hm(null)).toBe("—");
+  expect(hm(0)).toBe("0분");
+  expect(hm(10 / 60)).toBe("10분");
+  expect(hm(2)).toBe("2시간");
+  expect(hm(1 + 10 / 60)).toBe("1시간 10분");
+  expect(hm(0.1)).toBe("6분");
 });

@@ -374,13 +374,18 @@ function cellText(v: unknown, text: string): string {
   return (text ?? "").toString();
 }
 
-export async function buildWorkbook(tables: Record<SheetKey, OutTable[]>): Promise<ArrayBuffer> {
+export function buildWorkbook(tables: Record<SheetKey, OutTable[]>): Promise<ArrayBuffer> {
+  return writeSheets((Object.entries(SHEETS) as [SheetKey, string][]).map(([key, name]) => ({ name, tables: tables[key] })));
+}
+
+/** 시트마다 표를 위에서부터 한 칸씩 띄워 쌓는다 — 기준정보 양식과 측정 결과 내려받기가 같은 모양을 쓴다 */
+export async function writeSheets(sheets: { name: string; tables: OutTable[] }[]): Promise<ArrayBuffer> {
   const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
-  for (const [key, name] of Object.entries(SHEETS) as [SheetKey, string][]) {
-    const ws = wb.addWorksheet(name);
+  for (const sh of sheets) {
+    const ws = wb.addWorksheet(sh.name);
     let r = 2;
-    for (const t of tables[key]) {
+    for (const t of sh.tables) {
       if (t.title) {
         ws.getCell(r, 2).value = t.title;
         ws.getCell(r, 2).font = { bold: true };
@@ -404,7 +409,7 @@ export async function buildWorkbook(tables: Record<SheetKey, OutTable[]>): Promi
     }
     (ws.columns ?? []).forEach((col, i) => {
       if (i === 0) col.width = 2;
-      else col.width = Math.min(48, Math.max(10, ...tables[key].flatMap((t) => [t.head[i - 1] ?? "", ...t.rows.map((x) => String(x[i - 1] ?? ""))]).map((s) => s.length * 1.6)));
+      else col.width = Math.min(48, Math.max(10, ...sh.tables.flatMap((t) => [t.head[i - 1] ?? "", ...t.rows.map((x) => String(x[i - 1] ?? ""))]).map((s) => s.length * 1.6)));
     });
   }
   return (await wb.xlsx.writeBuffer()) as ArrayBuffer;

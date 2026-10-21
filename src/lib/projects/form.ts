@@ -36,7 +36,7 @@ export const FORM_FIELDS: FormField[] = [
   f("PRJ-01", "하이닉스 과제명", "기본 정보", "text", true),
   f("PRJ-12", "PROMIS 코드", "기본 정보", "text", false),
   f("PRJ-02", "대상 시스템명", "기본 정보", "text", true),
-  f("PRJ-03", "하이닉스 담당", "담당", "select", true, ["MES", "MIS", "기타"]),
+  f("PRJ-03", "하이닉스 담당", "담당", "select", true, ["MES", "MIS"]),
   f("PRJ-04", "하이닉스 담당 팀", "담당", "text", false),
   f("PRJ-14", "SK AX 소속 본부", "담당", "text", false),
   f("PRJ-15", "SK AX 소속 팀", "담당", "text", false),

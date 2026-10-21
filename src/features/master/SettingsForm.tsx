@@ -15,6 +15,8 @@ export function SettingsForm({ initial }: { initial: Settings }) {
   const { run, busy } = useMutate();
   const [mdHours, setMdHours] = useState(String(initial.mdHours));
   const [start, setStart] = useState(initial.measureStart);
+  const [workStart, setWorkStart] = useState(initial.workStart);
+  const [workEnd, setWorkEnd] = useState(initial.workEnd);
   const grades0 = Array.from(new Set([...Object.keys(initial.gradePrice), ...Object.keys(initial.gradePriceMm)]));
   const [grade, setGrade] = useState(grades0.map((g) => [g, s(initial.gradePriceMm[g] || undefined), s(initial.gradePrice[g])]));
   const [tokens, setTokens] = useState(Object.entries(initial.tokenPrice).map(([m, p]) => [m, s(p.input), s(p.cached), s(p.output)]));
@@ -24,6 +26,8 @@ export function SettingsForm({ initial }: { initial: Settings }) {
     const body: Settings = {
       mdHours: num(mdHours),
       measureStart: start,
+      workStart,
+      workEnd,
       gradePrice: Object.fromEntries(grade.filter(([k]) => k.trim()).map(([k, , md]) => [k.trim(), num(md)])),
       gradePriceMm: Object.fromEntries(grade.filter(([k]) => k.trim()).map(([k, mm]) => [k.trim(), mm.trim() ? num(mm) : 0])),
       tokenPrice: Object.fromEntries(tokens.filter(([m]) => m.trim()).map(([m, i, c, o]) => [m.trim(), { input: num(i), cached: c.trim() ? num(c) : 0, output: num(o) }])),
@@ -89,6 +93,12 @@ export function SettingsForm({ initial }: { initial: Settings }) {
               1 M/D = 시간 <span className={b.xs}>(= {Number(mdHours) * 60 || "—"}분)</span>
               <br />
               <input className={b.sel} type="number" min="1" step="0.5" style={{ width: 80 }} value={mdHours} onChange={(e) => setMdHours(e.target.value)} />
+            </label>
+            <label className={b.small}>
+              기본 근무시간 <span className={b.xs}>(밖의 시간도 입력 가능 · 타임라인에 근무시간 외로 표시)</span>
+              <br />
+              <input className={b.sel} type="time" step="600" value={workStart} onChange={(e) => setWorkStart(e.target.value)} aria-label="근무 시작" /> ~{" "}
+              <input className={b.sel} type="time" step="600" value={workEnd} onChange={(e) => setWorkEnd(e.target.value)} aria-label="근무 종료" />
             </label>
           </div>
         </section>

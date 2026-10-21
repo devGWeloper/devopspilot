@@ -6,7 +6,7 @@
 
 .layout {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -74,72 +74,6 @@
 .steps li b {
   color: var(--ink);
   font-size: 13px;
-}
-
-/* 왼쪽 날짜 목록 */
-.lfilter {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--line);
-}
-
-.pick {
-  position: relative;
-  font-size: 12px;
-  color: var(--muted);
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-/* 날짜 입력을 글자 위에 투명하게 덮어 누르면 달력이 뜨게 */
-.pick input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.days {
-  display: flex;
-  flex-direction: column;
-  max-height: calc(100vh - 260px);
-  overflow: auto;
-}
-
-.day {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-left: 3px solid transparent;
-  background: none;
-  padding: 9px 14px 9px 11px;
-  text-align: left;
-}
-
-.day:hover {
-  background: var(--bg);
-}
-
-.dayOn,
-.dayOn:hover {
-  background: var(--bg-deep);
-  border-left-color: var(--ink);
-}
-
-.dayH {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--ink);
-}
-
-.daySt {
-  font-size: 12px;
-  color: var(--muted);
 }
 
 /* 오른쪽 하루 패널 */
@@ -387,30 +321,6 @@
   color: var(--subtle);
 }
 
-/* AI 도구 외 시간 입력 창 */
-.tyrow {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  align-items: center;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-}
-
-.tyrowOn {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.tyrow input {
-  width: 72px;
-  border: 1px solid var(--line-strong);
-  border-radius: 4px;
-  padding: 4px 6px;
-  text-align: right;
-}
-
 @media (max-width: 1100px) {
   .kpis,
   .steps {
@@ -422,7 +332,152 @@
   .layout {
     grid-template-columns: 1fr;
   }
-  .days {
-    max-height: 240px;
-  }
+}
+
+/* 시 · 분 고르기 */
+.dur {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.dur select {
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  padding: 3px 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.offLine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  align-items: baseline;
+  margin: 0 16px 12px;
+  font-size: 12px;
+}
+
+.offItem {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.durBad select {
+  border-color: var(--danger);
+}
+
+/* 직접 입력 시간대 */
+.busyLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+
+.busyChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.busyDirect {
+  border-style: dashed;
+}
+
+.spanList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+
+.spanRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.spanType {
+  min-width: 170px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  padding: 3px 6px;
+  background: var(--surface);
+}
+
+.spanDur {
+  min-width: 72px;
+  text-align: right;
+}
+
+.spanDel {
+  border: 0;
+  background: none;
+  color: var(--subtle);
+  padding: 0 4px;
+  cursor: pointer;
+}
+
+.spanDel:hover {
+  color: var(--ink);
+}
+
+.spanErr,
+.spanWarn {
+  flex-basis: 100%;
+  font-size: 12px;
+  padding-left: 2px;
+}
+
+.spanErr {
+  color: var(--danger);
+}
+
+.spanWarn {
+  color: var(--warn);
+}
+
+.typeHelp {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.typeHelp summary {
+  cursor: pointer;
+  width: fit-content;
+}
+
+.typeHelp dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 20px;
+  margin: 8px 0 0;
+}
+
+.typeHelp dt {
+  font-weight: 650;
+  color: var(--ink-2);
+}
+
+.typeHelp dd {
+  margin: 0;
 }

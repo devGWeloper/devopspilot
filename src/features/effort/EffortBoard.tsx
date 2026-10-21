@@ -7,11 +7,11 @@ import { Chip } from "@/components/ui/Chip";
 import { Select } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState, KpiTile, Panel } from "@/components/ui/Panel";
-import { Segmented } from "@/components/ui/Tabs";
 import { useToast } from "@/components/ui/Toast";
 import { useCoach } from "@/components/ui/Coach";
 import { api } from "@/lib/apiClient";
-import { f1, pct } from "@/lib/format";
+import { f1, hm, pct } from "@/lib/format";
+import { spanMin } from "@/lib/measure/spans";
 import { fmtDay } from "@/lib/labels";
 import { ACT_LABEL, type ActType } from "@/lib/measure/types";
 import { STAGE_LABEL } from "@/lib/types";
@@ -25,12 +25,13 @@ import type {
 } from "@/lib/views";
 import { Progress, STATUS_LABEL } from "../common/bits";
 import { useMutate } from "../common/useMutate";
-import { AddTimeDialog, type AddTarget } from "./AddTimeDialog";
+import { AddTimeDialog, type AddTarget, type BusyItem } from "./AddTimeDialog";
+import { DayCalendar } from "./DayCalendar";
+import { DayTimeline, type Lane } from "./DayTimeline";
+import { DurationInput } from "./TimeFields";
 import s from "./effort.module.css";
 import { EffortTour } from "./EffortTour";
 import { UploadDialog } from "./UploadDialog";
-
-type Filter = "TODO" | "ALL";
 
 const SRC_LABEL = {
   OTEL: "텔레메트리 자동 수집",
@@ -49,7 +50,6 @@ export function EffortBoard({
   const [nav, start] = useTransition();
   const [upload, setUpload] = useState(false);
   const [add, setAdd] = useState<AddTarget | null>(null);
-  const [f, setF] = useState<Filter>("ALL");
   const todo = (d: EffortDayVM) => d.need > 0 || d.pending > 0;
   // 처음엔 할 일이 남은 가장 최근 날을 연다.
   const [date, setDate] = useState(vm.days.find(todo)?.date ?? vm.today);
@@ -62,13 +62,13 @@ export function EffortBoard({
     tot: 0,
     need: 0,
     pending: 0,
+    off: [],
   };
-  const days = vm.days.filter((d) => f === "ALL" || todo(d) || d.date === date);
   const { stats } = vm;
   const confTot = stats.confAi + stats.confOut;
   const who = editable ? "내" : `${vm.userNm} 님`;
-  // 역할과 관계없이 처음 들어오면 한 번은 띄운다. 첫 장 설명이 생겨 이전에 끝까지 본 사람도 다시 보도록 v2.
-  const tour = useCoach("effort.v2", vm.today, true);
+  // 역할과 관계없이 처음 들어오면 한 번은 띄운다. 달력·시간대 입력·작업 흐름으로 화면이 바뀌어 이전에 끝까지 본 사람도 다시 보도록 v3.
+  const tour = useCoach("effort.v3", vm.today, true);
 
   return (
     <>
@@ -179,42 +179,8 @@ export function EffortBoard({
         ) : (
           <div className={s.layout}>
             <Panel flush title="날짜">
-              <div className={s.lfilter}>
-                <Segmented<Filter>
-                  ariaLabel="날짜 범위"
-                  value={f}
-                  onChange={setF}
-                  options={[
-                    { key: "TODO", label: "할 일 있는 날" },
-                    { key: "ALL", label: "전체" },
-                  ]}
-                />
-                <label className={s.pick}>
-                  다른 날짜 고르기
-                  <input
-                    type="date"
-                    max={vm.today}
-                    value=""
-                    onChange={(e) => e.target.value && setDate(e.target.value)}
-                    aria-label="다른 날짜 고르기"
-                  />
-                </label>
-              </div>
-              <div className={s.days} data-tour="days">
-                {days.length === 0 && (
-                  <p className="subtle" style={{ padding: 14, fontSize: 13 }}>
-                    할 일이 남은 날이 없습니다.
-                  </p>
-                )}
-                {days.map((d) => (
-                  <DayItem
-                    key={d.date}
-                    d={d}
-                    on={d.date === date}
-                    today={vm.today}
-                    onClick={() => setDate(d.date)}
-                  />
-                ))}
+              <div data-tour="days">
+                <DayCalendar days={vm.days} date={date} today={vm.today} onPick={setDate} />
               </div>
             </Panel>
 
@@ -283,47 +249,6 @@ function Flow({ vm, editable }: { vm: EffortVM; editable: boolean }) {
   );
 }
 
-function DayItem({
-  d,
-  on,
-  today,
-  onClick,
-}: {
-  d: EffortDayVM;
-  on: boolean;
-  today: string;
-  onClick: () => void;
-}) {
-  const states = Object.values(d.st);
-  const edit = states.includes("edit");
-  const label =
-    d.need > 0
-      ? edit
-        ? "다시 확정 필요"
-        : "확정 필요"
-      : states.length
-        ? "확정됨"
-        : "기록 없음";
-  const ago = daysAgo(d.date, today);
-  return (
-    <button className={`${s.day} ${on ? s.dayOn : ""}`} onClick={onClick}>
-      <span className={s.dayH}>
-        <b>
-          {fmtDay(d.date)}
-          {ago && <span className="subtle"> {ago}</span>}
-        </b>
-        <span className="num">{d.tot ? `${f1(d.tot)}h` : ""}</span>
-      </span>
-      <span className={s.daySt}>
-        <span className={d.need > 0 ? s.warn : ""}>{label}</span>
-        {d.pending > 0 && (
-          <span className={s.warn}> · 미분류 Codex {d.pending}건</span>
-        )}
-      </span>
-    </button>
-  );
-}
-
 function DayPanel({
   day,
   vm,
@@ -350,6 +275,32 @@ function DayPanel({
       `${fmtDay(day.date)} 공수를 확정했습니다.`,
     );
   const ago = daysAgo(day.date, vm.today);
+  const untimed = Object.values(day.cells).reduce((a, c) => a + Math.max(0, c.out - c.spans.reduce((m, x) => m + spanMin(x), 0) / 60), 0);
+  const lanes: Lane[] = [
+    ...reqs.flatMap(({ r, units }) =>
+      units.map((u) => {
+        const c = day.cells[u.code];
+        return {
+          key: u.code,
+          label: r.name || r.reqId,
+          sub: STAGE_LABEL[u.stage],
+          bars: [
+            ...(c?.sess ?? []).map((x, i) => ({ key: `s${i}|${x.datId}`, kind: "codex" as const, start: x.start, end: x.end || x.start, min: x.min, label: "Codex" })),
+            ...(c?.spans ?? []).map((x, i) => ({ key: `d${i}`, kind: "direct" as const, start: x.start, end: x.end, label: ACT_LABEL[x.type] })),
+          ],
+        };
+      }),
+    ),
+    { key: "pending", label: "미분류 Codex", bars: pend.map((p) => ({ key: p.datId, kind: "pending" as const, start: p.start, end: p.end || p.start, min: p.minutes, label: "미분류" })) },
+    { key: "off", label: "업무 외", bars: day.off.map((o) => ({ key: o.datId, kind: "off" as const, start: o.start, end: o.end || o.start, min: o.minutes, label: "업무 외" })) },
+  ];
+  // 직접 입력 창에서 겹침을 미리 보이려고 — 같은 단계 직접 입력은 창 안에서 고치므로 뺀다.
+  const busyFor = (unit: string): BusyItem[] =>
+    lanes.flatMap((l) =>
+      l.bars.flatMap((b): BusyItem[] =>
+        b.kind === "codex" ? [{ start: b.start, end: b.end, label: `${l.label} · ${l.sub}`, kind: "codex" }] : b.kind === "direct" && l.key !== unit ? [{ start: b.start, end: b.end, label: `${l.label} · ${l.sub}`, kind: "direct" }] : [],
+      ),
+    );
 
   return (
     <Panel
@@ -363,9 +314,9 @@ function DayPanel({
       actions={
         <span className={s.psum} data-tour="daySum">
           <span>
-            Codex <b className="num">{f1(day.ai)}</b>h + 직접 입력{" "}
-            <b className="num">{f1(day.out)}</b>h ={" "}
-            <b className="num">{f1(day.tot)}</b>h
+            Codex <b className="num">{hm(day.ai)}</b> + 직접 입력{" "}
+            <b className="num">{hm(day.out)}</b> ={" "}
+            <b className="num">{hm(day.tot)}</b>
           </span>
           {editable && day.need > 0 && (
             <Button variant="primary" loading={busy} onClick={confirm} data-tour="confirm">
@@ -376,6 +327,8 @@ function DayPanel({
       }
     >
       {pend.length > 0 && <PendingBox items={pend} editable={editable} />}
+      {day.off.length > 0 && <OffLine items={day.off} editable={editable} />}
+      <DayTimeline lanes={lanes} work={vm.work} untimed={untimed} />
 
       <div className={s.tw}>
         <table className={s.et}>
@@ -388,7 +341,7 @@ function DayPanel({
               <th className={s.r} data-tour="addCol">
                 직접 입력
               </th>
-              <th className={s.r}>합계 (h)</th>
+              <th className={s.r}>합계</th>
             </tr>
           </thead>
           <tbody data-tour="stages">
@@ -399,7 +352,8 @@ function DayPanel({
                 units={units}
                 day={day}
                 editable={editable}
-                onAdd={onAdd}
+                onAdd={(t) => onAdd({ ...t, workStart: vm.work.start })}
+                busyFor={busyFor}
               />
             ))}
           </tbody>
@@ -407,6 +361,14 @@ function DayPanel({
       </div>
     </Panel>
   );
+}
+
+function unitLabel(vm: EffortVM, code: string): string {
+  for (const r of vm.reqs) {
+    const u = r.units.find((x) => x.code === code);
+    if (u) return `${r.name || r.reqId} · ${STAGE_LABEL[u.stage]}`;
+  }
+  return code;
 }
 
 const ST_LABEL = {
@@ -421,12 +383,14 @@ function ReqRows({
   day,
   editable,
   onAdd,
+  busyFor,
 }: {
   r: EffortReqVM;
   units: EffortUnitVM[];
   day: EffortDayVM;
   editable: boolean;
-  onAdd: (t: AddTarget) => void;
+  onAdd: (t: Omit<AddTarget, "workStart">) => void;
+  busyFor: (unit: string) => BusyItem[];
 }) {
   const { run, busy } = useMutate();
   const st = day.st[r.rk];
@@ -477,6 +441,7 @@ function ReqRows({
           locked={!editable || st === "conf" || u.done}
           editable={editable}
           onAdd={onAdd}
+          busyFor={busyFor}
         />
       ))}
     </>
@@ -491,6 +456,7 @@ function UnitRow({
   locked,
   editable,
   onAdd,
+  busyFor,
 }: {
   r: EffortReqVM;
   u: EffortUnitVM;
@@ -498,11 +464,18 @@ function UnitRow({
   date: string;
   locked: boolean;
   editable: boolean;
-  onAdd: (t: AddTarget) => void;
+  onAdd: (t: Omit<AddTarget, "workStart">) => void;
+  busyFor: (unit: string) => BusyItem[];
 }) {
   const [open, setOpen] = useState(false);
+  const { run, busy } = useMutate();
   const types = Object.entries(c?.add ?? {}).filter(([, h]) => (h ?? 0) > 0);
   const title = `${r.name || r.reqId} · ${STAGE_LABEL[u.stage]}`;
+  const unassign = (datId: string) =>
+    run(
+      () => api("/api/effort/sessions", { body: { datId, reset: true } }),
+      "배정을 되돌렸습니다. 공수 태그로 다시 맞추고, 안 맞으면 미분류로 돌아갑니다.",
+    );
   return (
     <>
       <tr>
@@ -527,29 +500,29 @@ function UnitRow({
         <td className={s.r}>
           {locked ? (
             <span className={`num ${c?.out ? "" : s.z}`}>
-              {c?.out ? f1(c.out) : "—"}
+              {c?.out ? hm(c.out) : "—"}
             </span>
           ) : (
             <button
               data-tour="add"
               className={`${s.addb} ${c?.out ? s.addbOn : ""}`}
               onClick={() =>
-                onAdd({ unit: u.code, date, title, cell: c ?? null })
+                onAdd({ unit: u.code, date, title, cell: c ?? null, busy: busyFor(u.code) })
               }
             >
-              {c?.out ? `${f1(c.out)} 수정` : "＋ 입력"}
+              {c?.out ? `${hm(c.out)} 수정` : "＋ 입력"}
             </button>
           )}
           {types.length > 0 && (
             <span className={s.meta}>
               {types
-                .map(([k, h]) => `${ACT_LABEL[k as ActType]} ${f1(h ?? 0)}`)
+                .map(([k, h]) => `${ACT_LABEL[k as ActType]} ${hm(h ?? 0)}`)
                 .join(" · ")}
             </span>
           )}
         </td>
         <td className={`${s.r} num`}>
-          <b className={c?.tot ? "" : s.z}>{f1(c?.tot ?? 0)}</b>
+          <b className={c?.tot ? "" : s.z}>{c?.tot ? hm(c.tot) : "—"}</b>
         </td>
       </tr>
       {open && c && c.sess.length > 0 && (
@@ -560,16 +533,21 @@ function UnitRow({
                 <li key={i}>
                   <span className="num">
                     {x.start}
-                    {x.end ? `~${x.end}` : ""} · {f1(x.min / 60)}h
+                    {x.end ? `~${x.end}` : ""} · {hm(x.min / 60)}
                   </span>
                   <span className="subtle">
                     {SRC_LABEL[x.src]} · {x.how}
                   </span>
+                  {x.manual && !locked && (
+                    <button className={s.lnk} disabled={busy} onClick={() => unassign(x.datId)}>
+                      배정 되돌리기
+                    </button>
+                  )}
                 </li>
               ))}
               {c.mn > 0 && (
                 <li>
-                  <span className="num">− {f1(c.mn)}h</span>
+                  <span className="num">− {hm(c.mn)}</span>
                   <span className="subtle">
                     실제 작업이 아니었던 시간으로 뺌
                   </span>
@@ -600,13 +578,15 @@ function AiCell({
 }) {
   const { run, busy } = useMutate();
   const [cut, setCut] = useState(false);
-  const [v, setV] = useState("");
+  // 뺄 시간(분). 화면은 '얼마를 뺄지'로 묻고, 저장은 남는 시간(inT)으로 보낸다.
+  const [v, setV] = useState(0);
   if (!c || c.ai === 0) return <span className={s.z}>—</span>;
+  const cell = c;
 
   async function save() {
     if (
       await run(() =>
-        api("/api/effort/entry", { body: { unit, date, inT: Number(v) } }),
+        api("/api/effort/entry", { body: { unit, date, inT: Math.max(0, cell.ai - v / 60) } }),
       )
     )
       setCut(false);
@@ -615,17 +595,8 @@ function AiCell({
   if (cut)
     return (
       <span className={s.aiEdit}>
-        <input
-          type="number"
-          step="0.1"
-          min="0"
-          max={c.ai}
-          value={v}
-          autoFocus
-          onChange={(e) => setV(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && save()}
-          aria-label="실제 작업한 Codex 시간"
-        />
+        <span className="subtle">뺄 시간</span>
+        <DurationInput min={v} onChange={setV} maxMin={Math.floor(c.ai * 60)} label="뺄 Codex 시간" autoFocus />
         <Button size="sm" variant="primary" loading={busy} onClick={save}>
           저장
         </Button>
@@ -637,7 +608,7 @@ function AiCell({
 
   return (
     <span className={s.ai} data-tour="aiCell">
-      <b className="num">{f1(c.inT)}</b>
+      <b className="num">{hm(c.inT)}</b>
       <span className={s.meta}>
         <button className={s.lnk} onClick={onToggle} aria-expanded={open}>
           세션 {c.sess.length}건 {open ? "▴" : "▾"}
@@ -645,7 +616,7 @@ function AiCell({
         {!locked && (
           <button
             className={s.lnk}
-            onClick={() => (setV(f1(c.inT)), setCut(true))}
+            onClick={() => (setV(Math.round(c.mn * 60)), setCut(true))}
             title="자리 비움 등 실제 작업이 아니었던 시간을 뺍니다"
           >
             시간 빼기
@@ -654,7 +625,7 @@ function AiCell({
       </span>
       {c.mn > 0 && (
         <span className={s.meta}>
-          수집 {f1(c.ai)} − 뺀 시간 {f1(c.mn)}
+          수집 {hm(c.ai)} − 뺀 시간 {hm(c.mn)}
         </span>
       )}
     </span>
@@ -706,13 +677,16 @@ function PendingBox({
 
 function PendingRow({ p, editable }: { p: PendingVM; editable: boolean }) {
   const { run, busy } = useMutate();
-  const assign = (code: string) =>
+  // 고르자마자 넣으면 잘못 고른 걸 알아채기 어려워서, 고른 뒤 '이동'을 눌러야 들어가게 한다.
+  const [code, setCode] = useState("");
+  const pick = p.options.find((o) => o.code === code);
+  const assign = () =>
     run(
       () =>
         api("/api/effort/sessions", {
           body: { datId: p.datId, parts: [{ unit: code, min: p.minutes }] },
         }),
-      "선택한 단계에 넣었습니다.",
+      `${pick?.label ?? code} 단계로 옮겼습니다. 잘못 옮겼으면 그 단계의 '세션' 목록에서 되돌릴 수 있습니다.`,
     );
   const off = () =>
     run(
@@ -725,7 +699,7 @@ function PendingRow({ p, editable }: { p: PendingVM; editable: boolean }) {
       <span className={s.pendInfo}>
         <b className="num">
           {p.start}
-          {p.end ? `~${p.end}` : ""} · {f1(p.minutes / 60)}h
+          {p.end ? `~${p.end}` : ""} · {hm(p.minutes / 60)}
         </b>{" "}
         <span className="subtle">
           {p.tool}
@@ -737,9 +711,9 @@ function PendingRow({ p, editable }: { p: PendingVM; editable: boolean }) {
         <>
           <span className={s.pendSel}>
             <Select
-              value=""
+              value={code}
               disabled={busy}
-              onChange={(e) => e.target.value && assign(e.target.value)}
+              onChange={(e) => setCode(e.target.value)}
               aria-label="요구사항·단계 고르기"
             >
               <option value="">요구사항·단계 고르기</option>
@@ -751,11 +725,42 @@ function PendingRow({ p, editable }: { p: PendingVM; editable: boolean }) {
               ))}
             </Select>
           </span>
+          <Button size="sm" variant="primary" disabled={!code} loading={busy} onClick={assign}>
+            이동
+          </Button>
           <Button size="sm" variant="ghost" disabled={busy} onClick={off}>
             업무 외 사용
           </Button>
         </>
       )}
+    </div>
+  );
+}
+
+/** '업무 외 사용'으로 뺀 세션 — 잘못 뺐을 때 되돌릴 곳 */
+function OffLine({ items, editable }: { items: EffortDayVM["off"]; editable: boolean }) {
+  const { run, busy } = useMutate();
+  const back = (datId: string) =>
+    run(
+      () => api("/api/effort/sessions", { body: { datId, reset: true } }),
+      "업무 외 표시를 되돌렸습니다.",
+    );
+  return (
+    <div className={s.offLine}>
+      <span className="subtle">업무 외로 뺀 Codex 세션</span>
+      {items.map((o) => (
+        <span key={o.datId} className={s.offItem}>
+          <span className="num">
+            {o.start}
+            {o.end ? `~${o.end}` : ""} · {hm(o.minutes / 60)}
+          </span>
+          {editable && (
+            <button className={s.lnk} disabled={busy} onClick={() => back(o.datId)}>
+              되돌리기
+            </button>
+          )}
+        </span>
+      ))}
     </div>
   );
 }

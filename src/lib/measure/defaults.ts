@@ -1,4 +1,5 @@
 import { STAGES } from "../types";
+import { isHHMM, toMin } from "./spans";
 import type { Settings } from "./types";
 
 export const SETTINGS_KEY = "SETTINGS";
@@ -11,6 +12,8 @@ export function defaultSettings(): Settings {
     // 계약 단가가 정해지기 전이라 비워 둔다 — 비어 있으면 AI 비용은 빈칸으로 보인다.
     tokenPrice: {},
     measureStart: "2026-11-02",
+    workStart: "08:30",
+    workEnd: "17:30",
     workTypes: {
       AN: ["요구사항 분석·정의"],
       DS: ["UI 설계", "프로그램 설계", "DB 설계", "인터페이스 설계"],
@@ -30,6 +33,7 @@ export function normalizeSettings(v: Partial<Settings> | null | undefined): Sett
     gradePriceMm: { ...d.gradePriceMm, ...(v.gradePriceMm ?? {}) },
     tokenPrice: v.tokenPrice ?? d.tokenPrice,
     measureStart: v.measureStart || d.measureStart,
+    ...(isHHMM(v.workStart) && isHHMM(v.workEnd) && toMin(v.workStart) < toMin(v.workEnd) ? { workStart: v.workStart, workEnd: v.workEnd } : { workStart: d.workStart, workEnd: d.workEnd }),
     // 저장값에 남은 배포·운영 단계 키는 버린다.
     workTypes: Object.fromEntries(STAGES.map((c) => [c, v.workTypes?.[c] ?? d.workTypes[c]])) as Settings["workTypes"],
   };

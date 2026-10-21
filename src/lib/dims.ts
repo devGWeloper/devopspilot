@@ -24,7 +24,7 @@ export const DIMS: Dim[] = [
   { key: "baseSrc", title: "공수 출처", level: "tag", cats: ["WBS 실적", "공수 산정서", "과거 실적", "담당자 추정"] },
   { key: "area", title: "과제 영역", level: "prj", cats: ["신규 구축", "기능 개선", "전환", "재구축 (차세대)", "혼합"] },
   { key: "deployType", title: "배포 형식", level: "prj", cats: ["Web — On-Premise", "Web — Cloud", "C/S — 설치형", "Mobile", "서버 전용 (UI 없음)", "설비·Embedded", "복합"] },
-  { key: "dept", title: "하이닉스 담당", level: "prj", cats: ["MES", "MIS", "기타"] },
+  { key: "dept", title: "하이닉스 담당", level: "prj", cats: ["MES", "MIS"] },
   { key: "sysGrade", title: "시스템 등급", level: "prj", cats: ["L0", "L1", "L2", "L3", "L4"] },
 ];
 

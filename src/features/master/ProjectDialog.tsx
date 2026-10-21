@@ -14,6 +14,7 @@ import type { ProjectInfo } from "@/lib/views";
 type Key = Exclude<keyof ProjectPatch, "prjId">;
 
 // 기준정보 엑셀 '01. 과제' 열 순서. 선택값은 선정 현황 항목(form.ts)과 같게.
+// 하이닉스 조직은 개편이 잦아 선택지로 묶지 않고 직접 적는다.
 const FIELDS: [Key, string, string | null][] = [
   ["prjNm", "하이닉스 과제명", null],
   ["promisCd", "PROMIS 코드", null],
@@ -89,7 +90,7 @@ export function ProjectDialog({ info, onClose }: { info: ProjectInfo | null; onC
           const options = opt ? FIELD_BY_ID[opt]?.options : undefined;
           const v = String(f[k] ?? "");
           return (
-            <Field key={k} label={label} required={k === "prjNm"}>
+            <Field key={k} label={label} required={k === "prjNm"} hint={k === "teamNm" ? "직접 입력 — 예: 제조IT팀" : undefined}>
               {options ? (
                 <Select value={v} onChange={(e) => setF({ ...f, [k]: e.target.value })}>
                   <option value="">—</option>

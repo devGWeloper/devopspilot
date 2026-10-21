@@ -1,0 +1,152 @@
+.cal {
+  padding: 10px 12px 12px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.nav {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.nav:disabled {
+  color: var(--line-strong);
+  cursor: default;
+}
+
+.navDot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.dow {
+  text-align: center;
+  font-size: 11px;
+  color: var(--subtle);
+  padding: 2px 0 4px;
+}
+
+.weekend {
+  color: var(--line-strong);
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 46px;
+  padding: 4px 0 3px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink);
+}
+
+.day:hover:not(:disabled) {
+  background: var(--bg);
+}
+
+.day:disabled {
+  color: var(--line-strong);
+  cursor: default;
+}
+
+.today .num {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.on,
+.on:hover:not(:disabled) {
+  background: var(--bg-deep);
+  border-color: var(--ink);
+}
+
+.num {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.badges {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.need,
+.pend,
+.done {
+  display: inline-block;
+  font-size: 10px;
+  line-height: 14px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.need {
+  background: var(--warn);
+  color: #fff;
+}
+
+.pend {
+  border: 1px solid var(--warn);
+  color: var(--warn);
+  line-height: 12px;
+  min-width: 14px;
+  text-align: center;
+}
+
+.done {
+  color: var(--subtle);
+  font-weight: 400;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--subtle);
+}
+
+.legend > span {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}

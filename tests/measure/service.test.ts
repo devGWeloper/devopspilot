@@ -4,7 +4,7 @@ import { tmpdir } from "os";
 import path from "path";
 import { kstDate } from "@/lib/measure/ingest";
 import { rowsOf } from "@/lib/measure/metrics";
-import { confirmDate, confirmDays, ingestOtel, loadIndex, reopenDay, resolveSession, saveEffort, todayKst, uploadLog } from "@/lib/measure/service";
+import { confirmDate, confirmDays, exportResult, getSettings, ingestOtel, loadIndex, reopenDay, resolveSession, saveEffort, saveSettings, todayKst, uploadLog } from "@/lib/measure/service";
 import { createJsonStore } from "@/lib/store/json";
 import { ensureSeed } from "@/lib/store/seed";
 import type { Store } from "@/lib/store/types";
@@ -39,6 +39,30 @@ describe("공수 입력·확정", () => {
     expect(await saveEffort(store, admin, { unit: DV, date: D, add: { A1: 2 } })).toMatchObject({ ok: false, status: 403 });
     expect(await saveEffort(store, dev1, { unit: DV, date: "2999-01-01", add: { A1: 1 } })).toMatchObject({ ok: false, code: "BAD_DATE" });
     expect(await saveEffort(store, dev1, { unit: DV, date: D, add: { A8: 1 } })).toMatchObject({ ok: false, code: "MEMO_REQUIRED" });
+  });
+
+  it("직접 입력은 분 단위로 저장한다 — 10분이 0.2시간(12분)으로 바뀌지 않게", async () => {
+    expect((await saveEffort(store, dev1, { unit: DV, date: D, add: { A1: 1 + 10 / 60 } })).ok).toBe(true);
+    const ix = await loadIndex(store);
+    expect(Math.round((ix.effort.get(`${DV}|${D}`)?.add.A1 ?? 0) * 60)).toBe(70);
+  });
+
+  it("직접 입력 시간대 — 합계는 구간 합, 같은 사람의 다른 단계와 겹치면 거부", async () => {
+    const save = (unit: string, spans: { type: "A1" | "A5"; start: string; end: string }[], untimed?: Record<string, number>) =>
+      saveEffort(store, dev1, { unit, date: D, spans, untimed, memo: "" });
+    expect(await save(DV, [{ type: "A1", start: "14:00", end: "13:00" }])).toMatchObject({ ok: false, code: "BAD_SPAN" });
+    expect(await save(DV, [{ type: "A1", start: "13:00", end: "14:00" }, { type: "A5", start: "13:50", end: "14:30" }])).toMatchObject({ ok: false, code: "SPAN_OVERLAP" });
+    expect((await save(DV, [{ type: "A5", start: "14:00", end: "14:30" }, { type: "A1", start: "13:00", end: "14:00" }])).ok).toBe(true);
+    let e = (await loadIndex(store)).effort.get(`${DV}|${D}`)!;
+    expect(e.add).toEqual({ A1: 1, A5: 0.5 });
+    expect(e.spans?.map((x) => x.start)).toEqual(["13:00", "14:00"]);
+    expect(await save(DS, [{ type: "A1", start: "13:30", end: "15:00" }])).toMatchObject({ ok: false, code: "SPAN_OVERLAP" });
+    expect((await save(DS, [{ type: "A1", start: "14:30", end: "15:00" }])).ok).toBe(true);
+    // 시간대 없이 넣은 이전 값은 남기거나 줄일 수만 있다
+    await saveEffort(store, dev1, { unit: DS, date: D, add: { A5: 1 } });
+    expect((await save(DS, [{ type: "A1", start: "15:00", end: "15:30" }], { A5: 3 })).ok).toBe(true);
+    e = (await loadIndex(store)).effort.get(`${DS}|${D}`)!;
+    expect(e.add).toEqual({ A1: 0.5, A5: 1 });
   });
 
   it("AI 도구 내 시간은 수집값보다 크게 못 넣는다", async () => {
@@ -108,6 +132,18 @@ describe("AI 사용 배정", () => {
     expect(ix.alloc.byUnitDay.get(`${DV}|${D}`)?.min).toBe(40);
   });
 
+  it("잘못 처리한 세션은 되돌리면 미분류로 돌아간다", async () => {
+    let ix = await loadIndex(store);
+    const id = ix.alloc.pending[0].session.datId;
+    expect(await resolveSession(store, dev1, id, { reset: true })).toMatchObject({ ok: false, code: "NOT_RESOLVED" });
+    expect((await resolveSession(store, dev1, id, { parts: [{ unit: DV, min: 60 }] })).ok).toBe(true);
+    expect(await resolveSession(store, dev2, id, { reset: true })).toMatchObject({ ok: false, status: 403 });
+    expect((await resolveSession(store, dev1, id, { reset: true })).ok).toBe(true);
+    ix = await loadIndex(store);
+    expect(ix.alloc.pending.map((p) => p.session.datId)).toEqual([id]);
+    expect(ix.alloc.byUnitDay.get(`${DV}|${D}`)).toBeUndefined();
+  });
+
   it("이어 들어온 이벤트는 같은 세션에 더해지고, 계정을 못 찾으면 버린다 · AI 도구 계정 또는 사번으로 매핑", async () => {
     const after = Date.parse(`${D}T01:00:00Z`) + 61 * 60000;
     await ingestOtel(store, [
@@ -151,4 +187,32 @@ describe("로그 업로드", () => {
 
 it("todayKst 는 YYYY-MM-DD", () => {
   expect(todayKst()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+});
+
+describe("측정 결과 내려받기", () => {
+  it("화면과 같은 집계를 시트별로 — 측정 중 포함이면 확정한 공수가 들어간다", async () => {
+    await saveEffort(store, dev1, { unit: DV, date: D, add: { A1: 2 } });
+    await confirmDate(store, dev1, D);
+    const r = await exportResult(store, admin, { prjId: "", includeIng: true });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(r.value);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(["과제별", "SDLC 단계별", "요구사항별", "요구사항×단계", "과제 성격별", "기준"]);
+    const ws = wb.getWorksheet("과제별")!;
+    const head = (ws.getRow(2).values as unknown[]).map(String);
+    const col = head.indexOf("AI 없이 (h)");
+    expect(ws.getRow(3).getCell(col).value).toBe(2);
+  });
+});
+
+describe("기본 근무시간", () => {
+  it("이전 저장값엔 없어 08:30~17:30 으로 채우고, 시작이 끝보다 늦으면 저장하지 않는다", async () => {
+    const cur = await getSettings(store);
+    expect([cur.workStart, cur.workEnd]).toEqual(["08:30", "17:30"]);
+    expect(await saveSettings(store, admin, { ...cur, workStart: "18:00", workEnd: "09:00" })).toMatchObject({ ok: false, code: "BAD_VALUE" });
+    expect((await saveSettings(store, admin, { ...cur, workStart: "08:00", workEnd: "17:00" })).ok).toBe(true);
+    expect((await getSettings(store)).workStart).toBe("08:00");
+  });
 });

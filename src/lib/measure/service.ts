@@ -8,7 +8,13 @@ import { activeMinutes, addTokens, kstDate, kstTime, parseLogUpload, type OtelEv
 import type { StoredSession } from "./match";
 import { buildIndex, cellOf, confKey, dayState, daySnap, rowsOf, type Index, type MeasureData } from "./metrics";
 import { ACT_TYPES, type ActType, type AiSession, type DayConf, type EffortEntry, type MonitorNote, type NoteStatus, type Settings } from "./types";
+import { isHHMM, overlaps, spanMin, toMin, type EffortSpan } from "./spans";
 import { reqDone, reqKey } from "./units";
+import type { Actor } from "../auth/permissions";
+import { writeSheets, type OutTable } from "../projects/workbook";
+import { STAGE_LABEL } from "../types";
+import { dashView, type DashFilter } from "../views";
+import type { Agg } from "./metrics";
 
 export async function getSettings(store: Store): Promise<Settings> {
   return normalizeSettings((await store.config.get<Settings>(SETTINGS_KEY))?.value);
@@ -44,6 +50,8 @@ function row(kind: MeasRow["kind"], datId: string, base: { prjId: string; reqId:
 
 const isDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 const round1 = (v: number) => Math.round(v * 10) / 10;
+// 입력은 10분 단위라 0.1시간으로 반올림하면 10분이 12분이 된다 — 분으로 맞춘다.
+const roundMin = (v: number) => Math.round(v * 60) / 60;
 
 export interface EffortInput {
   unit: string;
@@ -51,6 +59,10 @@ export interface EffortInput {
   /** AI 도구 내 시간(h) — 수집값 이하로만. 없으면 그대로 */
   inT?: number;
   add?: Partial<Record<ActType, number>>;
+  /** 직접 입력 시간대 — 주면 add 대신 이것으로 유형별 합계를 만든다 */
+  spans?: EffortSpan[];
+  /** 시간대 없이 넣었던 이전 값 중 남겨 둘 것(h) */
+  untimed?: Partial<Record<ActType, number>>;
   memo?: string;
 }
 
@@ -75,22 +87,41 @@ export async function saveEffort(store: Store, actor: ActorFull, input: EffortIn
     workDt: input.date,
     reduceH: prev?.reduceH ?? 0,
     add: prev?.add ?? {},
+    spans: prev?.spans,
     memo: prev?.memo ?? "",
   };
   if (input.inT !== undefined) {
-    const v = round1(Number(input.inT));
+    const v = roundMin(Number(input.inT));
     if (!Number.isFinite(v) || v < 0) return err(400, "BAD_VALUE", "AI 도구 내 시간은 0 이상이어야 합니다.");
-    if (v > round1(cur.ai)) return err(400, "OVER_COLLECTED", `수집값 ${round1(cur.ai)}h 보다 크게 넣을 수 없습니다. 수집되지 않은 AI 사용은 A7 로 넣어 주세요.`);
-    next.reduceH = round1(cur.ai - v);
+    if (v > roundMin(cur.ai)) return err(400, "OVER_COLLECTED", `수집값 ${round1(cur.ai)}h 보다 크게 넣을 수 없습니다. 수집되지 않은 AI 사용은 A7 로 넣어 주세요.`);
+    next.reduceH = Math.max(0, cur.ai - v);
   }
-  if (input.add !== undefined) {
+  if (input.spans !== undefined) {
+    const r = checkSpans(ix, actor.userId, u.code, input.date, input.spans);
+    if (!r.ok) return r;
     const add: Partial<Record<ActType, number>> = {};
     for (const t of ACT_TYPES) {
-      const v = round1(Number(input.add[t.cd] ?? 0));
+      const keep = roundMin(Number(input.untimed?.[t.cd] ?? 0));
+      if (!Number.isFinite(keep) || keep < 0) return err(400, "BAD_VALUE", `${t.label} 시간이 올바르지 않습니다.`);
+      // 시간대 없는 이전 값은 줄이거나 지우기만 — 시간대 없이 새로 늘리지 못하게.
+      const had = Math.max(0, (prev?.add[t.cd] ?? 0) - (prev?.spans ?? []).filter((x) => x.type === t.cd).reduce((a, x) => a + spanMin(x) / 60, 0));
+      const v = r.value.filter((x) => x.type === t.cd).reduce((a, x) => a + spanMin(x), 0) / 60 + Math.min(keep, roundMin(had));
+      if (v > 0) add[t.cd] = roundMin(v);
+    }
+    next.add = add;
+    next.spans = r.value;
+    next.memo = (input.memo ?? "").trim().slice(0, 200);
+    if (add.A8 && !next.memo) return err(400, "MEMO_REQUIRED", "A8 기타는 메모를 적어 주세요.");
+  } else if (input.add !== undefined) {
+    const add: Partial<Record<ActType, number>> = {};
+    for (const t of ACT_TYPES) {
+      const v = roundMin(Number(input.add[t.cd] ?? 0));
       if (!Number.isFinite(v) || v < 0) return err(400, "BAD_VALUE", `${t.label} 시간이 올바르지 않습니다.`);
       if (v > 0) add[t.cd] = v;
     }
     next.add = add;
+    // 합계만 바꾸면 시간대와 맞지 않으므로 시간대를 버린다.
+    next.spans = undefined;
     next.memo = (input.memo ?? "").trim().slice(0, 200);
     if (add.A8 && !next.memo) return err(400, "MEMO_REQUIRED", "A8 기타는 메모를 적어 주세요.");
   }
@@ -99,6 +130,27 @@ export async function saveEffort(store: Store, actor: ActorFull, input: EffortIn
 
   await store.meas.upsert([row("EFFORT", effortId(u.code, input.date), { ...next, reqId: u.reqId }, next, "MANUAL", actor.userId)]);
   return okR(null);
+}
+
+/** 시간대 검증 — 한 사람이 같은 시각에 직접 한 일을 두 군데 적으면 공수가 두 번 잡히므로 다른 단계 입력과도 겹치지 않게 */
+function checkSpans(ix: Index, userId: string, unit: string, date: string, raw: unknown): ServiceResult<EffortSpan[]> {
+  if (!Array.isArray(raw) || raw.length > 50) return err(400, "BAD_VALUE", "시간대 형식이 올바르지 않습니다.");
+  const types = new Set(ACT_TYPES.map((t) => t.cd));
+  const spans: EffortSpan[] = [];
+  for (const x of raw as Partial<EffortSpan>[]) {
+    if (!x || !types.has(x.type as ActType) || !isHHMM(x.start) || !isHHMM(x.end)) return err(400, "BAD_VALUE", "시간대 형식이 올바르지 않습니다.");
+    if (toMin(x.end) <= toMin(x.start)) return err(400, "BAD_SPAN", `${x.start}~${x.end}: 끝 시각이 시작보다 늦어야 합니다.`);
+    spans.push({ type: x.type as ActType, start: x.start, end: x.end });
+  }
+  spans.sort((a, b) => a.start.localeCompare(b.start));
+  for (let i = 1; i < spans.length; i++)
+    if (overlaps(spans[i - 1], spans[i])) return err(400, "SPAN_OVERLAP", `${spans[i - 1].start}~${spans[i - 1].end} 와 ${spans[i].start}~${spans[i].end} 가 겹칩니다.`);
+  for (const e of Array.from(ix.effort.values())) {
+    if (e.userId !== userId || e.workDt !== date || e.unit === unit) continue;
+    const o = (e.spans ?? []).find((y) => spans.some((x) => overlaps(x, y)));
+    if (o) return err(400, "SPAN_OVERLAP", `${o.start}~${o.end} 는 이미 ${e.unit} 에 직접 입력한 시간입니다.`);
+  }
+  return okR(spans);
 }
 
 /** rk = 과제ID-요구사항ID */
@@ -187,7 +239,7 @@ async function setConfState(store: Store, actor: ActorFull, rk: string, date: st
 export const reopenDay = (store: Store, actor: ActorFull, rk: string, date: string) => setConfState(store, actor, rk, date, "EDIT");
 export const addExtraDay = (store: Store, actor: ActorFull, rk: string, date: string) => setConfState(store, actor, rk, date, "EXTRA");
 
-export type ResolveInput = { off: true } | { parts: { unit: string; min: number }[] };
+export type ResolveInput = { off: true } | { reset: true } | { parts: { unit: string; min: number }[] };
 
 export async function resolveSession(store: Store, actor: ActorFull, datId: string, input: ResolveInput): Promise<ServiceResult<null>> {
   const r = await store.meas.get(datId);
@@ -195,7 +247,11 @@ export async function resolveSession(store: Store, actor: ActorFull, datId: stri
   const s = r.data as AiSession;
   if (actor.role !== "DEVELOPER" || s.userId !== actor.userId) return forbiddenR("본인 AI 사용만 처리할 수 있습니다.");
   const at = new Date().toISOString();
-  if ("off" in input) {
+  if ("reset" in input) {
+    // 직접 처리를 지우면 다시 공수 태그로 매칭되고, 안 맞으면 미분류로 돌아간다.
+    if (!s.resolution) return err(409, "NOT_RESOLVED", "직접 처리한 세션이 아닙니다.");
+    s.resolution = null;
+  } else if ("off" in input) {
     s.resolution = { kind: "OFF", by: actor.userId, at };
   } else {
     const ix = await loadIndex(store);
@@ -286,6 +342,7 @@ export async function ingestOtel(store: Store, events: OtelEvent[]): Promise<num
 
 export async function saveSettings(store: Store, actor: ActorFull, v: Settings): Promise<ServiceResult<Settings>> {
   if (!can(actor, "settings.manage")) return forbiddenR();
+  if (!isHHMM(v.workStart) || !isHHMM(v.workEnd) || toMin(v.workStart) >= toMin(v.workEnd)) return err(400, "BAD_VALUE", "기본 근무시간은 시작이 끝보다 빠른 HH:MM 이어야 합니다.");
   const s = normalizeSettings(v);
   if (!isDate(s.measureStart)) return err(400, "BAD_DATE", "측정 시작일 형식이 올바르지 않습니다.");
   if (!(s.mdHours > 0)) return err(400, "BAD_VALUE", "1 M/D 시간은 0 보다 커야 합니다.");
@@ -332,4 +389,85 @@ export async function addNote(store: Store, actor: ActorFull, input: NoteInput):
   };
   await store.meas.upsert([row("NOTE", note.noteId, { prjId: "-", reqId: input.reqId ?? null, workDt: isDate(input.date) ? input.date : kstDate(Date.now()), userId: input.userId ?? null }, note, "ADMIN", actor.userId)]);
   return okR(note);
+}
+
+// ---------- 측정 결과 내려받기 ----------
+
+const AGG_HEAD = [
+  "단계 수",
+  "기준 공수 (M/D)",
+  "실제 공수 (M/D)",
+  "공수 절감률 (%)",
+  "절감 공수 (M/D)",
+  "기준 인건비 (원)",
+  "실제 인건비 (원)",
+  "AI 비용 (원)",
+  "비용 순절감률 (%)",
+  "순절감액 (원)",
+  "AI 사용 (h)",
+  "AI 없이 (h)",
+  "AI 활용률 (%)",
+  ...ACT_TYPES.map((t) => `AI 없이 · ${t.label} (h)`),
+];
+const r2n = (v: number) => Math.round(v * 100) / 100;
+const pctN = (v: number | null) => (v === null ? null : Math.round(v * 1000) / 10);
+const aggCols = (a: Agg): (number | null)[] => [
+  a.unitN,
+  r2n(a.baseMd),
+  r2n(a.md),
+  pctN(a.save),
+  r2n(a.saveMd),
+  Math.round(a.baseCost),
+  Math.round(a.labor),
+  Math.round(a.aiCost),
+  pctN(a.net),
+  Math.round(a.netAmt),
+  r2n(a.inT),
+  r2n(a.out),
+  pctN(a.use),
+  ...ACT_TYPES.map((t) => r2n(a.byType[t.cd] ?? 0)),
+];
+
+/** 측정 결과 화면의 집계를 엑셀로 — 보는 사람마다 다른 관점으로 다시 묶어 볼 수 있게 화면과 같은 숫자를 내보낸다 */
+export async function exportResult(store: Store, actor: Actor, filter: DashFilter): Promise<ServiceResult<ArrayBuffer>> {
+  const vm = dashView(await loadIndex(store), actor, filter, new Date().toISOString());
+  const t = (head: string[], rows: (string | number | null)[][], title?: string): OutTable => ({ title, head: [...head, ...AGG_HEAD], rows });
+  const sheets: { name: string; tables: OutTable[] }[] = [
+    { name: "과제별", tables: [t(["과제 ID", "과제명"], [...vm.projects.map((p) => [p.prjId, p.prjNm, ...aggCols(p.agg)]), ["합계", "", ...aggCols(vm.total)]])] },
+    {
+      name: "SDLC 단계별",
+      tables: [
+        t(["단계", "업무 유형"], vm.stages.flatMap((x) => [[STAGE_LABEL[x.cd], "전체", ...aggCols(x.agg)], ...(x.workTypes.length > 1 ? x.workTypes.map((w) => [STAGE_LABEL[x.cd], w.workType, ...aggCols(w.agg)]) : [])])),
+      ],
+    },
+    { name: "요구사항별", tables: [t(["과제 ID", "과제명", "요구사항 ID", "요구사항"], vm.reqs.map((r) => [r.prjId, r.prjNm, r.reqId, r.name || null, ...aggCols(r.agg)]))] },
+    {
+      name: "요구사항×단계",
+      tables: [
+        t(
+          ["과제 ID", "과제명", "요구사항 ID", "요구사항", "단계", "담당"],
+          vm.matrix.flatMap((m) =>
+            Object.entries(m.cells).flatMap(([cd, c]) => (c?.agg ? [[m.prjId, m.prjNm, m.reqId, m.name || null, STAGE_LABEL[cd as keyof typeof STAGE_LABEL], c.ownerNm, ...aggCols(c.agg)]] : [])),
+          ),
+        ),
+      ],
+    },
+    { name: "과제 성격별", tables: vm.byDim.map((d) => t(["분류 축", "분류"], d.rows.map((r) => [d.title, r.cat, ...aggCols(r.agg)]), d.title)) },
+    {
+      name: "기준",
+      tables: [
+        {
+          head: ["항목", "값"],
+          rows: [
+            ["범위", `${vm.filter.prjId ? (vm.projectOptions.find((p) => p.prjId === vm.filter.prjId)?.prjNm ?? vm.filter.prjId) : "과제 전체"} · ${vm.filter.includeIng ? "측정 완료 + 측정 중" : "측정 완료"}`],
+            ["집계", "개발자가 확정한 날만"],
+            ["1 M/D", `${vm.settings.mdHours}시간`],
+            ["내려받은 시각", new Date().toISOString()],
+          ],
+        },
+        { title: "지표 정의", head: ["구분", "지표", "계산", "비고"], rows: vm.metrics.map((m) => [m.group, m.name, m.formula, m.note || null]) },
+      ],
+    },
+  ];
+  return okR(await writeSheets(sheets));
 }

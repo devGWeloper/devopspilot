@@ -7,6 +7,7 @@ import { Segmented } from "@/components/ui/Tabs";
 import { f1, man, pct } from "@/lib/format";
 import type { Agg } from "@/lib/measure/metrics";
 import x from "./explain.module.css";
+import { TypeBars } from "./TypeBars";
 
 export type ExplainKey = "save" | "net" | "use";
 
@@ -277,6 +278,13 @@ function Use({ a }: { a: Agg }) {
           ["실제 공수", `${f1(a.tot)}h`, "AI 사용 + AI 없이 (확정된 날만)"],
         ]}
       />
+      <div className={x.parts}>
+        <div className={x.partsHead}>
+          <span>AI 없이 한 일 — 업무 유형</span>
+          <span>시간 · AI 없이 중 비중</span>
+        </div>
+        <TypeBars a={a} empty="AI 없이 한 시간이 없습니다." />
+      </div>
     </>
   );
 }
