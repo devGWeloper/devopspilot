@@ -22,10 +22,10 @@ describe("seed", () => {
     expect((await s.config.get("SETTINGS"))?.value).toBeTruthy();
   });
 
-  it("샘플: 과제 4개(개발만)·데모 계정, 확정 스냅샷이 실제 값과 같다", async () => {
+  it("샘플: 과제 10개·데모 계정, 확정 스냅샷이 실제 값과 같다", async () => {
     const s = fresh();
     await ensureSeed(s, { samples: true });
-    expect(await s.projects.list()).toHaveLength(4);
+    expect(await s.projects.list()).toHaveLength(10);
     const ids = (await s.users.list()).map((u) => u.userId).sort();
     expect(ids).toEqual(["admin", "dev01", "dev02", "dev03", "dev04", "dev05", "dev06", "view01"]);
     const ix = await loadIndex(s);

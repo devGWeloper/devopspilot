@@ -352,7 +352,7 @@ function DayPanel({
                 units={units}
                 day={day}
                 editable={editable}
-                onAdd={(t) => onAdd({ ...t, workStart: vm.work.start })}
+                onAdd={(t) => onAdd({ ...t, work: vm.work })}
                 busyFor={busyFor}
               />
             ))}
@@ -389,7 +389,7 @@ function ReqRows({
   units: EffortUnitVM[];
   day: EffortDayVM;
   editable: boolean;
-  onAdd: (t: Omit<AddTarget, "workStart">) => void;
+  onAdd: (t: Omit<AddTarget, "work">) => void;
   busyFor: (unit: string) => BusyItem[];
 }) {
   const { run, busy } = useMutate();
@@ -464,7 +464,7 @@ function UnitRow({
   date: string;
   locked: boolean;
   editable: boolean;
-  onAdd: (t: Omit<AddTarget, "workStart">) => void;
+  onAdd: (t: Omit<AddTarget, "work">) => void;
   busyFor: (unit: string) => BusyItem[];
 }) {
   const [open, setOpen] = useState(false);

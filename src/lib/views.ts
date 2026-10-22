@@ -529,6 +529,7 @@ export interface SelReqVM {
   prjId: string;
   reqId: string;
   name: string;
+  stage: StageCd;
   baseMd: number;
   status: ReqStatus;
   /** 선정 현황 항목 ID → 값 */
@@ -555,6 +556,7 @@ export function selectionView(ix: Index, actor: Actor): SelectionVM {
           prjId: u.prjId,
           reqId: u.code,
           name: reqLabel(u.req),
+          stage: u.stage,
           baseMd: u.s.baseMd,
           status: stageStatus(ix, u.req, u.stage),
           values: formValues(u.prj, u.req, u.s, u.code),

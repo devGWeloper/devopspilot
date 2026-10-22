@@ -11,7 +11,8 @@ import { f1 } from "@/lib/format";
 import { FORM_FIELDS, FORM_GROUPS, missingRequired, tally, type FormField, type FormGroup } from "@/lib/projects/form";
 import type { SelReqVM, SelectionVM } from "@/lib/views";
 import { AXES, BLANK, distOf, getter, val, type Axis } from "./axes";
-import { CrossPanel, DistPanel } from "./DistPanel";
+import { DistPanel } from "./DistPanel";
+import { ProjectMap } from "./ProjectMap";
 import s from "./selection.module.css";
 
 // 과제 속성은 과제 줄에 한 번만 보여 주고, 열로는 요구사항 이하 항목만 편다 — 엑셀처럼 행마다 반복하면 읽을 게 너무 많다.
@@ -68,6 +69,7 @@ export function SelectionDashboard({ vm }: { vm: SelectionVM }) {
     [filters],
   );
   const pickOne = useCallback((id: string, v: string) => pick([[id, v]]), [pick]);
+  const pickPrj = useCallback((v: string) => pickOne("PRJ-01", v), [pickOne]);
 
   if (!vm.reqs.length)
     return (
@@ -119,8 +121,8 @@ export function SelectionDashboard({ vm }: { vm: SelectionVM }) {
         </Stats>
       </PageHeader>
 
+      <ProjectMap vm={vm} picked={filters["PRJ-01"]} onPick={pickPrj} />
       <DistPanel dists={dists} filters={filters} onPick={pickOne} />
-      <CrossPanel vm={vm} onPick={pick} />
 
       <Panel
         id="sel-table"

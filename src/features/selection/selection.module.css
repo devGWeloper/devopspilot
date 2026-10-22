@@ -133,140 +133,6 @@
 
 
 
-/* 교차 분포 — 축 이름을 단 격자, 가장자리에 행·열 합계 막대 */
-.crossPick {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 16px;
-}
-
-.mx {
-  display: grid;
-  gap: 6px;
-  align-items: stretch;
-  width: max-content;
-  max-width: 100%;
-  font-variant-numeric: tabular-nums;
-}
-
-.mxY {
-  grid-column: 1;
-  writing-mode: vertical-rl;
-  text-orientation: upright;
-  letter-spacing: 1px;
-  justify-self: center;
-  align-self: center;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.mxRow {
-  grid-column: 2;
-  align-self: center;
-  max-width: 180px;
-  padding-right: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-2);
-  text-align: right;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mxCell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  height: 72px;
-  border: 0;
-  border-radius: var(--r-md, 8px);
-  font: inherit;
-  transition: box-shadow 120ms;
-}
-
-.mxCell:hover {
-  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink);
-}
-
-.mxCell b {
-  font-size: 20px;
-  line-height: 1;
-}
-
-.mxCell small {
-  font-size: 11px;
-  opacity: 0.75;
-}
-
-.mxEmpty {
-  height: 72px;
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--r-md, 8px);
-  background: repeating-linear-gradient(135deg, transparent 0 6px, var(--surface-2) 6px 8px);
-}
-
-.mxMargin {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-left: 6px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink-2);
-}
-
-.mxMargin i,
-.mxColBar i {
-  display: block;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--line-strong);
-}
-
-.mxMargin i {
-  max-width: 56px;
-  flex: none;
-}
-
-.mxColFoot {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-top: 2px;
-}
-
-.mxColBar {
-  display: block;
-}
-
-.mxCol {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-2);
-  text-align: center;
-  white-space: nowrap;
-}
-
-.mxCol b {
-  margin-left: 4px;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-.mxX {
-  text-align: center;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
-}
-
 .groups {
   display: flex;
   flex-wrap: wrap;
@@ -543,5 +409,378 @@
   .prjCard,
   .detail {
     max-width: calc(100vw - 80px);
+  }
+}
+
+/* 선정 과제 분포 — 왼쪽 분포도, 오른쪽 번호 맞춘 과제 목록 */
+.mapAxes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mapSelect {
+  width: 150px;
+  height: 32px;
+  font-size: 13px;
+}
+
+.mapGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
+  border-top: 1px solid var(--line);
+}
+
+.mapSide {
+  min-width: 0;
+  padding: 14px 24px 18px;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.presets > span {
+  margin-right: 2px;
+  font-weight: 650;
+}
+
+.preset {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+
+.preset:hover {
+  border-color: var(--ink-2);
+}
+
+.presetOn {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+
+.mapNote {
+  font-size: 12px;
+  color: var(--subtle);
+}
+
+.map {
+  position: relative;
+  height: 330px;
+  margin: 34px 16px 48px 36px;
+}
+
+.plot {
+  position: absolute;
+  inset: 0;
+  border-left: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.gx,
+.gy {
+  position: absolute;
+  background: var(--line);
+}
+
+.gx {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.gy {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.tx,
+.ty {
+  position: absolute;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.tx {
+  top: calc(100% + 6px);
+  transform: translateX(-50%);
+}
+
+.ty {
+  right: calc(100% + 10px);
+  transform: translateY(-50%);
+}
+
+.axX,
+.axY {
+  position: absolute;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.axX {
+  top: calc(100% + 26px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.axY {
+  bottom: calc(100% + 10px);
+  left: -30px;
+}
+
+.dot {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.78);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 2px var(--surface);
+  transition: opacity var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+
+/* 작은 원도 누르기 쉽게 */
+.dot::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+}
+
+.dotHot {
+  z-index: 2;
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink);
+}
+
+.dotDim {
+  opacity: 0.28;
+}
+
+.dotTip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--ink);
+  box-shadow: var(--shadow-pop);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 11.5px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.dotTip b {
+  color: #fff;
+  font-size: 12.5px;
+}
+
+.dotTipDown {
+  top: calc(100% + 10px);
+  bottom: auto;
+}
+
+/* 목록은 분포도 높이에 맞추고 넘치면 안에서 스크롤 — 과제가 늘어도 그림이 밀려나지 않게 */
+.listSide {
+  position: relative;
+  min-width: 0;
+  border-left: 1px solid var(--line);
+}
+
+.listInner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.listHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px 6px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--muted);
+}
+
+.legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.prjList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0 10px 12px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.prjRow {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  font: inherit;
+  text-align: left;
+}
+
+.prjRowHot {
+  background: var(--surface-2);
+}
+
+.prjRowPicked {
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.prjNo {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.78);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.prjMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.prjTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.prjTitle b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+}
+
+.prjMd {
+  flex: none;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.prjMd small {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.prjMeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.prjStages {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--subtle);
+  white-space: nowrap;
+}
+
+.mini {
+  flex: 1;
+  display: flex;
+  gap: 2px;
+  height: 6px;
+}
+
+.mini i {
+  flex-basis: 0;
+  min-width: 2px;
+  border-radius: 1px;
+}
+
+@media (max-width: 1180px) {
+  .mapGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .listSide {
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+  .listInner {
+    position: static;
   }
 }

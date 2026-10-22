@@ -7,12 +7,20 @@ import type { Project, StageCd } from "../types";
 
 const LV = ["상", "중", "하"];
 
-/** 난이도를 바탕으로 단계마다 조금씩 다른 적합도 평가를 만든다(분포 화면이 비지 않게). */
-function demoFit(code: string, diff: string): { fit: string; spec: string; ctx: string; gen: string } {
+const lv = (i: number) => LV[Math.min(2, Math.max(0, i))];
+
+/**
+ * 과제마다 AI 에 맞는 정도(0 상 · 1 중 · 2 하)를 두고 단계마다 조금씩 흔든다 — 과제끼리 분포가 갈리게.
+ * 선정 양식대로 명세·맥락·생성 패턴은 개발자 평가, 예상 기대효과는 그중 가장 낮은 값(참고 등급)을 보고 PM 이 정한다(가끔 한 단계 올려 잡음).
+ */
+function demoFit(code: string, bias: number): { fit: string; spec: string; ctx: string; gen: string } {
   const n = Array.from(code).reduce((a, c) => a + c.charCodeAt(0), 0);
-  const base = diff === "상" ? 0 : diff === "중" ? 1 : 2;
-  const pick = (k: number) => LV[Math.min(2, Math.max(0, base + ((n + k) % 3 === 0 ? 1 : (n + k) % 5 === 0 ? -1 : 0)))];
-  return { spec: pick(0), ctx: pick(1), gen: pick(2), fit: pick(3) };
+  const pick = (k: number) => lv(bias + ((n + k) % 3 === 0 ? 1 : (n + k) % 5 === 0 ? -1 : 0));
+  const spec = pick(0);
+  const ctx = pick(1);
+  const gen = pick(2);
+  const worst = Math.max(LV.indexOf(spec), LV.indexOf(ctx), LV.indexOf(gen));
+  return { spec, ctx, gen, fit: lv(worst - (n % 2 === 0 ? 1 : 0)) };
 }
 
 /** [사번, 성명, SK AX 팀, SK AX 본부] — AI 도구 계정은 사번@skax.demo */
@@ -32,7 +40,15 @@ const PRJ: P[] = [
   ["QAL02", "품질 알람 고도화", "smartMES", "MES", "품질시스템팀", "홍길동", "L2", "Web — On-Premise", "기능 개선", "Bitbucket", "Jira", "MES개발2팀", "제조DX본부"],
   ["LMS03", "물류 조회 화면 개선", "LMS", "MES", "물류시스템팀", "박민수", "L3", "Web — On-Premise", "기능 개선", "GitLab", "Redmine", "물류DX팀", "제조DX본부"],
   ["MIS05", "경영 리포트 전환", "MIS Portal", "MIS", "경영정보팀", "최현우", "L3", "Web — Cloud", "전환", "GitHub", "Jira", "경영DX팀", "경영DX본부"],
+  ["EQP04", "설비 PM 일정 자동화", "EQP Portal", "MES", "설비기술팀", "정수진", "L2", "Web — On-Premise", "신규 구축", "GitHub", "Jira", "MES개발2팀", "제조DX본부"],
+  ["YLD06", "수율 집계 배치 재구축", "YMS", "MES", "수율분석팀", "강민호", "L1", "서버 전용 (UI 없음)", "재구축 (차세대)", "Bitbucket", "Jira", "MES개발1팀", "제조DX본부"],
+  ["RCP07", "레시피 변경 이력 관리", "RMS", "MES", "공정기술팀", "윤서연", "L0", "C/S — 설치형", "기능 개선", "SVN", "Redmine", "MES개발2팀", "제조DX본부"],
+  ["HRM08", "인사 평가 화면 신규", "HR Portal", "MIS", "인사시스템팀", "임지훈", "L4", "Web — Cloud", "신규 구축", "GitHub", "Azure Boards", "경영DX팀", "경영DX본부"],
+  ["PUR09", "구매 승인 흐름 개선", "SRM", "MIS", "구매시스템팀", "오세훈", "L3", "Web — On-Premise", "기능 개선", "GitLab", "Jira", "경영DX팀", "경영DX본부"],
+  ["MOB10", "현장 점검 모바일 앱", "Field App", "MES", "설비보전팀", "서지민", "L2", "Mobile", "신규 구축", "GitHub", "Jira", "물류DX팀", "제조DX본부"],
 ];
+// 과제별 AI 에 맞는 정도(0 상 · 1 중 · 2 하) — 화면 패턴 반복·신규 웹은 높게, 레거시 C/S·암묵지 많은 재구축은 낮게.
+const AI_BIAS: Record<string, number> = { DAE01: 1, QAL02: 0, LMS03: 0, MIS05: 1, EQP04: 1, YLD06: 2, RCP07: 2, HRM08: 0, PUR09: 1, MOB10: 1 };
 
 type S = [StageCd, string, string, number];
 type R = [prj: number, reqId: string, name: string, difficulty: string, grade: string, baseSrc: string, stages: S[], done: boolean];
@@ -51,6 +67,27 @@ const REQS: R[] = [
   [3, "REQ0083", "리포트 요구사항 정의", "중", "고급", "공수 산정서", [["AN", "요구사항 분석·정의", "한개발", 2]], true],
   [3, "REQ0081", "월 손익 리포트 화면 전환", "중", "중급", "공수 산정서", [["DV", "코드·플랫폼 전환", "한개발", 6]], false],
   [3, "REQ0085", "리포트 단위 테스트 보강", "하", "초급", "공수 산정서", [["TS", "단위 테스트", "한개발", 1.5]], false],
+  // 아래는 측정 전 과제 — 공수 입력이 없으므로 측정 완료로 두지 않는다(결과에 0 시간으로 잡히지 않게).
+  [4, "REQ0101", "PM 주기 기준 정의", "중", "고급", "공수 산정서", [["AN", "요구사항 분석·정의", "최개발", 2]], false],
+  [4, "REQ0102", "PM 일정 생성 배치", "상", "고급", "공수 산정서", [["DS", "프로그램 설계", "최개발", 1.5], ["DV", "배치", "최개발", 5], ["TS", "통합·회귀 테스트", "최개발", 1.5]], false],
+  [4, "REQ0103", "PM 일정 캘린더 화면", "중", "중급", "공수 산정서", [["DS", "UI 설계", "김개발", 1], ["DV", "UI 개발", "김개발", 4], ["TS", "단위 테스트", "김개발", 1]], false],
+  [4, "REQ0104", "PM 알림 메일 연계", "하", "중급", "담당자 추정", [["DV", "인터페이스·연계", "박개발", 2]], false],
+  [5, "REQ0201", "기존 수율 집계 로직 분석", "상", "특급", "과거 실적", [["AN", "요구사항 분석·정의", "박개발", 2.5]], false],
+  [5, "REQ0202", "수율 집계 배치 재구현", "상", "특급", "과거 실적", [["DS", "프로그램 설계", "박개발", 2], ["DV", "배치", "박개발", 7], ["TS", "통합·회귀 테스트", "박개발", 2]], false],
+  [5, "REQ0203", "집계 SQL 튜닝", "중", "고급", "WBS 실적", [["DV", "성능 개선", "박개발", 3], ["TS", "단위 테스트", "박개발", 1]], false],
+  [6, "REQ0301", "변경 이력 테이블 설계", "중", "고급", "WBS 실적", [["DS", "DB 설계", "최개발", 1.5]], false],
+  [6, "REQ0302", "변경 이력 저장 로직", "상", "고급", "WBS 실적", [["DV", "백엔드 로직 수정", "최개발", 4], ["TS", "통합·회귀 테스트", "최개발", 1.5]], false],
+  [6, "REQ0303", "이력 조회 화면 (C/S)", "중", "중급", "WBS 실적", [["DV", "UI 개발", "정개발", 3], ["TS", "단위 테스트", "정개발", 0.5]], false],
+  [7, "REQ0401", "평가 항목 요구사항 정의", "하", "중급", "공수 산정서", [["AN", "요구사항 분석·정의", "한개발", 1.5]], false],
+  [7, "REQ0402", "평가 입력 화면", "하", "중급", "공수 산정서", [["DS", "UI 설계", "한개발", 1], ["DV", "UI 개발", "한개발", 3], ["TS", "단위 테스트", "한개발", 0.5]], false],
+  [7, "REQ0403", "평가 결과 조회 API", "하", "초급", "공수 산정서", [["DV", "백엔드 로직 신규", "한개발", 2], ["TS", "단위 테스트", "한개발", 0.5]], false],
+  [7, "REQ0404", "평가 집계 리포트", "중", "중급", "공수 산정서", [["DV", "DB·SQL", "한개발", 2.5]], false],
+  [8, "REQ0501", "승인 단계 규칙 정리", "중", "고급", "WBS 실적", [["AN", "요구사항 분석·정의", "한개발", 1]], false],
+  [8, "REQ0502", "결재선 로직 수정", "중", "고급", "WBS 실적", [["DV", "백엔드 로직 수정", "이개발", 3], ["TS", "통합·회귀 테스트", "이개발", 1]], false],
+  [8, "REQ0503", "ERP 연계 전문 변경", "상", "고급", "WBS 실적", [["DS", "인터페이스 설계", "이개발", 1.5], ["DV", "인터페이스·연계", "이개발", 4]], false],
+  [9, "REQ0601", "점검 항목 화면 설계", "하", "중급", "담당자 추정", [["DS", "UI 설계", "정개발", 1.5]], false],
+  [9, "REQ0602", "점검 결과 입력 화면", "중", "중급", "담당자 추정", [["DV", "UI 개발", "정개발", 4], ["TS", "단위 테스트", "정개발", 1]], false],
+  [9, "REQ0603", "오프라인 동기화", "상", "고급", "담당자 추정", [["DS", "프로그램 설계", "이개발", 1.5], ["DV", "백엔드 로직 신규", "이개발", 5], ["TS", "통합·회귀 테스트", "이개발", 1.5]], false],
 ];
 
 /** [요구사항 ID-단계, 일자 인덱스들, AI 시간 합(h), AI 도구 외 합(h), 작업 유형 순환] — 데모 요구사항 ID 는 과제끼리 겹치지 않는다 */
@@ -148,7 +185,7 @@ export function sampleData(now = Date.now()): SampleData {
         baseSrc: src,
         done,
         doneAt: done ? days[days.length - 1] : null,
-        ...demoFit(unitCode(prjId, reqId, cd), diff),
+        ...demoFit(unitCode(prjId, reqId, cd), AI_BIAS[prjId] ?? 1),
       })),
     });
   }

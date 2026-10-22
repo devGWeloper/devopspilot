@@ -1,4 +1,5 @@
 import { FORM_FIELDS, FORM_GROUPS, tally, type FormGroup } from "@/lib/projects/form";
+import { STAGE_LABEL, STAGES, type StageCd } from "@/lib/types";
 import type { SelReqVM, SelectionVM } from "@/lib/views";
 
 export interface Axis {
@@ -82,4 +83,29 @@ export function distOf(vm: SelectionVM, a: Axis): AxisDist {
     if (blank) warns.push(`미입력 ${blank}`);
   }
   return { rows, total, blank, warns };
+}
+
+// 상·중·하 축은 점수로 바꿔 과제의 자리를 평균으로 잡는다 — 선정 과제 분포의 가로·세로 축.
+const LEVEL: Record<string, number> = { 하: 1, 중: 2, 상: 3 };
+export const LEVEL_AXES = AXES.filter((a) => a.level === "req" && a.options.join() === "상,중,하").map((a) => a.id);
+
+/** 요구사항·단계 값의 평균(하 1 · 중 2 · 상 3). 상·중·하 값이 하나도 없으면 null */
+export function levelAvg(reqs: SelReqVM[], id: string): number | null {
+  const xs = reqs.map((r) => LEVEL[val(r, id)]).filter((x): x is number => x !== undefined);
+  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+}
+
+export interface StageSum {
+  cd: StageCd;
+  label: string;
+  n: number;
+  baseMd: number;
+}
+
+/** SDLC 단계별 측정 단위 수·기준 공수 — 단위가 없는 단계도 자리를 지킨다 */
+export function stageSums(reqs: SelReqVM[]): StageSum[] {
+  return STAGES.map((cd) => {
+    const rs = reqs.filter((r) => r.stage === cd);
+    return { cd, label: STAGE_LABEL[cd], n: rs.length, baseMd: rs.reduce((a, r) => a + r.baseMd, 0) };
+  });
 }

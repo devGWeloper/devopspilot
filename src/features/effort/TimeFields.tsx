@@ -1,8 +1,67 @@
 "use client";
 
+import { useState, type KeyboardEvent } from "react";
+import { fromMin, readTime, toMin } from "@/lib/measure/spans";
 import s from "./effort.module.css";
 
 const STEP = 10;
+// 저장 형식이 23:59 까지라 10분 단위 마지막 칸은 23:50
+const LAST = 24 * 60 - STEP;
+
+/**
+ * 시각 직접 쓰기 "HH:MM" — 930·0930·9:30 처럼 적어도 되고 ↑↓ 는 10분씩.
+ * 잘못 쓴 값도 그대로 올려 보내 입력 창이 저장을 막게 한다 — 이전 값으로 몰래 되돌리면 적은 줄 알고 넘어간다.
+ */
+export function TimeText({
+  value,
+  onChange,
+  label,
+  invalid,
+  autoFocus,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  label: string;
+  invalid?: boolean;
+  autoFocus?: boolean;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  function commit() {
+    if (draft === null) return;
+    onChange(readTime(draft, STEP) ?? draft);
+    setDraft(null);
+  }
+  function key(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") return e.currentTarget.blur();
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    const cur = toMin(readTime(draft ?? value, 1) ?? "");
+    if (Number.isNaN(cur)) return;
+    const next = fromMin(Math.max(0, Math.min(LAST, e.key === "ArrowUp" ? Math.floor(cur / STEP) * STEP + STEP : Math.ceil(cur / STEP) * STEP - STEP)));
+    setDraft(next);
+    onChange(next);
+  }
+  return (
+    <input
+      className={`${s.timeText} ${invalid ? s.timeBad : ""}`}
+      value={draft ?? value}
+      onFocus={(e) => {
+        setDraft(value);
+        e.target.select();
+      }}
+      onChange={(e) => setDraft(e.target.value.replace(/[^\d:]/g, ""))}
+      onBlur={commit}
+      onKeyDown={key}
+      inputMode="numeric"
+      maxLength={5}
+      placeholder="09:00"
+      autoFocus={autoFocus}
+      aria-label={`${label} 시각`}
+      aria-invalid={invalid || undefined}
+      title="10분 단위 — 0930 처럼 숫자만 적어도 됩니다. ↑↓ 로 10분씩"
+    />
+  );
+}
 
 /** 시 · 분(10분 단위) 고르기. 값은 분 */
 export function DurationInput({
@@ -42,32 +101,6 @@ export function DurationInput({
         ))}
       </select>
       분
-    </span>
-  );
-}
-
-/** 시각 고르기 "HH:MM" — 분은 10분 단위 */
-export function TimeInput({ value, onChange, label, invalid }: { value: string; onChange: (v: string) => void; label: string; invalid?: boolean }) {
-  const [h, m] = value.split(":").map(Number);
-  const ms = Array.from(new Set([...Array.from({ length: 60 / STEP }, (_, i) => i * STEP), m])).sort((a, b) => a - b);
-  const pad = (x: number) => String(x).padStart(2, "0");
-  return (
-    <span className={`${s.dur} ${invalid ? s.durBad : ""}`}>
-      <select value={h} onChange={(e) => onChange(`${pad(Number(e.target.value))}:${pad(m)}`)} aria-label={`${label} 시`}>
-        {Array.from({ length: 24 }, (_, i) => (
-          <option key={i} value={i}>
-            {pad(i)}
-          </option>
-        ))}
-      </select>
-      :
-      <select value={m} onChange={(e) => onChange(`${pad(h)}:${pad(Number(e.target.value))}`)} aria-label={`${label} 분`}>
-        {ms.map((x) => (
-          <option key={x} value={x}>
-            {pad(x)}
-          </option>
-        ))}
-      </select>
     </span>
   );
 }

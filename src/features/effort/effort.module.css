@@ -378,17 +378,14 @@
   align-items: baseline;
 }
 
-.durBad select {
-  border-color: var(--danger);
-}
 
-/* 직접 입력 시간대 */
+/* 직접 입력 */
 .busyLine {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-bottom: 12px;
+  margin-top: 12px;
   font-size: 12px;
 }
 
@@ -404,38 +401,294 @@
   font-variant-numeric: tabular-nums;
 }
 
-.busyDirect {
-  border-style: dashed;
+/* 하루 막대 — 위는 이미 잡힌 시간, 아래는 이 단계 시간대 */
+.strip {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 4px 10px;
+  align-items: center;
+  margin: 4px 0 16px;
 }
 
+.stripAxis {
+  position: relative;
+  height: 14px;
+  font-size: 11px;
+  color: var(--subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.stripAxis span {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.stripAxis span:first-child {
+  transform: none;
+}
+
+.stripAxis span:last-child {
+  transform: translateX(-100%);
+}
+
+.stripLane {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.stripLane small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--subtle);
+}
+
+.stripTrack {
+  position: relative;
+  height: 30px;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+
+.stripMine {
+  border: 1px dashed var(--line-strong);
+  background: var(--surface);
+  cursor: copy;
+}
+
+.stripMine:hover {
+  border-color: var(--ink);
+}
+
+.stripTick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+  pointer-events: none;
+}
+
+.stripNone {
+  position: absolute;
+  top: 50%;
+  left: 8px;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--subtle);
+}
+
+/* 막대가 좁으면 글자는 잘리고 막대만 남는다 */
+.sb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  min-width: 4px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 3px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sbCodex {
+  background: var(--ink);
+  color: #fff;
+}
+
+.sbOther {
+  background: var(--surface);
+  border: 1px dashed var(--line-strong);
+  color: var(--subtle);
+  font-weight: 400;
+}
+
+.sbMine {
+  background: var(--line-strong);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.sbMine:hover {
+  outline: 1px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.sbNone {
+  background: var(--surface);
+  border: 1.5px dashed var(--ink-2);
+}
+
+.sbOn,
+.sbOn:hover {
+  z-index: 1;
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.sbWarn {
+  box-shadow: inset 0 0 0 2px var(--warn);
+}
+
+.sbBad {
+  box-shadow: inset 0 0 0 2px var(--danger);
+}
+
+/* 시간대 목록 — 시각은 줄에서 바로 적고, 작업 유형은 눌러서 펼쳐 고른다 */
 .spanList {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.spanEmpty {
+  margin: 0;
   padding: 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  color: var(--subtle);
+}
+
+.spanItem {
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
-}
-
-.spanRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-
-.spanType {
-  min-width: 170px;
-  border: 1px solid var(--line-strong);
-  border-radius: 4px;
-  padding: 3px 6px;
   background: var(--surface);
 }
 
+.spanOn {
+  border-color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.spanHead {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 4px 8px 10px;
+}
+
+.spanWhen {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tilde {
+  color: var(--subtle);
+}
+
+.timeText {
+  width: 64px;
+  height: 34px;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--ink);
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+
+.timeText::placeholder {
+  font-weight: 400;
+  color: var(--subtle);
+}
+
+.timeText:hover {
+  border-color: var(--ink-2);
+}
+
+.timeText:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.timeBad,
+.timeBad:hover,
+.timeBad:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-soft);
+}
+
 .spanDur {
-  min-width: 72px;
-  text-align: right;
+  min-width: 70px;
+  padding-left: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.typeBtn {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.typeBtn span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.typeBtn i {
+  font-style: normal;
+  font-size: 9px;
+  color: var(--subtle);
+}
+
+.typeBtn:hover,
+.typeBtnOn {
+  border-color: var(--ink);
+}
+
+.typeBtnNone {
+  border-style: dashed;
+  font-weight: 400;
+  color: var(--subtle);
+}
+
+.spanX {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--subtle);
+  cursor: pointer;
+}
+
+.spanX:hover {
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .spanDel {
@@ -452,9 +705,9 @@
 
 .spanErr,
 .spanWarn {
-  flex-basis: 100%;
+  margin: 0;
+  padding: 0 12px 9px;
   font-size: 12px;
-  padding-left: 2px;
 }
 
 .spanErr {
@@ -465,29 +718,80 @@
   color: var(--warn);
 }
 
-.typeHelp {
-  margin-top: 12px;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.typeHelp summary {
-  cursor: pointer;
-  width: fit-content;
-}
-
-.typeHelp dl {
+.types {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px 20px;
-  margin: 8px 0 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 12px 10px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 var(--r-sm) var(--r-sm);
+  background: var(--surface-2);
 }
 
-.typeHelp dt {
-  font-weight: 650;
-  color: var(--ink-2);
+.typeCard {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
 }
 
-.typeHelp dd {
-  margin: 0;
+.typeCard b {
+  font-size: 13px;
+}
+
+.typeCard small {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--subtle);
+}
+
+.typeCard:hover {
+  border-color: var(--ink);
+}
+
+.typeOn {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+
+.typeOn b::before {
+  content: "✓ ";
+}
+
+.typeOn small {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.memo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 14px;
+  font-size: 13px;
+}
+
+.why {
+  margin-right: auto;
+  font-size: 13px;
+  color: var(--warn);
+}
+
+@media (max-width: 700px) {
+  .types {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .spanHead {
+    flex-wrap: wrap;
+  }
+  .strip {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
 }
