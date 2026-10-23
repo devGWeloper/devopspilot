@@ -7,7 +7,8 @@ import { Tabs } from "@/components/ui/Tabs";
 import { f1, pct } from "@/lib/format";
 import { fmtDay } from "@/lib/labels";
 import type { Ratio } from "@/lib/measure/metrics";
-import type { CollectRowVM, ConfMatrixVM } from "@/lib/views";
+import { kstDate, kstTime } from "@/lib/measure/ingest";
+import type { CollectRowVM, ConfMatrixVM, UploadStatVM } from "@/lib/views";
 import b from "../common/board.module.css";
 import { HistoryView } from "./history/HistoryView";
 
@@ -16,7 +17,7 @@ type Tab = "conf" | "collect" | "history";
 const won = (v: number) => `${Math.round(v).toLocaleString()}원`;
 const ratioText = (r: Ratio) => (r.rate === null ? "—" : `${pct(r.rate)} (${r.num}/${r.den})`);
 
-export function AdminTabs({ conf, collect, otelOn }: { conf: ConfMatrixVM; collect: CollectRowVM[]; otelOn: boolean }) {
+export function AdminTabs({ conf, collect, uploads, today }: { conf: ConfMatrixVM; collect: CollectRowVM[]; uploads: UploadStatVM[]; today: string }) {
   const [tab, setTab] = useState<Tab>("conf");
   return (
     <>
@@ -25,7 +26,7 @@ export function AdminTabs({ conf, collect, otelOn }: { conf: ConfMatrixVM; colle
         title="시스템 관리"
         description={
           <>
-            개발자 확정 현황과 Codex 사용 수집 상태, 변경 이력입니다. 계정·단가·요구사항은 <Link href="/master">기준 데이터</Link>에서 관리합니다.
+            개발자 확정 현황과 Codex 사용 수집 상태, 변경 이력입니다. 과제·요구사항은 <Link href="/master">과제 선정 관리</Link>, 계정은 <Link href="/users">사용자 관리</Link>, 단가는 <Link href="/settings">단가·기준정보</Link>에서 관리합니다.
           </>
         }
       />
@@ -41,7 +42,7 @@ export function AdminTabs({ conf, collect, otelOn }: { conf: ConfMatrixVM; colle
       <div style={{ marginTop: 16 }}>
         {tab === "history" && <HistoryView />}
         {tab === "conf" && <ConfMatrix vm={conf} />}
-        {tab === "collect" && <CollectLog rows={collect} otelOn={otelOn} />}
+        {tab === "collect" && <CollectLog rows={collect} uploads={uploads} today={today} />}
       </div>
     </>
   );
@@ -97,11 +98,57 @@ function ConfMatrix({ vm }: { vm: ConfMatrixVM }) {
   );
 }
 
-function CollectLog({ rows, otelOn }: { rows: CollectRowVM[]; otelOn: boolean }) {
+/** 이보다 오래 안 올렸으면 표시 — 매일 퇴근 전 올리는 것이 원칙이라 주말을 넘겨도 걸리지 않을 만큼 */
+const STALE_DAYS = 3;
+
+function UploadTable({ rows, today }: { rows: UploadStatVM[]; today: string }) {
+  const days = (ymd: string) => Math.round((Date.parse(today) - Date.parse(ymd)) / 86400000);
   return (
     <>
       <p className={b.note} style={{ marginBottom: 8 }}>
-        텔레메트리 수신 {otelOn ? "켜짐" : <b className={b.warn}>꺼짐 — config.yml 의 collect.token 을 넣어야 받습니다</b>} · 개발자 × 일자 × 출처별 Codex 세션 · 자동 연결 = 공수 태그로 자동 배정된 시간 · 요구사항 미지정 = 아직
+        개발자별 Codex 세션 파일 마지막 올림 · 오래 안 올린 사람부터 · {STALE_DAYS}일 넘게 안 올렸거나 한 번도 안 올리면 표시
+      </p>
+      <div className={b.tw} style={{ marginBottom: 20 }}>
+        <table className={b.tbl}>
+          <thead>
+            <tr>
+              <th>개발자</th>
+              <th>마지막 올림</th>
+              <th>올린 기록의 마지막 작업일</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const up = r.upAt ? kstDate(Date.parse(r.upAt)) : null;
+              const stale = !up || days(up) > STALE_DAYS;
+              return (
+                <tr key={r.userId}>
+                  <td>{r.userNm}</td>
+                  <td>{up ? <span className={stale ? b.warn : undefined}>{`${fmtDay(up)} ${kstTime(Date.parse(r.upAt!))}`}{stale && ` (${days(up)}일 전)`}</span> : <b className={b.warn}>올린 적 없음</b>}</td>
+                  <td>{r.lastDt ? fmtDay(r.lastDt) : "—"}</td>
+                </tr>
+              );
+            })}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={3} className="muted">
+                  개발자 계정이 없습니다.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function CollectLog({ rows, uploads, today }: { rows: CollectRowVM[]; uploads: UploadStatVM[]; today: string }) {
+  return (
+    <>
+      <UploadTable rows={uploads} today={today} />
+      <p className={b.note} style={{ marginBottom: 8 }}>
+        개발자 × 일자 × 출처별 Codex 세션 · 자동 연결 = 공수 태그로 자동 배정된 시간 · 요구사항 미지정 = 아직
         &apos;확인 필요&apos;에 남은 세션 · 비용 빈칸 = 토큰 미수집 또는 단가 없는 모델
       </p>
       <div className={b.tw}>
@@ -124,7 +171,7 @@ function CollectLog({ rows, otelOn }: { rows: CollectRowVM[]; otelOn: boolean })
               <tr key={`${r.userId}|${r.date}|${r.src}`}>
                 <td>{fmtDay(r.date)}</td>
                 <td>{r.userNm}</td>
-                <td>{r.src === "OTEL" ? "텔레메트리" : "로그 업로드"}</td>
+                <td>{r.src === "OTEL" ? "텔레메트리(이전)" : "세션 파일 업로드"}</td>
                 <td className="r">{r.sessions}</td>
                 <td className="r">{f1(r.minutes / 60)}</td>
                 <td className="r">{f1(r.tagged / 60)}</td>

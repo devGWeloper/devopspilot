@@ -13,7 +13,7 @@ import d from "./dashboard.module.css";
 import b from "./basis.module.css";
 
 const ST: Record<string, string> = { conf: "확정", edit: "다시 확정 필요", need: "미확정" };
-const SRC: Record<string, string> = { OTEL: "텔레메트리", LOG: "로그 업로드" };
+const SRC: Record<string, string> = { OTEL: "텔레메트리(이전)", LOG: "세션 파일 업로드" };
 const h2 = (v: number) => (Math.round(v * 100) / 100).toString();
 
 export function BasisView({ vm, scope }: { vm: BasisVM; scope: string }) {
@@ -101,7 +101,7 @@ export function BasisView({ vm, scope }: { vm: BasisVM; scope: string }) {
                   )}
                 </tbody>
               </table>
-              <p className={b.note}>기준 데이터 &gt; 04 기준정보에서 바꾸면 과거 값까지 다시 계산됩니다.</p>
+              <p className={b.note}>단가·기준정보에서 바꾸면 과거 값까지 다시 계산됩니다.</p>
             </Panel>
             <Panel title="집계에서 빠진 값">
               <table className={b.kv}>

@@ -122,6 +122,23 @@ export function detectAnomalies(ix: Index, names: Map<string, string>, today: st
     out.push({ key: `PENDING_OLD|${userId}`, rule: "PENDING_OLD", severity: "low", userId, reqId: null, date: null, title: `${nm(userId)} — 요구사항 미지정 Codex 사용 ${n}건`, detail: `${PENDING_DAYS}일 넘게 어느 일인지 정하지 않음` }),
   );
 
+  // 단계 섞인 세션 — 미분류로 남았든 직접 배정했든
+  const mixedBy = new Map<string, string[]>();
+  for (const s of ix.data.sessions) if (ix.alloc.mixed.has(s.datId)) mixedBy.set(s.userId, [...(mixedBy.get(s.userId) ?? []), s.workDt]);
+  mixedBy.forEach((ds, userId) => {
+    const list = Array.from(new Set(ds)).sort();
+    out.push({
+      key: `MIXED_STAGE|${userId}`,
+      rule: "MIXED_STAGE",
+      severity: "low",
+      userId,
+      reqId: null,
+      date: list[list.length - 1],
+      title: `${nm(userId)} — 여러 단계가 섞인 Codex 세션 ${ds.length}건`,
+      detail: `${list.slice(-5).join(", ")}${list.length > 5 ? " …" : ""} · 단계마다 새 세션을 열고 단계 지시문을 쓰도록 안내`,
+    });
+  });
+
   const rank: Record<Severity, number> = { high: 0, mid: 1, low: 2 };
   return out.sort((a, b) => rank[a.severity] - rank[b.severity] || (b.date ?? "").localeCompare(a.date ?? ""));
 }

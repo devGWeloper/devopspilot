@@ -11,8 +11,6 @@ export interface DbConfig {
 export interface AppConfig {
   db: DbConfig | null;
   authSecret: string | null;
-  /** 텔레메트리 수신 토큰 — 비우면 /api/otel 수신을 받지 않는다 */
-  collectToken: string | null;
   loadError: string | null;
 }
 
@@ -30,7 +28,6 @@ function parse(raw: unknown): Omit<AppConfig, "loadError"> {
     // 셋 중 하나라도 비면 JSON 저장소로 간다 — 반쯤 채운 설정으로 Oracle 에 붙으려다 실패하지 않게.
     db: user && password && connectString ? { user, password, connectString } : null,
     authSecret: str(r.auth?.secret) || null,
-    collectToken: process.env.POC_COLLECT_TOKEN?.trim() || str(r.collect?.token) || null,
   };
 }
 

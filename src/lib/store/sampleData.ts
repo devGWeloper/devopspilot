@@ -5,6 +5,9 @@ import type { ActType, AiSession, DayConf, EffortEntry } from "../measure/types"
 import { reqKey, unitCode } from "../measure/units";
 import type { Project, StageCd } from "../types";
 
+/** 데모 개발자는 퇴근 무렵(18:30 KST) 그날 세션 파일을 올린 것으로 둔다 */
+const upAtOf = (date: string) => `${date}T09:30:00.000Z`;
+
 const LV = ["상", "중", "하"];
 
 const lv = (i: number) => LV[Math.min(2, Math.max(0, i))];
@@ -248,7 +251,7 @@ export function sampleData(now = Date.now()): SampleData {
         // 일부 세션은 과제ID-요구사항ID 만 남겨 '확인 필요'를 만든다(단계가 2개 이상인 요구사항).
         const hints = key === "REQ0051-DV" && k === 1 && b.j === 0 ? [reqKey(p.prjId, r.reqId)] : [unit];
         sessions.push({
-          src: "OTEL",
+          src: "LOG",
           sessionId: `s-${unit}-${di}-${b.j}`,
           userId,
           workDt: date,
@@ -260,6 +263,7 @@ export function sampleData(now = Date.now()): SampleData {
           hints,
           resolution: null,
           tokens: demoTokens(b.m),
+          upAt: upAtOf(date),
         });
       });
       if (spans.length) {
@@ -275,8 +279,8 @@ export function sampleData(now = Date.now()): SampleData {
   efforts.push({ unit: "MIS05-REQ0081-DV", prjId: "MIS05", reqId: "REQ0081", stage: "DV", userId: "dev06", workDt: days[7], reduceH: 1, add: { A1: 1 }, memo: "" });
   efforts.push({ unit: "DAE01-REQ0033-DV", prjId: "DAE01", reqId: "REQ0033", stage: "DV", userId: "dev02", workDt: days[3], reduceH: 0, add: { A8: 1 }, memo: "보안 점검 대응 자료 작성" });
   // 시나리오: 공수 태그 없이 잡힌 AI 사용 — 하나는 토큰 미수집이라 비용 빈칸
-  sessions.push({ src: "LOG", sessionId: "s-main-1", userId: "dev01", workDt: days[8], tool: "Codex", minutes: 45, start: "10:05", end: "10:50", branch: "main", hints: [], resolution: null, tokens: demoTokens(45) });
-  sessions.push({ src: "LOG", sessionId: "s-main-2", userId: "dev05", workDt: days[8], tool: "Codex", minutes: 40, start: "13:30", end: "14:10", branch: "main", hints: [], resolution: null });
+  sessions.push({ src: "LOG", sessionId: "s-main-1", userId: "dev01", workDt: days[8], tool: "Codex", minutes: 45, start: "10:05", end: "10:50", branch: "main", hints: [], resolution: null, tokens: demoTokens(45), upAt: upAtOf(days[8]) });
+  sessions.push({ src: "LOG", sessionId: "s-main-2", userId: "dev05", workDt: days[8], tool: "Codex", minutes: 40, start: "13:30", end: "14:10", branch: "main", hints: [], resolution: null, upAt: upAtOf(days[8]) });
 
   const confs: DayConf[] = [];
   touched.forEach((t) => {

@@ -9,5 +9,5 @@ export const metadata = { title: "과제 선정 현황" };
 export default async function Page() {
   const actor = await pageActor();
   const ix = await loadIndex(await getStore());
-  return <SelectionDashboard vm={selectionView(ix, actor)} />;
+  return <SelectionDashboard vm={selectionView(ix, actor)} admin={actor.role === "ADMIN"} />;
 }

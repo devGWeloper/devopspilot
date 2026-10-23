@@ -1,10 +1,5 @@
 import { it, expect } from "vitest";
-import { activeMinutes, kstDate, parseLogUpload, parseOtelLogs } from "@/lib/measure/ingest";
-
-const kv = (key: string, v: string) => ({ key, value: { stringValue: v } });
-// 2026-11-10 23:30 UTC = 11-11 08:30 KST
-const T0 = Date.UTC(2026, 10, 10, 23, 30);
-const nano = (ms: number) => String(ms * 1e6);
+import { activeMinutes, kstDate, parseCodexSessions, parseLogUpload } from "@/lib/measure/ingest";
 
 it("KST 일자 경계", () => {
   expect(kstDate(Date.UTC(2026, 10, 10, 15, 0))).toBe("2026-11-11");
@@ -18,35 +13,53 @@ it("활동 시간 = 5분 이하 간격만 더하고, 앞 묶음 마지막 시각
   expect(activeMinutes([3 * m], 8 * m)).toBe(0);
 });
 
-it("Codex 이벤트 → 계정 후보·대화 ID·토큰, 프롬프트는 태그 후보만 남기고 버린다", () => {
-  const common = [kv("conversation.id", "cv1"), kv("user.email", "dev02@corp.com"), kv("user.account_id", "acc-9"), kv("model", "gpt-5-codex")];
-  const body = {
-    resourceLogs: [
-      {
-        resource: { attributes: [kv("service.name", "codex_cli_rs")] },
-        scopeLogs: [
-          {
-            logRecords: [
-              { timeUnixNano: nano(T0), attributes: [kv("event.name", "codex.user_prompt"), ...common, kv("prompt", "DAE01-REQ0051-DS 화면 설계 해줘 비밀내용")] },
-              {
-                timeUnixNano: nano(T0 + 60000),
-                attributes: [kv("event.name", "codex.sse_event"), ...common, kv("event.kind", "response.completed"), kv("input_token_count", "1200"), kv("cached_token_count", "200"), kv("output_token_count", "300")],
-              },
-              { timeUnixNano: nano(T0 + 90000), attributes: [kv("event.name", "codex.sse_event"), ...common, kv("event.kind", "response.output_text.delta")] },
-              { timeUnixNano: nano(T0), attributes: [kv("event.name", "other"), ...common] },
-            ],
-          },
-        ],
-      },
+const line = (ts: string, type: string, payload: Record<string, unknown>) => JSON.stringify({ timestamp: ts, type, payload });
+const tok = (ts: string, input: number, cached: number, output: number) =>
+  line(ts, "event_msg", { type: "token_count", info: { total_token_usage: { input_tokens: input, cached_input_tokens: cached, output_tokens: output } } });
+
+// 11-10 23:58 KST 에 시작해 자정을 넘기는 세션 — 14:58Z = 23:58 KST
+const rollout = [
+  line("2026-11-10T14:58:00.000Z", "session_meta", { id: "sid-1", git: { branch: "feature/dae01-req0047-dv" } }),
+  line("2026-11-10T14:58:00.000Z", "turn_context", { model: "gpt-5-codex" }),
+  line("2026-11-10T14:58:30.000Z", "event_msg", { type: "user_message", message: "DAE01-REQ0051-DS 화면 설계 해줘 비밀내용" }),
+  tok("2026-11-10T14:59:00.000Z", 1000, 100, 50),
+  tok("2026-11-10T14:59:00.000Z", 1000, 100, 50),
+  tok("2026-11-10T15:02:00.000Z", 1500, 300, 80),
+  // 1시간 자리 비움 — 5분까지만 센다
+  line("2026-11-10T16:02:00.000Z", "response_item", { type: "message", role: "user", content: [{ type: "input_text", text: "poc off" }] }),
+  "깨진 줄",
+].join("\n");
+
+it("Codex 세션 파일 → 세션 × 일자, 자리 비움 제외, 토큰 증가분, 원문 없이 태그 후보만", () => {
+  const { summary, warnings } = parseCodexSessions([{ name: "2026/11/10/rollout-2026-11-10T23-58-00-sid-1.jsonl", text: rollout }]);
+  expect(summary.format).toBe("poc-ai-sessions");
+  expect(summary.sessions.map((x) => [x.date, x.start, x.end, x.activeMin])).toEqual([
+    ["2026-11-10", "23:58", "23:59", 1],
+    ["2026-11-11", "00:02", "01:02", 5],
+  ]);
+  const [d1, d2] = summary.sessions;
+  expect(d1).toMatchObject({ sessionId: "sid-1", branch: "feature/dae01-req0047-dv", tokens: { "gpt-5-codex": { input: 1000, cached: 100, output: 50 } } });
+  expect(d2.tokens).toEqual({ "gpt-5-codex": { input: 500, cached: 200, output: 30 } });
+  expect(d1.hints).toEqual(expect.arrayContaining(["DAE01-REQ0047-DV", "DAE01-REQ0051-DS", "POC-OFF"]));
+  expect(JSON.stringify(summary)).not.toContain("비밀");
+  expect(warnings).toEqual(["rollout-2026-11-10T23-58-00-sid-1.jsonl: 1줄 해석 실패 — 건너뜀"]);
+  // 서버 검사를 그대로 통과한다
+  const r = parseLogUpload(summary);
+  expect("sessions" in r && r.sessions.map((x) => x.minutes)).toEqual([1, 5]);
+});
+
+it("측정 시작일 전 날짜는 빼고, 같은 세션이 두 파일에 있어도 한 번만 센다 · 세션 기록이 아니면 경고", () => {
+  const { summary, warnings } = parseCodexSessions(
+    [
+      { name: "rollout-a.jsonl", text: rollout },
+      { name: "rollout-b.jsonl", text: rollout },
+      { name: "notes.jsonl", text: "hello" },
     ],
-  };
-  const out = parseOtelLogs(body);
-  expect(out).toHaveLength(3);
-  expect(out[0]).toMatchObject({ accounts: ["dev02@corp.com", "acc-9"], sessionId: "cv1", tool: "Codex", workDt: "2026-11-11", tokens: null });
-  expect(out[0].hints).toContain("DAE01-REQ0051-DS");
-  expect(out[1]).toMatchObject({ model: "gpt-5-codex", tokens: { input: 1200, cached: 200, output: 300 } });
-  expect(out[2].tokens).toBeNull();
-  expect(JSON.stringify(out)).not.toContain("비밀");
+    "2026-11-11",
+  );
+  expect(summary.sessions).toHaveLength(1);
+  expect(summary.sessions[0]).toMatchObject({ date: "2026-11-11", activeMin: 5, tokens: { "gpt-5-codex": { input: 500, cached: 200, output: 30 } } });
+  expect(warnings).toContain("notes.jsonl: Codex 세션 기록이 아닙니다 — 건너뜀");
 });
 
 it("업로드 JSON 형식 검사 · 토큰", () => {

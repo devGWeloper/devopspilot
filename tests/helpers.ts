@@ -1,5 +1,5 @@
 import type { ActorFull } from "@/lib/auth/permissions";
-import type { OtelEvent } from "@/lib/measure/ingest";
+import type { TokenUse } from "@/lib/measure/types";
 import type { Project, Requirement, Stage, UserRecord } from "@/lib/types";
 
 export const admin: ActorFull = { userId: "admin", role: "ADMIN", userNm: "관리자", orgCd: "SKAX" };
@@ -56,18 +56,9 @@ export function mkProject(partial: Partial<Project> = {}): Project {
   };
 }
 
-/** Codex 이벤트를 1분 간격으로 만든다 — minutes 분 활동이 되도록 minutes + 1 개 */
-export function otelEvents(account: string, sessionId: string, workDt: string, minutes: number, hints: string[] = [], startMs = Date.parse(`${workDt}T01:00:00Z`)): OtelEvent[] {
-  return Array.from({ length: minutes + 1 }, (_, i) => ({
-    accounts: [account],
-    sessionId,
-    tool: "Codex",
-    workDt,
-    ms: startMs + i * 60000,
-    hints: i === 0 ? hints : [],
-    model: "gpt-5-codex",
-    tokens: null,
-  }));
+/** 브라우저가 세션 파일에서 만든 요약과 같은 모양 — uploadLog 에 그대로 넘긴다 */
+export function sessionFile(sessionId: string, date: string, activeMin: number, hints: string[] = [], tokens?: Record<string, TokenUse>) {
+  return { format: "poc-ai-sessions", version: 3, sessions: [{ tool: "Codex", sessionId, date, start: "10:00", end: "11:00", activeMin, branch: "", hints, ...(tokens ? { tokens } : {}) }] };
 }
 
 export function mkUser(userId: string, userNm: string, p: Partial<UserRecord> = {}): UserRecord {

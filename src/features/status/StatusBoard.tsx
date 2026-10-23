@@ -26,7 +26,7 @@ const ST_TONE: Record<ReqStatus, Tone> = {
 
 type Filter = "ALL" | ReqStatus;
 
-/** 조회 전용 — 과제·요구사항 편집은 '기준 데이터'(관리자)에서 한다 */
+/** 조회 전용 — 과제·요구사항 편집은 '과제 선정 관리'(관리자)에서 한다 */
 export function StatusBoard({
   vm,
   canManage,
@@ -91,7 +91,7 @@ export function StatusBoard({
         actions={
           canManage && (
             <Link href="/master">
-              <Button icon="edit">기준 데이터에서 편집</Button>
+              <Button icon="edit">과제 선정 관리에서 편집</Button>
             </Link>
           )
         }
@@ -156,7 +156,7 @@ export function StatusBoard({
             }
           >
             {canManage && !vm.projects.length
-              ? "기준 데이터에서 엑셀을 올려 주세요."
+              ? "과제 선정 관리에서 엑셀을 올려 주세요."
               : undefined}
           </EmptyState>
         </Panel>

@@ -72,7 +72,7 @@ export function UsersAdmin() {
       key: "acct",
       header: "AI 도구 계정",
       width: 190,
-      render: (u) => (u.aiAcct ? <span className="num">{u.aiAcct}</span> : u.role === "DEVELOPER" ? <Chip tone="warn">미등록</Chip> : <span className="subtle">—</span>),
+      render: (u) => (u.aiAcct ? <span className="num">{u.aiAcct}</span> : <span className="subtle">—</span>),
       sortValue: (u) => u.aiAcct,
     },
     {
@@ -109,7 +109,7 @@ export function UsersAdmin() {
     <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
         <span className="muted">
-          엑셀 &apos;03. 공수 태그 매핑 &gt; 개발자 권한 관리&apos; 표와 같습니다. 사번이 로그인 ID 이고, <b>AI 도구 계정</b>(Codex 로그인 이메일 또는 account id)이 있어야 텔레메트리가 그 사람 시간으로 들어옵니다.
+          엑셀 &apos;03. 공수 태그 매핑 &gt; 개발자 권한 관리&apos; 표와 같습니다. 사번이 로그인 ID 이고, Codex 기록은 개발자가 올린 계정으로 저장됩니다(AI 도구 계정은 참고용).
         </span>
         <Button variant="primary" icon="plus" onClick={() => setEdit({ mode: "new", form: EMPTY, useYn: true })}>
           계정 추가
@@ -151,7 +151,7 @@ export function UsersAdmin() {
             <Field label="SK AX 팀 (부서)">
               <TextInput value={f.deptNm} onChange={(e) => setF({ deptNm: e.target.value })} />
             </Field>
-            <Field label="AI 도구 계정" hint="oTel 계정 Key — Codex 로그인 이메일 또는 account id">
+            <Field label="AI 도구 계정" hint="참고용 — Codex 기록은 올린 사람의 포털 계정으로 저장됩니다">
               <TextInput value={f.aiAcct} onChange={(e) => setF({ aiAcct: e.target.value.trim() })} />
             </Field>
 

@@ -204,7 +204,7 @@ function Save({ a, mdHours }: { a: Agg; mdHours: number }) {
       />
       <From
         rows={[
-          ["기준 공수", `${f1(a.baseMd)} M/D`, `요구사항 ${a.reqN}건 · 단계 ${a.unitN}개의 기준 공수 합 (기준 데이터)`],
+          ["기준 공수", `${f1(a.baseMd)} M/D`, `요구사항 ${a.reqN}건 · 단계 ${a.unitN}개의 기준 공수 합 (과제 선정 관리)`],
           ["실제 공수", `${f1(a.md)} M/D`, `확정한 시간 ${f1(a.tot)}h ÷ ${mdHours}h`],
           ["└ AI 사용", `${f1(a.inT)}h · ${h(a.inT)} M/D`, `Codex 자동 수집 ${f1(a.ai)}h − 개발자가 줄인 ${f1(a.ai - a.inT)}h`],
           ["└ AI 없이", `${f1(a.out)}h · ${h(a.out)} M/D`, "개발자가 작업 유형별로 직접 입력"],

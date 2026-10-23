@@ -11,7 +11,7 @@ export interface UserRecord {
   hqNm: string;
   deptNm: string;
   role: Role;
-  /** AI 도구 계정(oTel 계정 Key) — 텔레메트리의 user.email·account_id 와 맞춘다 */
+  /** AI 도구 계정 — 기준정보 엑셀 03 시트의 참고 값. Codex 기록은 올린 사람 계정으로 저장되므로 매칭에 쓰지 않는다 */
   aiAcct: string;
   useYn: boolean;
   pwdHash: string;

@@ -4,11 +4,11 @@ import { tmpdir } from "os";
 import path from "path";
 import { kstDate } from "@/lib/measure/ingest";
 import { rowsOf } from "@/lib/measure/metrics";
-import { confirmDate, confirmDays, exportResult, getSettings, ingestOtel, loadIndex, reopenDay, resolveSession, saveEffort, saveSettings, todayKst, uploadLog } from "@/lib/measure/service";
+import { confirmDate, confirmDays, exportResult, getSettings, loadIndex, reopenDay, resolveSession, saveEffort, saveSettings, todayKst, uploadLog } from "@/lib/measure/service";
 import { createJsonStore } from "@/lib/store/json";
 import { ensureSeed } from "@/lib/store/seed";
 import type { Store } from "@/lib/store/types";
-import { admin, dev1, dev2, mkProject, mkReq, mkStage, mkUser, otelEvents } from "../helpers";
+import { admin, dev1, dev2, mkProject, mkReq, mkStage, mkUser, sessionFile } from "../helpers";
 
 // 오늘 이후 날짜는 서비스가 거부하므로 실행일 기준 과거로 잡는다.
 const D = kstDate(Date.now() - 3 * 86400000);
@@ -66,7 +66,7 @@ describe("공수 입력·확정", () => {
   });
 
   it("AI 도구 내 시간은 수집값보다 크게 못 넣는다", async () => {
-    await ingestOtel(store, otelEvents("kim@corp.com", "s", D, 120, [DV]));
+    await uploadLog(store, dev1, sessionFile("s", D, 120, [DV]));
     expect(await saveEffort(store, dev1, { unit: DV, date: D, inT: 3 })).toMatchObject({ ok: false, code: "OVER_COLLECTED" });
     expect((await saveEffort(store, dev1, { unit: DV, date: D, inT: 1.5 })).ok).toBe(true);
     const ix = await loadIndex(store);
@@ -116,7 +116,7 @@ describe("공수 입력·확정", () => {
 
 describe("AI 사용 배정", () => {
   beforeEach(async () => {
-    await ingestOtel(store, otelEvents("kim@corp.com", "s9", D, 60, ["DAE01-R-1"]));
+    await uploadLog(store, dev1, sessionFile("s9", D, 60, ["DAE01-R-1"]));
   });
 
   it("단계가 둘이면 확인 필요 → 나눠 배정하면 사라진다", async () => {
@@ -144,27 +144,16 @@ describe("AI 사용 배정", () => {
     expect(ix.alloc.byUnitDay.get(`${DV}|${D}`)).toBeUndefined();
   });
 
-  it("이어 들어온 이벤트는 같은 세션에 더해지고, 계정을 못 찾으면 버린다 · AI 도구 계정 또는 사번으로 매핑", async () => {
-    const after = Date.parse(`${D}T01:00:00Z`) + 61 * 60000;
-    await ingestOtel(store, [
-      ...otelEvents("kim@corp.com", "s9", D, 29, [DV], after),
-      ...otelEvents("ghost@corp.com", "g", D, 30),
-      ...otelEvents("dev02@corp.com", "p", D, 10),
-    ]);
+  it("같은 세션을 다시 올리면 시간·태그·토큰이 새 값으로 바뀌고 다른 사람 세션과 섞이지 않는다", async () => {
+    await uploadLog(store, dev1, sessionFile("s9", D, 90, [DV], { "gpt-5-codex": { input: 300, cached: 30, output: 15 } }));
+    await uploadLog(store, dev2, sessionFile("p", D, 10));
     const ix = await loadIndex(store);
     expect(ix.data.sessions.map((s) => s.userId).sort()).toEqual(["dev01", "dev02"]);
     const s = ix.data.sessions.find((x) => x.userId === "dev01")!;
-    expect(s.minutes).toBe(90);
-    // 태그가 늦게 잡히면 자동 배정으로 바뀐다
+    expect(s).toMatchObject({ minutes: 90, tokens: { "gpt-5-codex": { input: 300, cached: 30, output: 15 } } });
+    expect(s.upAt).toBeTruthy();
+    // 태그가 나중 파일에서 잡히면 자동 배정으로 바뀐다
     expect(ix.alloc.byUnitDay.get(`${DV}|${D}`)?.min).toBe(90);
-  });
-
-  it("토큰은 모델별로 쌓인다", async () => {
-    const e = otelEvents("kim@corp.com", "s9", D, 1).map((x) => ({ ...x, tokens: { input: 100, cached: 10, output: 5 } }));
-    await ingestOtel(store, e);
-    await ingestOtel(store, e.slice(0, 1));
-    const s = (await loadIndex(store)).data.sessions[0];
-    expect(s.tokens).toEqual({ "gpt-5-codex": { input: 300, cached: 30, output: 15 } });
   });
 });
 

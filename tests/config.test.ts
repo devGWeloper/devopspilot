@@ -15,10 +15,9 @@ afterEach(() => {
   resetConfigCache();
 });
 
-it("파일이 없으면 db null, 수집 토큰 없음", () => {
+it("파일이 없으면 db null", () => {
   const c = loadConfig();
   expect(c.db).toBeNull();
-  expect(c.collectToken).toBeNull();
 });
 
 it("db 값이 하나라도 비면 null", () => {
@@ -26,7 +25,7 @@ it("db 값이 하나라도 비면 null", () => {
   expect(loadConfig().db).toBeNull();
 });
 
-it("db·수집 토큰 읽기", () => {
+it("db 읽기", () => {
   writeFileSync(
     "config.yml",
     [
@@ -34,13 +33,10 @@ it("db·수집 토큰 읽기", () => {
       '  user: "a"',
       '  password: "b"',
       '  connectString: "h:1521/s"',
-      "collect:",
-      '  token: "t0k"',
     ].join("\n"),
   );
   const c = loadConfig();
   expect(c.db).toEqual({ user: "a", password: "b", connectString: "h:1521/s" });
-  expect(c.collectToken).toBe("t0k");
 });
 
 it("깨진 YAML 은 기본값", () => {

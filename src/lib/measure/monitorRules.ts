@@ -13,7 +13,7 @@ export interface Anomaly {
   detail: string;
 }
 
-export type RuleCd = "SAME_HOURS" | "OVER_DAY" | "BULK_CONF" | "BIG_REDUCE" | "SPIKE" | "OVER_BASE" | "TOO_GOOD" | "NO_AI" | "LATE_CONF" | "PENDING_OLD";
+export type RuleCd = "SAME_HOURS" | "OVER_DAY" | "BULK_CONF" | "BIG_REDUCE" | "SPIKE" | "OVER_BASE" | "TOO_GOOD" | "NO_AI" | "LATE_CONF" | "PENDING_OLD" | "MIXED_STAGE";
 
 export const RULES: Record<RuleCd, { label: string; why: string }> = {
   SAME_HOURS: { label: "같은 시간 반복", why: "여러 날 하루 합계가 똑같으면 실제 기록이 아니라 형식적으로 채웠을 수 있습니다." },
@@ -26,5 +26,6 @@ export const RULES: Record<RuleCd, { label: string; why: string }> = {
   NO_AI: { label: "AI 사용 없음", why: "측정 완료인데 AI 사용 시간이 0 입니다. 수집 누락이거나 AI 를 쓰지 않았습니다." },
   LATE_CONF: { label: "확정 지연", why: "입력이 있는데 5일 넘게 확정하지 않았습니다." },
   PENDING_OLD: { label: "요구사항 미지정 Codex 사용 방치", why: "어느 일인지 정하지 않은 AI 사용이 3일 넘게 남아 있습니다." },
+  MIXED_STAGE: { label: "한 세션에 여러 단계", why: "한 Codex 세션에서 여러 단계 일을 했습니다. 단계별 시간이 개발자 기억에 의존하게 되므로 단계마다 새 세션을 열도록 안내합니다." },
 };
 

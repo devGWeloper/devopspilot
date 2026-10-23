@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Fragment, useCallback, useDeferredValue, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Select, TextInput } from "@/components/ui/Field";
@@ -35,7 +36,23 @@ function optionsOf(a: Axis, reqs: SelReqVM[]): { v: string; n: number }[] {
   return blank ? [...out, { v: BLANK, n: blank }] : out;
 }
 
-export function SelectionDashboard({ vm }: { vm: SelectionVM }) {
+/** 관리자만 — 선정 결과를 어디서 넣고 고치는지 이 화면에서 바로 찾게 */
+function AdminActions() {
+  return (
+    <>
+      <Link href="/master">
+        <Button icon="edit">과제 데이터 고치기</Button>
+      </Link>
+      <Link href="/master?import=1">
+        <Button variant="primary" icon="upload">
+          선정 결과 엑셀 올리기
+        </Button>
+      </Link>
+    </>
+  );
+}
+
+export function SelectionDashboard({ vm, admin = false }: { vm: SelectionVM; admin?: boolean }) {
   const [q, setQ] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [more, setMore] = useState(false);
@@ -74,9 +91,11 @@ export function SelectionDashboard({ vm }: { vm: SelectionVM }) {
   if (!vm.reqs.length)
     return (
       <>
-        <PageHeader eyebrow="Phase 1 결과" title="과제 선정 현황" />
+        <PageHeader eyebrow="Phase 1 결과" title="과제 선정 현황" actions={admin ? <AdminActions /> : undefined} />
         <Panel>
-          <EmptyState title="아직 선정된 과제가 없습니다">관리자가 기준 데이터에서 엑셀을 올리면 여기에 과제·요구사항이 나타납니다.</EmptyState>
+          <EmptyState title="아직 선정된 과제가 없습니다">
+            {admin ? "취합한 과제 선정 결과를 '선정 결과 엑셀 올리기'로 올리면 여기에 과제·요구사항이 나타납니다." : "관리자가 과제 선정 결과 엑셀을 올리면 여기에 과제·요구사항이 나타납니다."}
+          </EmptyState>
         </Panel>
       </>
     );
@@ -105,7 +124,8 @@ export function SelectionDashboard({ vm }: { vm: SelectionVM }) {
       <PageHeader
         eyebrow="Phase 1 결과"
         title="과제 선정 현황"
-        description="선정된 과제·요구사항의 성격 분포와 입력 상태입니다."
+        description={admin ? "선정된 과제·요구사항의 성격 분포와 입력 상태입니다. 엑셀로 다시 올리거나 일부를 고치면 바로 반영됩니다." : "선정된 과제·요구사항의 성격 분포와 입력 상태입니다."}
+        actions={admin ? <AdminActions /> : undefined}
       >
         {/* 규모 셋과 점검 둘을 나눠 둔다 */}
         <Stats>

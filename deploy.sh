@@ -64,7 +64,7 @@ CONFIG_FILE="$DEPLOY_DIR/config.yml"
 if [ ! -f "$CONFIG_FILE" ]; then
   if [ "$TARGET_ENV" = "prd" ]; then
     log "  ✗ 설정 파일이 없습니다: $CONFIG_FILE"
-    log "    cp config.example.yml config.yml 후 db·auth.secret·collect.token 을 채우세요."
+    log "    cp config.example.yml config.yml 후 db·auth.secret 을 채우세요."
     exit 1
   fi
   log "  ⚠  config.yml 없음 — dev 는 로컬 JSON 저장소(data/, 데모 데이터)로 뜹니다."

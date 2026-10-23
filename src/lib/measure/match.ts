@@ -9,6 +9,8 @@ export interface MatchResult {
   why: string;
   /** 개발자가 세션 첫 줄에 `poc off` 를 적은 업무 외 사용 */
   off?: boolean;
+  /** 한 세션에 내 단계 코드가 여럿 — 단계마다 세션을 나누라는 원칙을 어긴 것 */
+  mixed?: boolean;
 }
 
 /** `poc off` — 숫자가 없어 코드 후보 규칙에 안 걸리므로 따로 남기는 힌트 */
@@ -50,7 +52,12 @@ function matchKeys(s: AiSession, hints: Set<string>, keys: Keyed[]): MatchResult
   const exactMine = exact.filter((u) => u.ownerId === s.userId);
   if (exactMine.length === 1) return { unit: exactMine[0].code, cands: [], why: `코드 ${exactMine[0].code}` };
   if (exactMine.length > 1)
-    return { unit: null, cands: exactMine.map((u) => u.code), why: `세션에 단계 코드가 여러 개 (${exactMine.map((u) => u.code).join(", ")})` };
+    return {
+      unit: null,
+      cands: exactMine.map((u) => u.code),
+      why: `한 세션에 단계 코드가 여러 개 (${exactMine.map((u) => u.code).join(", ")}) — 다음부터 단계마다 새 세션을 여세요`,
+      mixed: true,
+    };
 
   // 세션마다 단계를 구분하라고 안내하므로, 과제 ID 를 뺀 `REQ0047-DV` 도 받는다. 내 담당 중 하나로 정해질 때만.
   const shortKeys = exact.length ? [] : keys.filter((k) => hints.has(k.short));
@@ -116,6 +123,8 @@ export interface Allocation {
   offCount: number;
   /** 태그로 자동 배정된 세션 — 태그 입력률의 분자 */
   auto: Set<string>;
+  /** 한 세션에 여러 단계 코드가 섞인 세션 — 나중에 직접 배정했어도 남긴다(모니터링 대상) */
+  mixed: Set<string>;
 }
 
 export const unitDayKey = (unit: string, date: string) => `${unit}|${date}`;
@@ -128,6 +137,7 @@ export function allocate(sessions: StoredSession[], units: Unit[], costOf: (s: S
   const srcByUnitDay = new Map<string, AllocSrc[]>();
   const pending: Pending[] = [];
   const auto = new Set<string>();
+  const mixed = new Set<string>();
   let offCount = 0;
   const add = (s: StoredSession, unit: string, min: number, how: string) => {
     if (min <= 0) return;
@@ -152,11 +162,12 @@ export function allocate(sessions: StoredSession[], units: Unit[], costOf: (s: S
       offCount++;
       continue;
     }
+    const m = match(s);
+    if (m.mixed) mixed.add(s.datId);
     if (r?.kind === "ASSIGN") {
       r.parts.forEach((p) => add(s, p.unit, p.min, `${r.by} 직접 배정`));
       continue;
     }
-    const m = match(s);
     if (m.off) {
       offCount++;
       continue;
@@ -166,7 +177,7 @@ export function allocate(sessions: StoredSession[], units: Unit[], costOf: (s: S
       auto.add(s.datId);
     } else pending.push({ session: s, cands: m.cands, why: m.why });
   }
-  return { byUnitDay, srcByUnitDay, pending, offCount, auto };
+  return { byUnitDay, srcByUnitDay, pending, offCount, auto, mixed };
 }
 
 const MAX_HINTS = 20;
@@ -177,7 +188,6 @@ const hasDigit = (v: string) => /\d/.test(v);
  * 대화·브랜치 텍스트에서 코드처럼 생긴 토큰만 뽑는다. 원문은 저장하지 않기 위해 수집 단계에서 쓴다.
  * 과제·요구사항 ID 형식을 가정하지 않고, 하이픈으로 이어진 토큰의 연속 부분(숫자 포함)을 모두 후보로 낸다 —
  * `feature/dae01-req0047-dv` 에서 태그·reqKey·요구사항 ID 가 다 나와야 포털이 현재 태그와 맞춰 볼 수 있다.
- * collect_ai_usage.py 의 hints_of 와 같은 규칙이다.
  */
 export function extractHints(text: string): string[] {
   const out = new Set<string>();

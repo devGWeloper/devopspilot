@@ -47,6 +47,9 @@ const PATH_RULES: { prefix: string; roles: Role[] }[] = [
   { prefix: "/api/admin", roles: ["ADMIN"] },
   { prefix: "/master", roles: ["ADMIN"] },
   { prefix: "/api/master", roles: ["ADMIN"] },
+  { prefix: "/assign", roles: ["ADMIN"] },
+  { prefix: "/users", roles: ["ADMIN"] },
+  { prefix: "/settings", roles: ["ADMIN"] },
 
   { prefix: "/monitor", roles: ["ADMIN"] },
   { prefix: "/api/monitor", roles: ["ADMIN"] },

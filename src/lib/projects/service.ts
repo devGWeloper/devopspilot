@@ -70,6 +70,11 @@ export interface ImportSummary {
   tokens: number;
   /** 새로 만든 계정의 초기 비밀번호 — 이 응답에서만 보여 준다 */
   newPasswords: { userId: string; userNm: string; password: string }[];
+  /** 미리보기 — 무엇이 새로 생기는지 반영 전에 확인하려고. 실제 반영 결과에도 같이 담는다 */
+  newProjects: { prjId: string; prjNm: string }[];
+  newTags: string[];
+  newUsers: { userId: string; userNm: string }[];
+  dryRun: boolean;
 }
 
 /** 파일에 있는 행은 파일 값으로, 없는 행은 그대로 둔다(삭제는 화면에서). */
@@ -139,7 +144,8 @@ function newPassword() {
   return randomBytes(9).toString("base64url").slice(0, 10) + "!";
 }
 
-export async function importWorkbook(store: Store, actor: ActorFull, buf: ArrayBuffer): Promise<ServiceResult<ImportSummary>> {
+/** dryRun 이면 검사·병합 결과만 돌려주고 저장하지 않는다 — 엑셀 한 번에 앱 전체가 바뀌므로 먼저 보여 준다. */
+export async function importWorkbook(store: Store, actor: ActorFull, buf: ArrayBuffer, opt: { dryRun?: boolean } = {}): Promise<ServiceResult<ImportSummary>> {
   if (!can(actor, "project.manage")) return forbiddenR();
   let grids: Awaited<ReturnType<typeof readWorkbookGrids>>;
   try {
@@ -171,7 +177,27 @@ export async function importWorkbook(store: Store, actor: ActorFull, buf: ArrayB
   if (errors.length) return err(400, "INVALID_ROWS", `${errors.length}개 행에 오류가 있어 아무것도 저장하지 않았습니다.`, errors);
 
   const now = new Date().toISOString();
-  const summary: ImportSummary = { projectsNew: 0, projectsUpdated: 0, tagsNew: 0, tagsUpdated: 0, mapped: 0, usersNew: 0, usersUpdated: 0, grades: data.grades.length, tokens: data.tokens.length, newPasswords: [] };
+  const newUsers = data.devs.filter((d) => !users.some((u) => u.userId === d.userId)).map((d) => ({ userId: d.userId, userNm: d.userNm }));
+  const summary: ImportSummary = {
+    projectsNew: 0,
+    projectsUpdated: 0,
+    tagsNew: 0,
+    tagsUpdated: 0,
+    mapped: 0,
+    usersNew: newUsers.length,
+    usersUpdated: data.devs.length - newUsers.length,
+    grades: data.grades.length,
+    tokens: data.tokens.length,
+    newPasswords: [],
+    newProjects: data.projects.filter((r) => !known.prjIds.has(r.prjId)).map((r) => ({ prjId: r.prjId, prjNm: r.prjNm })),
+    newTags: data.tags.map((t) => unitCode(t.prjId, t.reqId, t.stage)).filter((c) => !known.tags.has(c)),
+    newUsers,
+    dryRun: !!opt.dryRun,
+  };
+  if (opt.dryRun) {
+    Object.assign(summary, mergeWorkbook(before, users, data, actor, now).summary);
+    return okR(summary);
+  }
 
   // 계정 먼저 — 매핑된 담당 이름을 계정 이름으로 맞추려고
   for (const dv of data.devs) {
@@ -179,12 +205,10 @@ export async function importWorkbook(store: Store, actor: ActorFull, buf: ArrayB
     const fields = { userNm: dv.userNm, hqNm: dv.hqNm, deptNm: dv.deptNm, role: dv.role, aiAcct: dv.aiAcct };
     if (cur) {
       await store.users.update(dv.userId, { ...fields, updAt: now });
-      summary.usersUpdated++;
     } else {
       const password = newPassword();
       const { hash, salt } = hashPassword(password);
       await store.users.insert({ userId: dv.userId, ...fields, orgCd: "SKAX", useYn: true, pwdHash: hash, pwdSalt: salt, lastLoginAt: null, regAt: now, updAt: now });
-      summary.usersNew++;
       summary.newPasswords.push({ userId: dv.userId, userNm: dv.userNm, password });
     }
   }
@@ -365,6 +389,35 @@ export async function saveRequirement(store: Store, actor: ActorFull, prjId: str
     else p.reqs.push(next);
     const tags = next.stages.map((s) => `${unitCode(p.prjId, reqId, s.cd)} ${s.baseMd}MD ${s.ownerNm || "미지정"}${s.done ? " 완료" : ""}`);
     return okR(`${reqKey(p.prjId, reqId)} ${prev ? "수정" : "등록"} (${tags.join(", ")})`);
+  });
+}
+
+/**
+ * Phase 2 — 단계 하나의 담당·측정 완료만 바꾼다. 공수 입력 관리 화면에서 줄마다 바로 저장하므로
+ * 화면이 들고 있는 수정 시각 대신 현재 값을 읽어 고친다(선정 항목은 건드리지 않아 덮어쓸 일이 없다).
+ */
+export async function assignStage(store: Store, actor: ActorFull, prjId: string, input: { reqId: string; cd: string; ownerId?: string | null; done?: boolean }) {
+  const cur = await store.projects.get(prjId);
+  if (!cur) return notFoundR("과제");
+  const users = await store.users.list();
+  return mutateProject(store, actor, prjId, cur.updAt, (p) => {
+    const st = p.reqs.find((r) => r.reqId === input.reqId)?.stages.find((x) => x.cd === input.cd);
+    if (!st) return notFoundR("요구사항 단계");
+    const code = unitCode(p.prjId, input.reqId, st.cd);
+    const parts: string[] = [];
+    if (input.ownerId !== undefined) {
+      const u = input.ownerId ? users.find((x) => x.userId === input.ownerId && x.useYn) : undefined;
+      if (input.ownerId && !u) return err(400, "BAD_OWNER", `계정 ${input.ownerId} 가 없습니다.`);
+      st.ownerId = u?.userId ?? null;
+      st.ownerNm = u?.userNm ?? "";
+      parts.push(`담당 ${st.ownerNm || "미지정"}`);
+    }
+    if (input.done !== undefined) {
+      st.doneAt = input.done ? (st.doneAt ?? new Date().toISOString().slice(0, 10)) : null;
+      st.done = input.done;
+      parts.push(input.done ? "측정 완료" : "측정 완료 해제");
+    }
+    return okR(`${code} ${parts.join(" · ")}`);
   });
 }
 

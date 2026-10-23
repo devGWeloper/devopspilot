@@ -32,6 +32,11 @@ describe("permissions", () => {
     expect(canAccessPath("DEVELOPER", "/admin")).toBe(false);
     expect(canAccessPath("VIEWER", "/api/admin/users")).toBe(false);
     expect(canAccessPath("VIEWER", "/dashboard")).toBe(true);
+    for (const p of ["/master", "/assign", "/users", "/settings"]) {
+      expect(canAccessPath("ADMIN", p)).toBe(true);
+      expect(canAccessPath("DEVELOPER", p)).toBe(false);
+    }
+    expect(canAccessPath("DEVELOPER", "/voc")).toBe(true);
     expect(homePathFor("DEVELOPER")).toBe("/effort");
     expect(homePathFor("VIEWER")).toBe("/selection");
   });

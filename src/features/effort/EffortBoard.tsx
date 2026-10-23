@@ -7,10 +7,10 @@ import { Chip } from "@/components/ui/Chip";
 import { Select } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState, KpiTile, Panel } from "@/components/ui/Panel";
-import { useToast } from "@/components/ui/Toast";
 import { useCoach } from "@/components/ui/Coach";
 import { api } from "@/lib/apiClient";
 import { f1, hm, pct } from "@/lib/format";
+import { kstDate, kstTime } from "@/lib/measure/ingest";
 import { spanMin } from "@/lib/measure/spans";
 import { fmtDay } from "@/lib/labels";
 import { ACT_LABEL, type ActType } from "@/lib/measure/types";
@@ -31,11 +31,12 @@ import { DayTimeline, type Lane } from "./DayTimeline";
 import { DurationInput } from "./TimeFields";
 import s from "./effort.module.css";
 import { EffortTour } from "./EffortTour";
+import { TagCopy } from "./StagePrompt";
 import { UploadDialog } from "./UploadDialog";
 
 const SRC_LABEL = {
-  OTEL: "텔레메트리 자동 수집",
-  LOG: "Codex 기록 올리기",
+  OTEL: "텔레메트리(이전 수집)",
+  LOG: "세션 파일 업로드",
 } as const;
 
 export function EffortBoard({
@@ -67,15 +68,15 @@ export function EffortBoard({
   const { stats } = vm;
   const confTot = stats.confAi + stats.confOut;
   const who = editable ? "내" : `${vm.userNm} 님`;
-  // 역할과 관계없이 처음 들어오면 한 번은 띄운다. 달력·시간대 입력·작업 흐름으로 화면이 바뀌어 이전에 끝까지 본 사람도 다시 보도록 v3.
-  const tour = useCoach("effort.v3", vm.today, true);
+  // 역할과 관계없이 처음 들어오면 한 번은 띄운다. 단계별 세션 지시문·세션 파일 올리기가 생겨 이전에 끝까지 본 사람도 다시 보도록 v4.
+  const tour = useCoach("effort.v4", vm.today, true);
 
   return (
     <>
       <PageHeader
         eyebrow="Phase 2"
         title="공수 입력"
-        description="Codex 시간은 자동으로 들어옵니다. Codex 밖에서 한 일만 넣고 하루를 확정하세요."
+        description="Codex 세션 파일을 올리면 Codex 시간이 요구사항별로 들어옵니다. Codex 밖에서 한 일만 넣고 하루를 확정하세요."
         actions={
           <>
             {editable ? (
@@ -87,7 +88,7 @@ export function EffortBoard({
               >
                 작성 가이드
               </Button>
-              <Button icon="upload" onClick={() => setUpload(true)}>
+              <Button icon="upload" onClick={() => setUpload(true)} data-tour="upload">
                 Codex 기록 올리기
               </Button>
             </>
@@ -172,7 +173,7 @@ export function EffortBoard({
         {vm.reqs.length === 0 ? (
           <Panel>
             <EmptyState title="담당한 요구사항이 없습니다">
-              관리자가 기준 데이터에서 요구사항 단계의 담당자로 지정하면 여기에
+              관리자가 공수 입력 관리에서 요구사항 단계의 담당자로 지정하면 여기에
               나타납니다.
             </EmptyState>
           </Panel>
@@ -192,7 +193,7 @@ export function EffortBoard({
       </div>
 
       {add && <AddTimeDialog t={add} onClose={() => setAdd(null)} />}
-      {upload && <UploadDialog onClose={() => setUpload(false)} />}
+      {upload && <UploadDialog since={vm.measureStart} onClose={() => setUpload(false)} />}
       <EffortTour open={tour.open} onClose={tour.close} onDone={tour.done} onHideToday={tour.hideToday} />
     </>
   );
@@ -205,29 +206,32 @@ function Flow({ vm, editable }: { vm: EffortVM; editable: boolean }) {
     <details className={s.flow} data-tour="flow">
       <summary>
         <b>공수가 들어오는 순서</b>
-        {last && (
+        {(vm.stats.upAt || last) && (
           <span className="subtle">
-            마지막 수집 {fmtDay(last.date)} {last.time}
+            {vm.stats.upAt && `마지막 올림 ${fmtDay(kstDate(Date.parse(vm.stats.upAt)))} ${kstTime(Date.parse(vm.stats.upAt))}`}
+            {vm.stats.upAt && last && " · "}
+            {last && `Codex 기록 ${fmtDay(last.date)} ${last.time}까지`}
           </span>
         )}
       </summary>
       <ol className={s.steps}>
         <li>
-          <b>Codex 대화 첫 줄에 공수 태그</b>
+          <b>단계마다 새 Codex 세션 + 지시문</b>
           <span>
-            아래 표의 <span className={s.mono}>poc DAE01-REQ0047-DV</span> 처럼
-            생긴 값을 복사해 붙여 넣습니다. 업무가 아니면{" "}
-            <span className={s.mono}>poc off</span>.
+            아래 표 단계 줄의 <b>지시문</b>을 복사해 새 세션의 첫 메시지로
+            붙여 넣습니다. 첫 줄{" "}
+            <span className={s.mono}>poc DAE01-REQ0047-DV</span> 로 그 단계에
+            붙고, 단계 결과는 md 문서로 남겨 다음 단계 세션이 읽습니다. 업무가
+            아니면 <span className={s.mono}>poc off</span>.
           </span>
         </li>
         <li>
-          <b>Codex 시간 자동 반영</b>
+          <b>퇴근 전 Codex 기록 올리기</b>
           <span>
-            텔레메트리(OpenTelemetry)가 연결된 PC 는 바로, 아니면{" "}
-            <b>Codex 기록 올리기</b>로{" "}
-            <span className={s.mono}>~/.codex/sessions</span> 기록을 올립니다.
-            공수 태그로 요구사항·단계가 정해지면 그 줄의 &apos;Codex&apos; 칸에
-            들어갑니다.
+            <b>Codex 기록 올리기</b>에서{" "}
+            <span className={s.mono}>~/.codex/sessions</span> 의 세션 파일(또는
+            폴더째)을 고르면 시간·토큰이 자동으로 계산됩니다. 공수 태그로
+            요구사항·단계가 정해지면 그 줄의 &apos;Codex&apos; 칸에 들어갑니다.
           </span>
         </li>
         <li>
@@ -483,7 +487,7 @@ function UnitRow({
           <b>{STAGE_LABEL[u.stage]}</b>
           {u.workType && <span className="subtle"> · {u.workType}</span>}
           <span className={s.tagLine}>
-            <TagCopy code={u.code} show={editable && !u.done} />
+            <TagCopy target={{ code: u.code, reqKey: r.rk, name: r.name, stage: u.stage }} show={editable && !u.done} />
             {u.done && <span className="subtle">측정 완료</span>}
           </span>
         </td>
@@ -642,27 +646,6 @@ function AiCell({
   );
 }
 
-function TagCopy({ code, show }: { code: string; show: boolean }) {
-  const { toast } = useToast();
-  if (!show) return <span className={s.code}>{code}</span>;
-  return (
-    <span className={s.cmd} data-tour="tag">
-      poc {code}
-      <button
-        className={s.copy}
-        onClick={() => {
-          copyText(`poc ${code}`);
-          toast(
-            `"poc ${code}" 복사했습니다. Codex 대화 첫 줄에 붙여 넣으세요.`,
-          );
-        }}
-      >
-        복사
-      </button>
-    </span>
-  );
-}
-
 function PendingBox({
   items,
   editable,
@@ -704,6 +687,24 @@ function PendingRow({ p, editable }: { p: PendingVM; editable: boolean }) {
         api("/api/effort/sessions", { body: { datId: p.datId, off: true } }),
       "업무 외 사용으로 표시했습니다.",
     );
+  // 한 세션에 여러 단계가 섞였으면 단계별로 분을 나눠 넣는다 — 추천 후보가 둘 이상일 때만 연다.
+  const cands = p.options.filter((o) => o.cand);
+  const [split, setSplit] = useState<Record<string, string> | null>(null);
+  const splitSum = Object.values(split ?? {}).reduce((a, v) => a + (Number(v) || 0), 0);
+  const total = Math.ceil(p.minutes);
+  const assignSplit = () =>
+    run(
+      () =>
+        api("/api/effort/sessions", {
+          body: {
+            datId: p.datId,
+            parts: Object.entries(split ?? {})
+              .map(([unit, v]) => ({ unit, min: Number(v) || 0 }))
+              .filter((x) => x.min > 0),
+          },
+        }),
+      "단계별로 나눠 넣었습니다.",
+    );
   return (
     <div className={s.pendRow}>
       <span className={s.pendInfo}>
@@ -738,10 +739,43 @@ function PendingRow({ p, editable }: { p: PendingVM; editable: boolean }) {
           <Button size="sm" variant="primary" disabled={!code} loading={busy} onClick={assign}>
             이동
           </Button>
+          {cands.length > 1 && !split && (
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => setSplit(Object.fromEntries(cands.map((o) => [o.code, ""])))}>
+              나눠 넣기
+            </Button>
+          )}
           <Button size="sm" variant="ghost" disabled={busy} onClick={off}>
             업무 외 사용
           </Button>
         </>
+      )}
+      {editable && split && (
+        <span className={s.pendSplit}>
+          {cands.map((o) => (
+            <label key={o.code}>
+              <span>{o.label}</span>
+              <input
+                type="number"
+                min={0}
+                max={total}
+                step={5}
+                value={split[o.code] ?? ""}
+                onChange={(e) => setSplit({ ...split, [o.code]: e.target.value })}
+                aria-label={`${o.label} 분`}
+              />
+              분
+            </label>
+          ))}
+          <span className={splitSum > total ? s.warn : "subtle"}>
+            {splitSum} / {total}분
+          </span>
+          <Button size="sm" variant="primary" disabled={splitSum <= 0 || splitSum > total} loading={busy} onClick={assignSplit}>
+            넣기
+          </Button>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => setSplit(null)}>
+            취소
+          </Button>
+        </span>
       )}
     </div>
   );
@@ -816,7 +850,7 @@ function ReqProgress({ vm, editable }: { vm: EffortVM; editable: boolean }) {
                     {u.workType && <span className={s.meta}>{u.workType}</span>}
                   </td>
                   <td>
-                    <TagCopy code={u.code} show={editable && !u.done} />
+                    <TagCopy target={{ code: u.code, reqKey: r.rk, name: r.name, stage: u.stage }} show={editable && !u.done} />
                   </td>
                   <td className={`${s.r} num`}>
                     {f1(u.inT)} / {f1(u.out)}
@@ -844,20 +878,4 @@ function ReqProgress({ vm, editable }: { vm: EffortVM; editable: boolean }) {
 function daysAgo(date: string, today: string): string {
   const n = Math.round((Date.parse(today) - Date.parse(date)) / 86400000);
   return n === 0 ? "오늘" : n === 1 ? "어제" : n === 2 ? "그제" : "";
-}
-
-// 사내망 http 주소에서는 navigator.clipboard 가 없어서 예전 방식으로도 복사한다.
-function copyText(v: string) {
-  if (window.isSecureContext && navigator.clipboard) {
-    void navigator.clipboard.writeText(v);
-    return;
-  }
-  const ta = document.createElement("textarea");
-  ta.value = v;
-  ta.style.position = "fixed";
-  ta.style.opacity = "0";
-  document.body.appendChild(ta);
-  ta.select();
-  document.execCommand("copy");
-  ta.remove();
 }

@@ -2,9 +2,9 @@ import { can, type ActorFull } from "../auth/permissions";
 import { record } from "../history";
 import { err, forbiddenR, notFoundR, okR, type ServiceResult } from "../result";
 import type { MeasRow, Store } from "../store/types";
-import type { Project, UserRecord } from "../types";
+import type { Project } from "../types";
 import { normalizeSettings, SETTINGS_KEY } from "./defaults";
-import { activeMinutes, addTokens, kstDate, kstTime, parseLogUpload, type OtelEvent } from "./ingest";
+import { kstDate, parseLogUpload } from "./ingest";
 import type { StoredSession } from "./match";
 import { buildIndex, cellOf, confKey, dayState, daySnap, rowsOf, type Index, type MeasureData } from "./metrics";
 import { ACT_TYPES, type ActType, type AiSession, type DayConf, type EffortEntry, type MonitorNote, type NoteStatus, type Settings } from "./types";
@@ -276,68 +276,16 @@ export async function uploadLog(store: Store, actor: ActorFull, raw: unknown): P
   const parsed = parseLogUpload(raw);
   if ("error" in parsed) return err(400, "BAD_FILE", parsed.error);
   const existing = new Map((await store.meas.listAll("AIUSE")).map((r) => [r.datId, r]));
+  const upAt = new Date().toISOString();
   const rows = parsed.sessions.map((p) => {
     const id = sessionId("LOG", p.sessionId, p.workDt);
     const prev = existing.get(id)?.data as AiSession | undefined;
-    const s: AiSession = { ...p, userId: actor.userId, resolution: prev?.resolution ?? null };
+    const s: AiSession = { ...p, userId: actor.userId, resolution: prev?.resolution ?? null, upAt };
     return row("AIUSE", id, { prjId: "-", reqId: null, workDt: p.workDt, userId: actor.userId }, s, "LOG", actor.userId);
   });
   await store.meas.upsert(rows);
-  await record(store, actor, { targetTyp: "UPLOAD", targetId: actor.userId, actionCd: "AI_LOG", summary: `AI 사용 기록 ${rows.length}건 업로드` });
+  await record(store, actor, { targetTyp: "UPLOAD", targetId: actor.userId, actionCd: "AI_LOG", summary: `Codex 세션 ${rows.length}건 업로드` });
   return okR({ sessions: rows.length, warnings: parsed.warnings });
-}
-
-/** 이벤트의 계정 후보 → 포털 사번. 'AI 도구 계정'이 맞으면 그 사람, 없으면 사번·이메일 앞부분이 같은 계정 */
-export function userForAccounts(users: UserRecord[], accounts: string[]): string | null {
-  const low = accounts.map((a) => a.trim().toLowerCase());
-  const byAcct = users.find((u) => u.aiAcct && low.includes(u.aiAcct.trim().toLowerCase()));
-  if (byAcct) return byAcct.userId;
-  return users.find((u) => low.some((a) => a === u.userId.toLowerCase() || a.split("@")[0] === u.userId.toLowerCase()))?.userId ?? null;
-}
-
-/**
- * 텔레메트리 수신 — Codex 이벤트를 세션·일자 행에 쌓는다. 활동 시간은 앞 묶음의 마지막 이벤트 시각에서 이어 계산한다.
- * 동시 수신 시 같은 행을 겹쳐 쓸 수 있으나 PoC 규모(개발자 수십 명)에선 수용.
- */
-export async function ingestOtel(store: Store, events: OtelEvent[]): Promise<number> {
-  if (events.length === 0) return 0;
-  const users = (await store.users.list()).filter((u) => u.useYn);
-  const grouped = new Map<string, { userId: string; list: OtelEvent[] }>();
-  for (const e of events) {
-    const userId = userForAccounts(users, e.accounts);
-    if (!userId) continue;
-    const id = sessionId("OTEL", e.sessionId, e.workDt);
-    const g = grouped.get(id) ?? { userId, list: [] };
-    g.list.push(e);
-    grouped.set(id, g);
-  }
-  const rows: MeasRow[] = [];
-  for (const [id, { userId, list }] of Array.from(grouped)) {
-    const prev = (await store.meas.get(id))?.data as AiSession | undefined;
-    const first = list[0];
-    const times = list.map((d) => d.ms);
-    let tokens = prev?.tokens;
-    for (const e of list) if (e.tokens) tokens = addTokens(tokens, e.model || "unknown", e.tokens);
-    const lastMs = Math.max(prev?.lastMs ?? 0, ...times);
-    const s: AiSession = {
-      src: "OTEL",
-      sessionId: first.sessionId,
-      userId,
-      workDt: first.workDt,
-      tool: first.tool,
-      minutes: Math.round(((prev?.minutes ?? 0) + activeMinutes(times, prev?.lastMs)) * 100) / 100,
-      start: prev?.start || kstTime(Math.min(...times)),
-      end: kstTime(lastMs),
-      branch: prev?.branch ?? "",
-      hints: Array.from(new Set([...(prev?.hints ?? []), ...list.flatMap((d) => d.hints)])).slice(0, 20),
-      resolution: prev?.resolution ?? null,
-      tokens,
-      lastMs,
-    };
-    rows.push(row("AIUSE", id, { prjId: "-", reqId: null, workDt: s.workDt, userId: s.userId }, s, "OTEL", "otel"));
-  }
-  await store.meas.upsert(rows);
-  return rows.length;
 }
 
 export async function saveSettings(store: Store, actor: ActorFull, v: Settings): Promise<ServiceResult<Settings>> {

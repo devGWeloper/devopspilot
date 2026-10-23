@@ -173,6 +173,8 @@ export interface EffortStatsVM {
   confOut: number;
   /** 마지막으로 들어온 Codex 세션 */
   last: { date: string; time: string; src: "OTEL" | "LOG" } | null;
+  /** 마지막으로 세션 파일을 올린 시각(ISO) — 이전 데이터엔 없다 */
+  upAt: string | null;
 }
 
 export interface EffortVM {
@@ -181,6 +183,8 @@ export interface EffortVM {
   devs: { userId: string; userNm: string }[];
   today: string;
   mdHours: number;
+  /** 이보다 앞선 날의 세션은 올리지 않는다 */
+  measureStart: string;
   /** 기본 근무시간 — 이 밖의 입력은 받되 타임라인에 근무시간 외로 보인다 */
   work: { start: string; end: string };
   reqs: EffortReqVM[];
@@ -292,6 +296,7 @@ export function effortView(ix: Index, users: UserRecord[], userId: string, today
     devs,
     today,
     mdHours: ix.data.settings.mdHours,
+    measureStart: ix.data.settings.measureStart,
     work: { start: ix.data.settings.workStart, end: ix.data.settings.workEnd },
     reqs,
     days: list,
@@ -303,6 +308,7 @@ export function effortView(ix: Index, users: UserRecord[], userId: string, today
       confAi,
       confOut,
       last: lastS ? { date: lastS.workDt, time: lastS.end || lastS.start, src: lastS.src } : null,
+      upAt: mine.reduce<string | null>((a, x) => (x.upAt && (!a || x.upAt > a) ? x.upAt : a), null),
     },
   };
 }
@@ -489,6 +495,29 @@ export interface CollectRowVM {
   /** 비용을 알 수 있는 세션만 더한 값, 하나도 없으면 null */
   cost: number | null;
   costNa: number;
+}
+
+/** 개발자별 마지막 업로드 — 세션 파일은 사람이 올려야 들어오므로 오래 안 올린 사람을 찾으려고 */
+export interface UploadStatVM {
+  userId: string;
+  userNm: string;
+  upAt: string | null;
+  /** 올린 기록 중 가장 늦은 작업일 */
+  lastDt: string | null;
+}
+
+export function uploadStats(ix: Index, users: UserRecord[]): UploadStatVM[] {
+  const out = new Map<string, UploadStatVM>(
+    users.filter((u) => u.useYn && u.role === "DEVELOPER").map((u) => [u.userId, { userId: u.userId, userNm: u.userNm, upAt: null, lastDt: null }]),
+  );
+  for (const s of ix.data.sessions) {
+    const r = out.get(s.userId);
+    if (!r) continue;
+    if (s.upAt && (!r.upAt || s.upAt > r.upAt)) r.upAt = s.upAt;
+    if (!r.lastDt || s.workDt > r.lastDt) r.lastDt = s.workDt;
+  }
+  // 오래 안 올린 사람이 위로
+  return Array.from(out.values()).sort((a, b) => (a.upAt ?? "").localeCompare(b.upAt ?? "") || a.userNm.localeCompare(b.userNm));
 }
 
 export function collectLog(ix: Index, users: UserRecord[]): CollectRowVM[] {

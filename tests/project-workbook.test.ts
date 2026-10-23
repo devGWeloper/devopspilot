@@ -118,8 +118,14 @@ describe("importWorkbook · 내보내기 왕복", () => {
     const settings = { ...defaultSettings(), tokenPrice: { "gpt-5-codex": { input: 1, cached: 0.1, output: 8 } } };
     const buf = await buildWorkbook(workbookTables([proj], users, settings, [], () => "DONE"));
 
+    // 미리보기는 같은 숫자를 보여 주되 아무것도 저장하지 않는다
+    const dry = await importWorkbook(store, admin, buf, { dryRun: true });
+    expect(dry).toMatchObject({ ok: true, value: { dryRun: true, projectsNew: 1, tagsNew: 1, mapped: 1, usersNew: 1, newProjects: [{ prjId: "DAE01" }], newTags: ["DAE01-REQ0047-DV"], newPasswords: [] } });
+    expect(await store.projects.get("DAE01")).toBeNull();
+    expect(await store.users.get("s1001")).toBeNull();
+
     const r = await importWorkbook(store, admin, buf);
-    expect(r).toMatchObject({ ok: true, value: { projectsNew: 1, tagsNew: 1, mapped: 1, usersNew: 1 } });
+    expect(r).toMatchObject({ ok: true, value: { dryRun: false, projectsNew: 1, tagsNew: 1, mapped: 1, usersNew: 1 } });
     if (!r.ok) return;
     expect(r.value.newPasswords.map((x) => x.userId)).toEqual(["s1001"]);
     const p = (await store.projects.get("DAE01"))!;

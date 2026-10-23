@@ -49,7 +49,8 @@ const blank = (cd: StageCd, workTypes: Record<string, string[]>): Row => ({
   started: false,
 });
 
-export function ReqDialog({ info, req, devs, workTypes, onClose }: { info: ProjectInfo; req: ReqVM | null; devs: Dev[]; workTypes: Record<string, string[]>; onClose: () => void }) {
+/** Phase 1 선정 항목만 고친다 — 담당·측정 완료(Phase 2)는 공수 입력 관리 화면에서. 저장 시 그 값은 그대로 실어 보낸다. */
+export function ReqDialog({ info, req, workTypes, onClose }: { info: ProjectInfo; req: ReqVM | null; workTypes: Record<string, string[]>; onClose: () => void }) {
   const router = useRouter();
   const { toast, toastError } = useToast();
   const [f, setF] = useState({ reqId: req?.reqId ?? "", name: req?.name ?? "" });
@@ -125,7 +126,7 @@ export function ReqDialog({ info, req, devs, workTypes, onClose }: { info: Proje
 
       <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <b>SDLC 단계</b>
-        <span className={b.xs}>단계 하나에 담당 한 명 · 기준 공수 합계 {f1(total)} M/D</span>
+        <span className={b.xs}>기준 공수 합계 {f1(total)} M/D · 담당·측정 완료는 &apos;공수 입력 관리&apos;에서</span>
       </div>
       <div className={b.tw} style={{ marginTop: 6 }}>
         <table className={b.tbl}>
@@ -133,12 +134,10 @@ export function ReqDialog({ info, req, devs, workTypes, onClose }: { info: Proje
             <tr>
               <th>단계 · 공수 태그</th>
               <th>업무 유형</th>
-              <th>담당</th>
               <th className="r">기준 공수(M/D)</th>
               {PICKS.map(([k, label]) => (
                 <th key={k}>{label}</th>
               ))}
-              <th className="c">완료</th>
               <th />
             </tr>
           </thead>
@@ -165,16 +164,6 @@ export function ReqDialog({ info, req, devs, workTypes, onClose }: { info: Proje
                       ))}
                   </select>
                 </td>
-                <td>
-                  <select className={b.sel} value={s.ownerId ?? ""} onChange={(e) => setS(i, { ownerId: e.target.value || null })}>
-                    <option value="">미지정</option>
-                    {devs.map((d) => (
-                      <option key={d.userId} value={d.userId}>
-                        {d.userNm} ({d.userId})
-                      </option>
-                    ))}
-                  </select>
-                </td>
                 <td className="r">
                   <input className={b.sel} type="number" step="0.1" min="0" style={{ width: 70, textAlign: "right" }} value={s.baseMd} onChange={(e) => setS(i, { baseMd: e.target.value as unknown as number })} />
                 </td>
@@ -190,9 +179,6 @@ export function ReqDialog({ info, req, devs, workTypes, onClose }: { info: Proje
                     </select>
                   </td>
                 ))}
-                <td className="c">
-                  <input type="checkbox" aria-label="측정 완료" checked={!!s.done} onChange={(e) => setS(i, { done: e.target.checked })} />
-                </td>
                 <td>
                   <Button size="sm" variant="ghost" disabled={s.started || stages.length === 1} title={s.started ? "공수가 입력된 단계는 지울 수 없습니다" : undefined} onClick={() => setStages((xs) => xs.filter((_, k) => k !== i))}>
                     빼기
@@ -211,7 +197,7 @@ export function ReqDialog({ info, req, devs, workTypes, onClose }: { info: Proje
         </div>
       )}
       <p className={b.xs} style={{ marginTop: 12 }}>
-        완료 = 측정 완료. 측정 결과에 집계하고 그 단계는 더 이상 공수를 받지 않습니다. 등급은 인건비 단가 기준입니다.
+        등급은 인건비 단가 기준입니다. 공수가 입력된 단계는 단계를 바꾸거나 뺄 수 없습니다.
       </p>
     </Modal>
   );

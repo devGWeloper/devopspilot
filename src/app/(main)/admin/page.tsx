@@ -1,10 +1,9 @@
 import { AdminTabs } from "@/features/admin/AdminTabs";
 import { pageActor } from "@/lib/auth/server";
-import { loadConfig } from "@/lib/config";
 import { loadIndex, todayKst } from "@/lib/measure/service";
 import { recentWeekdays } from "@/lib/store/sampleData";
 import { getStore } from "@/lib/store";
-import { collectLog, confMatrix } from "@/lib/views";
+import { collectLog, confMatrix, uploadStats } from "@/lib/views";
 
 export const metadata = { title: "시스템 관리" };
 
@@ -18,7 +17,8 @@ export default async function Page() {
     <AdminTabs
       conf={confMatrix(ix, users, days, new Date().toISOString())}
       collect={collectLog(ix, users)}
-      otelOn={!!loadConfig().collectToken}
+      uploads={uploadStats(ix, users)}
+      today={todayKst()}
     />
   );
 }

@@ -10,7 +10,7 @@ export const ACT_TYPES: { cd: ActType; label: string; desc: string }[] = [
   { cd: "A4", label: "문서 작성", desc: "설계서·산출물·보고 자료 작성" },
   { cd: "A5", label: "협의·소통", desc: "회의, 현업·고객 문의 대응, 리뷰 의견 협의" },
   { cd: "A6", label: "환경·배포 조치", desc: "환경 구성, 배포, 데이터 조치, 권한·설정 변경" },
-  { cd: "A7", label: "AI 사용 미수집", desc: "AI 도구를 썼지만 시간이 잡히지 않은 경우 (오프라인·미설치 PC 등)" },
+  { cd: "A7", label: "AI 사용 미수집", desc: "AI 도구를 썼지만 시간이 잡히지 않은 경우 (세션 파일이 지워졌거나 다른 PC 에서 작업해 올릴 수 없는 경우 등)" },
   { cd: "A8", label: "기타", desc: "위 유형에 없는 업무 — 메모 필수" },
 ];
 export const ACT_LABEL = Object.fromEntries(ACT_TYPES.map((a) => [a.cd, a.label])) as Record<ActType, string>;
@@ -49,6 +49,7 @@ export interface DayConf {
   snap: Record<string, number>;
 }
 
+/** OTEL 은 텔레메트리 수신을 쓰던 때 쌓인 행 — 지금은 세션 파일 업로드(LOG)만 들어온다 */
 export type SessionSrc = "OTEL" | "LOG";
 
 export type SessionResolution =
@@ -71,8 +72,8 @@ export interface AiSession {
   resolution: SessionResolution | null;
   /** 모델 → 토큰 사용량. 수집되지 않은 세션은 비어 있고 AI 비용은 빈칸이 된다 */
   tokens?: Record<string, TokenUse>;
-  /** 텔레메트리 마지막 이벤트 시각(ms) — 다음 묶음과 활동 시간을 이어 계산하려고 */
-  lastMs?: number;
+  /** 마지막으로 올린 시각(ISO) — 개발자가 업로드를 잊었는지 보려고 */
+  upAt?: string;
 }
 
 /** Codex 토큰 사용량. input 은 cached 를 포함한다(OpenAI usage 규격) */
